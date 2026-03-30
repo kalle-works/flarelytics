@@ -93,6 +93,20 @@ DATASET_NAME = "my-site"
 - `CF_API_TOKEN` — Cloudflare API token with Analytics Engine read access
 - `CF_ACCOUNT_ID` — Your Cloudflare account ID
 
+## Design System
+
+Always read DESIGN.md before making any visual or UI decisions.
+All font choices, colors, spacing, and aesthetic direction are defined there.
+Do not deviate without explicit user approval.
+In QA mode, flag any code that doesn't match DESIGN.md.
+
+Key rules:
+- **Accent is amber (#d97706), NOT orange** — orange on dark = wrong association
+- **CTA buttons are dark (#1c1917), not amber** — amber is highlight, not action
+- **All UI labels use monospace** — nav, buttons, section headers, data labels
+- **Light mode landing page, dark code blocks** — the contrast is intentional
+- **Satoshi for display only** — everything else is system fonts or monospace
+
 ## Content & Style
 
 - No AI slop words
