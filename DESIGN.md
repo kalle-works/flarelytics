@@ -22,10 +22,10 @@
 - **Scale:** 10px (labels) / 12px (mono UI) / 15px (secondary text, table data) / 16px (body) / 28px (h2) / 36px (mobile hero) / 52px (hero)
 
 ## Color
-- **Approach:** Restrained — amber is the only color, used sparingly
-- **Accent:** #d97706 (amber) — warm, trustworthy, distinct from every competitor
+- **Approach:** Restrained — burnt orange is the only color, used sparingly
+- **Accent:** #dc6b14 (burnt orange) — warm, energetic, distinct from every competitor
 - **Accent hover:** #b45309
-- **Accent text:** #b45309 — for body-text-sized links and labels (WCAG AA 5.5:1 on #fafaf9). Use #d97706 only for large text (≥18px) or decorative elements.
+- **Accent text:** #b45309 — for body-text-sized links and labels (WCAG AA 5.5:1 on #fafaf9). Use #dc6b14 only for large text (≥18px) or decorative elements.
 - **Accent light:** #fffbeb (badges, highlights)
 - **Background:** #fafaf9 (warm off-white)
 - **Surface:** #ffffff (cards, tables)
@@ -37,7 +37,7 @@
 - **Code block bg:** #1c1917 (dark, high contrast)
 - **Code text:** #d6d3d1
 - **Code accent:** #fbbf24 (bright amber for strings/highlights in code)
-- **Semantic:** success #16a34a, error #dc2626, warning #d97706 (same as accent)
+- **Semantic:** success #16a34a, error #dc2626, warning #dc6b14 (same as accent)
 - **Dark mode:** Not planned for v1. Dashboard will be dark by default (separate palette).
 
 ## Spacing
@@ -88,7 +88,7 @@
 - **Secondary text (#57534e):** 8.0:1 on #fafaf9 — exceeds AAA
 - **Muted text (#78716c):** 5.9:1 on #fafaf9 — passes AA
 - **Accent as text (#b45309):** 5.5:1 on #fafaf9 — passes AA. Use for body-text links and labels.
-- **Accent decorative (#d97706):** 3.0:1 on #fafaf9 — large text and icons only (passes 3:1 threshold)
+- **Accent decorative (#dc6b14):** 3.8:1 on #fafaf9 — large text and icons only (passes 3:1 threshold)
 - **Badge text (#92400e on #fffbeb):** 7.8:1 — passes AAA
 - **Code text (#d6d3d1 on #1c1917):** 18.4:1 — exceeds AAA
 - **Code accent (#fbbf24 on #1c1917):** 14.8:1 — exceeds AAA
@@ -102,3 +102,4 @@
 | 2026-03-30 | Monospace for all UI labels | Reinforces developer identity. Every label, nav link, button, and data element uses mono. |
 | 2026-03-30 | Dark CTA buttons (not amber) | Amber is accent/highlight, not action. Dark buttons have better contrast and avoid "warning button" feel. |
 | 2026-03-30 | WCAG AA contrast fixes | Muted text darkened (#a8a29e → #78716c), accent text tier added (#b45309 for body text), badge text darkened (#92400e). All text now meets 4.5:1 minimum. |
+| 2026-03-30 | Burnt orange accent (#dc6b14) | Shifted from amber (#d97706) to burnt orange. More energy, still warm. WCAG 3.8:1 on light (better than amber's 3.0:1). |
