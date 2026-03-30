@@ -1,0 +1,14 @@
+{
+  "name": "@flarelytics/landing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Landing page for flarelytics.dev",
+  "scripts": {
+    "dev": "astro dev --port 4323",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "astro": "^6.1.0"
+  }
+}

@@ -1,0 +1,270 @@
+---
+const features = [
+  { icon: '🔒', title: 'No cookies', desc: 'No consent banners needed. GDPR, CCPA, and PECR compliant by architecture.' },
+  { icon: '⚡', title: 'Under 1KB', desc: 'The tracking script is smaller than most cookie banners. Zero impact on page speed.' },
+  { icon: '☁️', title: '100% Cloudflare', desc: 'Workers + Analytics Engine. No databases, no servers, no third-party services.' },
+  { icon: '📊', title: 'Real dashboard', desc: 'Traffic, referrers, countries, custom events, UTM tracking, conversion funnels.' },
+  { icon: '📧', title: 'Email reports', desc: 'Weekly digests with traffic trends, top pages, and anomaly alerts.' },
+  { icon: '🛠️', title: 'Custom events', desc: 'Track signups, purchases, clicks, or anything with flarelytics.track().' },
+];
+
+const comparisons = [
+  { feature: 'Privacy-first', flarelytics: true, ga: false, plausible: true, counterscale: true },
+  { feature: 'No cookies', flarelytics: true, ga: false, plausible: true, counterscale: true },
+  { feature: 'Self-hosted', flarelytics: true, ga: false, plausible: true, counterscale: true },
+  { feature: 'Runs on CF only', flarelytics: true, ga: false, plausible: false, counterscale: true },
+  { feature: 'Custom events', flarelytics: true, ga: true, plausible: true, counterscale: false },
+  { feature: 'Email reports', flarelytics: true, ga: true, plausible: true, counterscale: false },
+  { feature: 'Dashboard', flarelytics: true, ga: true, plausible: true, counterscale: true },
+  { feature: 'CSV export', flarelytics: true, ga: true, plausible: true, counterscale: false },
+  { feature: 'Open source', flarelytics: true, ga: false, plausible: true, counterscale: true },
+  { feature: 'Free tier', flarelytics: true, ga: true, plausible: false, counterscale: true },
+];
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flarelytics — Privacy-first analytics for Cloudflare</title>
+  <meta name="description" content="Privacy-first web analytics that runs entirely on Cloudflare. No cookies, no external dependencies, 5-minute setup. Open source." />
+  <link rel="canonical" href="https://flarelytics.dev" />
+  <meta property="og:title" content="Flarelytics — Privacy-first analytics for Cloudflare" />
+  <meta property="og:description" content="No cookies, no external dependencies, 5-minute setup. Open source." />
+  <meta property="og:url" content="https://flarelytics.dev" />
+  <meta property="og:type" content="website" />
+  <style is:inline>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font); background: var(--bg); color: var(--ink); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent2); }
+    .container { max-width: 960px; margin: 0 auto; padding: 0 1.5rem; }
+
+    /* Nav */
+    nav { padding: 1rem 0; border-bottom: 1px solid var(--border); }
+    nav .inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1.125rem; color: var(--ink); text-decoration: none; }
+    .logo-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { font-size: 0.875rem; color: var(--ink2); }
+    .btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 1.25rem; border-radius: 6px; font-size: 0.875rem; font-weight: 600; transition: all 150ms; text-decoration: none; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent2); color: white; }
+    .btn-outline { border: 1px solid var(--border); color: var(--ink2); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Hero */
+    .hero { padding: 5rem 0 4rem; text-align: center; }
+    .hero h1 { font-size: 2.75rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; max-width: 700px; margin: 0 auto; }
+    .hero h1 span { background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p { margin: 1.25rem auto 0; max-width: 520px; font-size: 1.125rem; color: var(--ink2); }
+    .hero-actions { margin-top: 2rem; display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+
+    /* Code block */
+    .code-block { margin: 3rem auto; max-width: 580px; background: #1e293b; border-radius: 8px; overflow: hidden; text-align: left; }
+    .code-header { padding: 0.5rem 1rem; background: #334155; display: flex; align-items: center; gap: 0.5rem; }
+    .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .code-body { padding: 1rem 1.25rem; font-family: var(--mono); font-size: 0.8125rem; line-height: 1.8; color: #e2e8f0; overflow-x: auto; }
+    .code-comment { color: #64748b; }
+    .code-string { color: #86efac; }
+    .code-cmd { color: #e2e8f0; }
+
+    /* Features */
+    .features { padding: 4rem 0; }
+    .features h2 { text-align: center; font-size: 1.75rem; font-weight: 700; margin-bottom: 2.5rem; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .feature-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; }
+    .feature-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .feature-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem; }
+    .feature-desc { font-size: 0.875rem; color: var(--ink2); }
+
+    /* Dashboard Preview */
+    .preview { padding: 3rem 0 4rem; text-align: center; }
+    .preview h2 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .preview p { color: var(--ink2); margin-bottom: 2rem; }
+    .preview-img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+
+    /* Comparison */
+    .comparison { padding: 4rem 0; }
+    .comparison h2 { text-align: center; font-size: 1.75rem; font-weight: 700; margin-bottom: 2.5rem; }
+    .cmp-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .cmp-table thead th { padding: 0.75rem 1rem; text-align: center; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink3); border-bottom: 2px solid var(--border); }
+    .cmp-table thead th:first-child { text-align: left; }
+    .cmp-table tbody td { padding: 0.625rem 1rem; text-align: center; border-bottom: 1px solid var(--border); color: var(--ink2); }
+    .cmp-table tbody td:first-child { text-align: left; font-weight: 500; color: var(--ink); }
+    .cmp-table tbody tr:last-child td { border-bottom: none; }
+    .cmp-yes { color: var(--green); font-weight: 600; }
+    .cmp-no { color: var(--red); }
+    .cmp-highlight { background: #fff7ed; }
+
+    /* Privacy */
+    .privacy { padding: 4rem 0; text-align: center; }
+    .privacy h2 { font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem; }
+    .privacy p { max-width: 580px; margin: 0 auto; color: var(--ink2); font-size: 1rem; }
+    .privacy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 580px; margin: 2rem auto 0; text-align: left; }
+    .privacy-item { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; }
+    .privacy-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink3); margin-bottom: 0.25rem; }
+    .privacy-value { font-weight: 600; font-size: 0.9375rem; }
+
+    /* CTA */
+    .cta { padding: 4rem 0; text-align: center; }
+    .cta h2 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .cta p { color: var(--ink2); margin-bottom: 1.5rem; }
+
+    /* Footer */
+    footer { padding: 2rem 0; border-top: 1px solid var(--border); text-align: center; }
+    footer p { font-size: 0.8125rem; color: var(--ink3); }
+    footer a { color: var(--ink3); }
+    footer a:hover { color: var(--accent); }
+
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 2rem; }
+      .privacy-grid { grid-template-columns: 1fr; }
+      .cmp-table { font-size: 0.75rem; }
+      .cmp-table thead th, .cmp-table tbody td { padding: 0.5rem; }
+    }
+  </style>
+</head>
+<body style="--font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mono:'JetBrains Mono','Fira Code','Menlo',monospace;--ink:#0f172a;--ink2:#475569;--ink3:#94a3b8;--bg:#fafaf9;--card:#ffffff;--border:#e2e8f0;--accent:#f97316;--accent2:#ea580c;--green:#22c55e;--red:#ef4444;">
+  <!-- Nav -->
+  <nav>
+    <div class="container inner">
+      <a href="/" class="logo">
+        <div class="logo-icon">
+          <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><path d="M12 28V16l8-6 8 6v12H12z" fill="white" opacity="0.9"/><circle cx="20" cy="21" r="3" fill="#f97316"/></svg>
+        </div>
+        Flarelytics
+      </a>
+      <div class="nav-links">
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a>
+        <a href="https://github.com/kalle-works/flarelytics/blob/main/README.md">Docs</a>
+        <a href="https://github.com/kalle-works/flarelytics" class="btn btn-primary">Get Started</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero container">
+    <h1>Privacy-first analytics for <span>Cloudflare</span></h1>
+    <p>No cookies. No external dependencies. Runs entirely on Cloudflare Workers. Deploy in 5 minutes. Open source.</p>
+    <div class="hero-actions">
+      <a href="https://github.com/kalle-works/flarelytics" class="btn btn-primary">View on GitHub</a>
+      <a href="#quickstart" class="btn btn-outline">Quick Start</a>
+    </div>
+  </section>
+
+  <!-- Quick Start -->
+  <section id="quickstart" class="container">
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dot" style="background:#ef4444;"></div>
+        <div class="code-dot" style="background:#eab308;"></div>
+        <div class="code-dot" style="background:#22c55e;"></div>
+      </div>
+      <div class="code-body">
+        <div><span class="code-comment"># Clone and deploy</span></div>
+        <div><span class="code-cmd">git clone https://github.com/kalle-works/flarelytics</span></div>
+        <div><span class="code-cmd">cd flarelytics/packages/worker</span></div>
+        <div><span class="code-cmd">npx wrangler deploy</span></div>
+        <div>&nbsp;</div>
+        <div><span class="code-comment"># Add to your site</span></div>
+        <div><span class="code-string">&lt;script defer src="https://your-worker.workers.dev/tracker.js"&gt;&lt;/script&gt;</span></div>
+        <div>&nbsp;</div>
+        <div><span class="code-comment"># Track custom events</span></div>
+        <div><span class="code-cmd">flarelytics.track(<span class="code-string">'signup'</span>, {"{"} props: {"{"} plan: <span class="code-string">'pro'</span> {"}"} {"}"})</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features container">
+    <h2>Everything you need, nothing you don't</h2>
+    <div class="feature-grid">
+      {features.map((f) => (
+        <div class="feature-card">
+          <div class="feature-icon">{f.icon}</div>
+          <div class="feature-title">{f.title}</div>
+          <div class="feature-desc">{f.desc}</div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- Privacy -->
+  <section class="privacy container">
+    <h2>Privacy by architecture, not policy</h2>
+    <p>Flarelytics doesn't need a privacy policy because it doesn't collect personal data. No cookies, no fingerprinting, no IP addresses stored.</p>
+    <div class="privacy-grid">
+      <div class="privacy-item">
+        <div class="privacy-label">Cookies</div>
+        <div class="privacy-value" style="color:var(--green);">None</div>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-label">IP addresses</div>
+        <div class="privacy-value" style="color:var(--green);">Never stored</div>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-label">Visitor tracking</div>
+        <div class="privacy-value">Daily hash, resets at midnight</div>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-label">GDPR compliant</div>
+        <div class="privacy-value" style="color:var(--green);">By default</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison -->
+  <section class="comparison container">
+    <h2>How Flarelytics compares</h2>
+    <div style="overflow-x:auto;">
+      <table class="cmp-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="cmp-highlight">Flarelytics</th>
+            <th>Google Analytics</th>
+            <th>Plausible</th>
+            <th>Counterscale</th>
+          </tr>
+        </thead>
+        <tbody>
+          {comparisons.map((row) => {
+            const fl = row.flarelytics;
+            const ga = row.ga;
+            const pl = row.plausible;
+            const cs = row.counterscale;
+            return (
+              <tr>
+                <td>{row.feature}</td>
+                <td class="cmp-highlight">{fl && <span class="cmp-yes">Yes</span>}{!fl && <span class="cmp-no">No</span>}</td>
+                <td>{ga && <span class="cmp-yes">Yes</span>}{!ga && <span class="cmp-no">No</span>}</td>
+                <td>{pl && <span class="cmp-yes">Yes</span>}{!pl && <span class="cmp-no">No</span>}</td>
+                <td>{cs && <span class="cmp-yes">Yes</span>}{!cs && <span class="cmp-no">No</span>}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta container">
+    <h2>Deploy analytics in 5 minutes</h2>
+    <p>One git clone, one wrangler deploy, one script tag. That's it.</p>
+    <a href="https://github.com/kalle-works/flarelytics" class="btn btn-primary" style="font-size:1rem;padding:0 2rem;min-height:48px;">Get Started on GitHub</a>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>
+        Flarelytics is open source (MIT) &middot;
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a> &middot;
+        Built by <a href="https://kalle.works">kalle.works</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>
