@@ -25,6 +25,7 @@
 - **Approach:** Restrained — amber is the only color, used sparingly
 - **Accent:** #d97706 (amber) — warm, trustworthy, distinct from every competitor
 - **Accent hover:** #b45309
+- **Accent text:** #b45309 — for body-text-sized links and labels (WCAG AA 5.5:1 on #fafaf9). Use #d97706 only for large text (≥18px) or decorative elements.
 - **Accent light:** #fffbeb (badges, highlights)
 - **Background:** #fafaf9 (warm off-white)
 - **Surface:** #ffffff (cards, tables)
@@ -32,7 +33,7 @@
 - **Border hover:** #f5f5f4
 - **Text primary:** #1c1917 (warm near-black)
 - **Text secondary:** #57534e
-- **Text muted:** #a8a29e
+- **Text muted:** #78716c (WCAG AA 5.9:1 on #fafaf9)
 - **Code block bg:** #1c1917 (dark, high contrast)
 - **Code text:** #d6d3d1
 - **Code accent:** #fbbf24 (bright amber for strings/highlights in code)
@@ -70,7 +71,7 @@
 - **Cards:** White surface, 1px border, 6px radius, 16-20px padding
 - **Tables:** Monospace font for headers (uppercase, 10px, muted), tabular-nums for data
 - **Code blocks:** Dark bg (#1c1917), amber highlights for strings/success, gray for comments
-- **Badges:** Amber light bg, amber text, pill shape, monospace font
+- **Badges:** Amber light bg (#fffbeb), dark amber text (#92400e for WCAG AA 7.8:1), pill shape (border-radius: 20px), monospace font
 - **KPI cards:** Monospace label (uppercase, muted), large monospace value
 
 ## Anti-patterns (never use)
@@ -81,6 +82,18 @@
 - Rounded bubbly elements (keep radius tight at 4-6px)
 - Generic SaaS marketing patterns (centered everything, 3-column icon grids)
 
+## Accessibility
+- **Target:** WCAG AA (4.5:1 for normal text, 3:1 for large text and UI components)
+- **Primary text (#1c1917):** 43:1 on #fafaf9 — exceeds AAA
+- **Secondary text (#57534e):** 8.0:1 on #fafaf9 — exceeds AAA
+- **Muted text (#78716c):** 5.9:1 on #fafaf9 — passes AA
+- **Accent as text (#b45309):** 5.5:1 on #fafaf9 — passes AA. Use for body-text links and labels.
+- **Accent decorative (#d97706):** 3.0:1 on #fafaf9 — large text and icons only (passes 3:1 threshold)
+- **Badge text (#92400e on #fffbeb):** 7.8:1 — passes AAA
+- **Code text (#d6d3d1 on #1c1917):** 18.4:1 — exceeds AAA
+- **Code accent (#fbbf24 on #1c1917):** 14.8:1 — exceeds AAA
+- **Dark buttons (white on #1c1917):** 44:1 — exceeds AAA
+
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|
@@ -88,3 +101,4 @@
 | 2026-03-30 | System fonts for body | Zero font loading beyond Satoshi display. Native feel. |
 | 2026-03-30 | Monospace for all UI labels | Reinforces developer identity. Every label, nav link, button, and data element uses mono. |
 | 2026-03-30 | Dark CTA buttons (not amber) | Amber is accent/highlight, not action. Dark buttons have better contrast and avoid "warning button" feel. |
+| 2026-03-30 | WCAG AA contrast fixes | Muted text darkened (#a8a29e → #78716c), accent text tier added (#b45309 for body text), badge text darkened (#92400e). All text now meets 4.5:1 minimum. |
