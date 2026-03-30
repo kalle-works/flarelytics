@@ -3,15 +3,14 @@ main = "src/index.ts"
 compatibility_date = "2025-03-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Set your account_id here or via CLOUDFLARE_ACCOUNT_ID env var
-# account_id = "your-cloudflare-account-id"
+account_id = "4afa9a2ef256ff7f1cec9ed91ff03561"
 
 [[analytics_engine_datasets]]
 binding = "ANALYTICS"
 dataset = "flarelytics"
 
 [vars]
-ALLOWED_ORIGINS = "https://your-site.com"
+ALLOWED_ORIGINS = "https://mailtoolfinder.com,https://flarelytics.dev,http://localhost:4321"
 DATASET_NAME = "flarelytics"
 
 # Secrets (set via `wrangler secret put`):

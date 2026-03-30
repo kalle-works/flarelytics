@@ -63,14 +63,16 @@ function getAllowedOrigins(env: Env): string[] {
   return env.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
 }
 
-function corsHeaders(origin: string | null, env: Env): Record<string, string> {
-  const allowed = getAllowedOrigins(env);
+function corsHeaders(origin: string | null, env: Env, allowAny = false): Record<string, string> {
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-API-Key',
     'Access-Control-Max-Age': '86400',
   };
-  if (origin && allowed.includes(origin)) {
+  if (allowAny && origin) {
+    // API-key authenticated endpoints allow any origin
+    headers['Access-Control-Allow-Origin'] = origin;
+  } else if (origin && getAllowedOrigins(env).includes(origin)) {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Access-Control-Allow-Credentials'] = 'true';
   }
@@ -291,7 +293,7 @@ const PERIOD_MAP: Record<string, string> = {
 
 async function handleQuery(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get('Origin');
-  const cors = corsHeaders(origin, env);
+  const cors = corsHeaders(origin, env, true);
 
   const apiKey = request.headers.get('X-API-Key');
   if (!apiKey || apiKey !== env.QUERY_API_KEY) {
@@ -400,7 +402,9 @@ export default {
     const { pathname } = url;
 
     if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders(request.headers.get('Origin'), env) });
+      // Allow any origin for preflight if the request includes X-API-Key
+      const allowAny = request.headers.get('Access-Control-Request-Headers')?.includes('x-api-key') ?? false;
+      return new Response(null, { status: 204, headers: corsHeaders(request.headers.get('Origin'), env, allowAny) });
     }
 
     if (pathname === '/track' && request.method === 'POST') return handleTrack(request, env);
