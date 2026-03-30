@@ -119,7 +119,7 @@ async function generateReport(env: Env): Promise<{ subject: string; html: string
 
   <!-- Header -->
   <div style="text-align:center;padding:16px 0 24px;">
-    <div style="display:inline-block;width:32px;height:32px;background:#f97316;border-radius:6px;"></div>
+    <div style="display:inline-block;width:32px;height:32px;background:#d97706;border-radius:6px;"></div>
     <h1 style="margin:8px 0 0;font-size:20px;color:#1a1a1a;">Weekly Report</h1>
     <p style="margin:4px 0 0;font-size:13px;color:#8a8a8a;">${siteName} — Last 7 days</p>
   </div>
@@ -201,8 +201,8 @@ async function generateReport(env: Env): Promise<{ subject: string; html: string
   <!-- Footer -->
   <div style="text-align:center;padding:16px 0;border-top:1px solid #e5e5e3;">
     <p style="font-size:12px;color:#8a8a8a;">
-      Sent by <a href="https://flarelytics.dev" style="color:#f97316;text-decoration:none;">Flarelytics</a>
-      ${siteUrl ? ` — <a href="${siteUrl}" style="color:#f97316;text-decoration:none;">View site</a>` : ''}
+      Sent by <a href="https://flarelytics.dev" style="color:#d97706;text-decoration:none;">Flarelytics</a>
+      ${siteUrl ? ` — <a href="${siteUrl}" style="color:#d97706;text-decoration:none;">View site</a>` : ''}
     </p>
   </div>
 </div>

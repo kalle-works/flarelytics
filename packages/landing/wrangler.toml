@@ -1,6 +1,5 @@
 name = "flarelytics-landing"
 compatibility_date = "2025-03-01"
-account_id = "4afa9a2ef256ff7f1cec9ed91ff03561"
 
 [assets]
 directory = "./dist"
