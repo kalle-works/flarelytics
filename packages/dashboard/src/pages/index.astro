@@ -5,12 +5,13 @@ import Layout from '../layouts/Layout.astro';
 <Layout title="Flarelytics Dashboard">
   <!-- Auth gate -->
   <div id="auth-gate" style="max-width:400px;margin:5rem auto;text-align:center;">
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="margin:0 auto 1rem;">
-      <rect width="40" height="40" rx="8" fill="#f97316"/>
-      <path d="M12 28V16l8-6 8 6v12H12z" fill="white" opacity="0.9"/>
-      <circle cx="20" cy="21" r="3" fill="#f97316"/>
+    <svg width="40" height="40" viewBox="0 0 32 32" fill="none" style="margin:0 auto 1rem;">
+      <rect width="32" height="32" rx="6" fill="#1c1917"/>
+      <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+      <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+      <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
     </svg>
-    <h1 style="font-size:1.75rem;font-weight:700;margin-bottom:0.5rem;">Flarelytics</h1>
+    <h1 style="font-family:var(--mono);font-size:1.25rem;font-weight:600;margin-bottom:0.5rem;">flarelytics</h1>
     <p style="font-size:0.875rem;color:var(--ink-muted);margin-bottom:1.5rem;">Enter your API key to view analytics.</p>
     <form id="auth-form" style="display:flex;flex-direction:column;gap:0.75rem;">
       <input
@@ -18,17 +19,19 @@ import Layout from '../layouts/Layout.astro';
         type="password"
         placeholder="API key"
         required
-        style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-size:0.875rem;color:var(--ink);outline:none;"
+        style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-family:var(--mono);font-size:0.8125rem;color:var(--ink);outline:none;"
       />
       <input
         id="worker-url"
         type="url"
-        placeholder="Worker URL (e.g. https://flarelytics.you.workers.dev)"
-        style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-size:0.875rem;color:var(--ink);outline:none;"
+        placeholder="Worker URL (e.g. https://analytics.yoursite.com)"
+        style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-family:var(--mono);font-size:0.8125rem;color:var(--ink);outline:none;"
       />
       <button
         type="submit"
-        style="min-height:44px;border-radius:var(--radius-lg);background:var(--accent);color:white;font-size:0.875rem;font-weight:600;border:none;cursor:pointer;"
+        style="min-height:44px;border-radius:var(--radius-lg);background:#1c1917;color:white;font-family:var(--mono);font-size:0.8125rem;font-weight:600;border:none;cursor:pointer;transition:background 120ms;"
+        onmouseover="this.style.background='#292524'"
+        onmouseout="this.style.background='#1c1917'"
       >
         View Dashboard
       </button>
@@ -40,13 +43,14 @@ import Layout from '../layouts/Layout.astro';
   <div id="dashboard" style="display:none;">
     <!-- Header -->
     <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.5rem;">
-      <div style="display:flex;align-items:center;gap:0.75rem;">
-        <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
-          <rect width="40" height="40" rx="8" fill="#f97316"/>
-          <path d="M12 28V16l8-6 8 6v12H12z" fill="white" opacity="0.9"/>
-          <circle cx="20" cy="21" r="3" fill="#f97316"/>
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="6" fill="#1c1917"/>
+          <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+          <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+          <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
         </svg>
-        <h1 style="font-size:1.5rem;font-weight:700;">Flarelytics</h1>
+        <h1 style="font-family:var(--mono);font-size:1rem;font-weight:500;">flarelytics</h1>
       </div>
       <div style="display:flex;align-items:center;gap:0.5rem;">
         <div id="period-group" style="display:flex;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
@@ -179,9 +183,9 @@ import Layout from '../layouts/Layout.astro';
 
   .card {
     border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     background: var(--surface-raised);
-    padding: 1rem;
+    padding: 16px;
   }
 
   .kpi {
@@ -190,13 +194,15 @@ import Layout from '../layouts/Layout.astro';
     gap: 4px;
   }
   .kpi-label {
-    font-size: 0.7rem;
+    font-family: var(--mono);
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--ink-muted);
   }
   .kpi-value {
+    font-family: var(--mono);
     font-size: 1.75rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -205,9 +211,12 @@ import Layout from '../layouts/Layout.astro';
 
   .section { margin-bottom: 1.5rem; }
   .section-title {
-    font-size: 1rem;
+    font-family: var(--mono);
+    font-size: 12px;
     font-weight: 600;
-    color: var(--ink);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
     margin-bottom: 0.5rem;
   }
 
@@ -216,11 +225,12 @@ import Layout from '../layouts/Layout.astro';
   .tbl {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.8125rem;
+    font-size: 13px;
   }
   .tbl thead th {
-    padding: 6px 10px;
-    font-size: 0.6875rem;
+    font-family: var(--mono);
+    padding: 7px 12px;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -228,7 +238,7 @@ import Layout from '../layouts/Layout.astro';
     border-bottom: 2px solid var(--border);
   }
   .tbl tbody td {
-    padding: 6px 10px;
+    padding: 7px 12px;
     color: var(--ink-secondary);
     border-bottom: 1px solid var(--border-light);
     font-variant-numeric: tabular-nums;
@@ -237,21 +247,23 @@ import Layout from '../layouts/Layout.astro';
   .tbl tbody tr:last-child td { border-bottom: none; }
 
   .period-btn {
+    font-family: var(--mono);
     min-height: 36px;
     padding: 0 14px;
-    font-size: 0.8125rem;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 600;
     background: transparent;
     border: none;
     color: var(--ink-secondary);
     cursor: pointer;
-    transition: background 150ms, color 150ms;
+    transition: background 120ms, color 120ms;
   }
   .period-btn:not(:last-child) { border-right: 1px solid var(--border); }
-  .period-btn.active { background: var(--accent); color: white; }
+  .period-btn.active { background: #1c1917; color: white; }
   .period-btn:hover:not(.active) { background: var(--surface); }
 
   .icon-btn {
+    font-family: var(--mono);
     min-height: 36px;
     min-width: 36px;
     display: flex;
@@ -263,19 +275,22 @@ import Layout from '../layouts/Layout.astro';
     color: var(--ink-secondary);
     cursor: pointer;
     font-size: 1rem;
-    transition: background 150ms;
+    transition: background 120ms;
   }
   .icon-btn:hover { background: var(--surface); }
 
   .csv-btn {
-    font-size: 0.6875rem;
-    font-weight: 500;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
     padding: 2px 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: transparent;
     color: var(--ink-muted);
     cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
   .csv-btn:hover { background: var(--surface); color: var(--ink-secondary); }
 
@@ -290,11 +305,11 @@ import Layout from '../layouts/Layout.astro';
   @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
   .funnel-row { margin-bottom: 0.75rem; }
-  .funnel-label { display: flex; justify-content: space-between; font-size: 0.8125rem; margin-bottom: 4px; }
-  .funnel-label span:first-child { font-weight: 500; color: var(--ink); }
-  .funnel-label span:last-child { font-variant-numeric: tabular-nums; color: var(--ink-secondary); }
-  .funnel-track { height: 28px; background: var(--surface); border-radius: var(--radius-md); overflow: hidden; }
-  .funnel-fill { height: 100%; border-radius: var(--radius-md); transition: width 600ms ease; }
+  .funnel-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+  .funnel-label span:first-child { font-family: var(--mono); font-weight: 500; color: var(--ink); }
+  .funnel-label span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-secondary); }
+  .funnel-track { height: 28px; background: var(--surface); border-radius: var(--radius-lg); overflow: hidden; }
+  .funnel-fill { height: 100%; border-radius: var(--radius-lg); transition: width 600ms ease; }
 </style>
 
 <script is:inline>
@@ -415,7 +430,7 @@ import Layout from '../layouts/Layout.astro';
   function loadAll() {
     // Skeletons
     document.querySelectorAll('.kpi-value').forEach(function(el) { el.innerHTML = skel(70); });
-    document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-size:0.875rem;">Loading...</div>';
+    document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
     var qs = ['daily-views','daily-unique-visitors','top-pages','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel'];
 
@@ -458,7 +473,7 @@ import Layout from '../layouts/Layout.astro';
   function renderChart(data) {
     var el = document.getElementById('chart-traffic');
     var r = rows(data);
-    if (!r.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-size:0.875rem;">No traffic data</div>'; return; }
+    if (!r.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No traffic data</div>'; return; }
 
     var max = Math.max.apply(null, r.map(function(d) { return parseFloat(d.views) || 0; }));
     if (max === 0) max = 1;
@@ -472,7 +487,7 @@ import Layout from '../layouts/Layout.astro';
     for (var i = 0; i <= 4; i++) {
       var val = Math.round(max * (1 - i / 4));
       var yp = 10 + (ch / 4) * i;
-      yLabels += '<text x="45" y="' + (yp + 4) + '" text-anchor="end" fill="var(--ink-muted)" font-size="10" font-family="var(--font-sans)">' + num(val) + '</text>';
+      yLabels += '<text x="45" y="' + (yp + 4) + '" text-anchor="end" fill="var(--ink-muted)" font-size="10" font-family="var(--mono)">' + num(val) + '</text>';
       yLabels += '<line x1="50" x2="' + sw + '" y1="' + yp + '" y2="' + yp + '" stroke="var(--border-light)" stroke-dasharray="4,4"/>';
     }
 
@@ -483,7 +498,7 @@ import Layout from '../layouts/Layout.astro';
       var y = ch - h + 10;
       bars += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + h + '" fill="var(--accent)" rx="2" opacity="0.85"><title>' + esc(row.date || '') + ': ' + num(v) + '</title></rect>';
       if (i % step === 0 || i === r.length - 1) {
-        xLabels += '<text x="' + (x + bw / 2) + '" y="' + (ch + 26) + '" text-anchor="middle" fill="var(--ink-muted)" font-size="10" font-family="var(--font-sans)">' + esc((row.date || '').slice(5)) + '</text>';
+        xLabels += '<text x="' + (x + bw / 2) + '" y="' + (ch + 26) + '" text-anchor="middle" fill="var(--ink-muted)" font-size="10" font-family="var(--mono)">' + esc((row.date || '').slice(5)) + '</text>';
       }
     });
 
@@ -493,7 +508,7 @@ import Layout from '../layouts/Layout.astro';
   function renderFunnel(data) {
     var el = document.getElementById('funnel');
     var r = rows(data);
-    if (!r.length) { el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--ink-muted);font-size:0.875rem;">No funnel data</div>'; return; }
+    if (!r.length) { el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No funnel data</div>'; return; }
 
     var pv = sum(r, 'pageviews');
     var conv = sum(r, 'conversions');
