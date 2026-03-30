@@ -1,0 +1,20 @@
+name = "flarelytics"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Set your account_id here or via CLOUDFLARE_ACCOUNT_ID env var
+# account_id = "your-cloudflare-account-id"
+
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "flarelytics"
+
+[vars]
+ALLOWED_ORIGINS = "https://your-site.com"
+DATASET_NAME = "flarelytics"
+
+# Secrets (set via `wrangler secret put`):
+#   QUERY_API_KEY  — random string for dashboard authentication
+#   CF_API_TOKEN   — Cloudflare API token with Analytics Engine read access
+#   CF_ACCOUNT_ID  — your Cloudflare account ID

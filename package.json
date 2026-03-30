@@ -1,0 +1,22 @@
+{
+  "name": "flarelytics",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Privacy-first web analytics that runs entirely on Cloudflare",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

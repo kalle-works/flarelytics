@@ -1,0 +1,19 @@
+{
+  "name": "@flarelytics/tracker",
+  "version": "0.1.0",
+  "description": "Lightweight tracking script for Flarelytics (<1KB gzipped)",
+  "main": "dist/tracker.js",
+  "module": "dist/tracker.mjs",
+  "types": "dist/tracker.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/tracker.ts --format cjs,esm --dts --minify",
+    "dev": "tsup src/tracker.ts --format cjs,esm --dts --watch"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.8.0"
+  },
+  "keywords": ["analytics", "cloudflare", "privacy", "tracking"],
+  "license": "MIT"
+}

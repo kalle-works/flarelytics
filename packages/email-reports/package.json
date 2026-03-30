@@ -1,0 +1,16 @@
+{
+  "name": "@flarelytics/email-reports",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scheduled email report worker for Flarelytics",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250312.0",
+    "typescript": "^5.8.0",
+    "wrangler": "^4.0.0"
+  }
+}
