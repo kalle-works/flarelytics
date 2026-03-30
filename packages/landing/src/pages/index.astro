@@ -33,6 +33,7 @@ const comparisons = [
   <meta property="og:description" content="No cookies, no external dependencies, 5-minute setup. Open source." />
   <meta property="og:url" content="https://flarelytics.dev" />
   <meta property="og:type" content="website" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231c1917'/%3E%3Crect x='7' y='12' width='4' height='12' rx='1' fill='%23fbbf24'/%3E%3Crect x='14' y='8' width='4' height='16' rx='1' fill='%23fbbf24'/%3E%3Crect x='21' y='16' width='4' height='8' rx='1' fill='%23fbbf24'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
   <style is:inline>
@@ -64,7 +65,7 @@ const comparisons = [
     }
     .logo-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
     .nav-links { display: flex; gap: 1.5rem; align-items: center; }
-    .nav-links a { font-family: var(--mono); font-size: 12px; color: var(--ink2); }
+    .nav-links a { font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 12px 0; }
     .nav-links a:hover { color: var(--ink); }
 
     .btn {
@@ -92,6 +93,7 @@ const comparisons = [
       font-weight: 900;
       line-height: 1.1;
       letter-spacing: -0.035em;
+      text-wrap: balance;
       max-width: 700px;
       margin: 0 auto;
     }
@@ -126,8 +128,8 @@ const comparisons = [
     .code-cmd { color: #d6d3d1; }
 
     /* Features */
-    .features { padding: 4rem 0; }
-    .features h2 { text-align: center; font-family: var(--display); font-size: 28px; font-weight: 700; margin-bottom: 2.5rem; }
+    .features { padding: 56px 0; }
+    .features h2 { text-align: center; font-family: var(--display); font-size: 28px; font-weight: 700; margin-bottom: 2.5rem; text-wrap: balance; }
     .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .feature-card {
       background: var(--card);
@@ -149,8 +151,8 @@ const comparisons = [
     .feature-desc { font-size: 14.5px; color: var(--ink2); line-height: 1.5; }
 
     /* Comparison */
-    .comparison { padding: 4rem 0; }
-    .comparison h2 { text-align: center; font-family: var(--display); font-size: 28px; font-weight: 700; margin-bottom: 2.5rem; }
+    .comparison { padding: 48px 0; }
+    .comparison h2 { text-align: center; font-family: var(--display); font-size: 28px; font-weight: 700; margin-bottom: 2.5rem; text-wrap: balance; }
     .cmp-table { width: 100%; border-collapse: collapse; font-size: 14.5px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
     .cmp-table thead th {
       padding: 0.75rem 1rem;
@@ -177,8 +179,8 @@ const comparisons = [
     .cmp-highlight { background: var(--accent-light); }
 
     /* Privacy */
-    .privacy { padding: 4rem 0; text-align: center; }
-    .privacy h2 { font-family: var(--display); font-size: 28px; font-weight: 700; margin-bottom: 1rem; }
+    .privacy { padding: 56px 0; text-align: center; }
+    .privacy h2 { font-family: var(--display); font-size: 28px; font-weight: 700; margin-bottom: 1rem; text-wrap: balance; }
     .privacy p { max-width: 580px; margin: 0 auto; color: var(--ink2); font-size: 16px; }
     .privacy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 580px; margin: 2rem auto 0; text-align: left; }
     .privacy-item {
@@ -200,14 +202,14 @@ const comparisons = [
     .privacy-value { font-family: var(--mono); font-weight: 600; font-size: 14.5px; }
 
     /* CTA */
-    .cta { padding: 4rem 0; text-align: center; }
-    .cta h2 { font-family: var(--display); font-size: 28px; font-weight: 700; margin-bottom: 0.5rem; }
+    .cta { padding: 48px 0; text-align: center; }
+    .cta h2 { font-family: var(--display); font-size: 28px; font-weight: 700; margin-bottom: 0.5rem; text-wrap: balance; }
     .cta p { color: var(--ink2); margin-bottom: 1.5rem; }
 
     /* Footer */
     footer { padding: 2rem 0; border-top: 1px solid var(--border); text-align: center; }
     footer p { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
-    footer a { color: var(--ink3); }
+    footer a { color: var(--ink3); padding: 8px 0; display: inline-block; }
     footer a:hover { color: var(--accent-text); }
 
     @media (max-width: 640px) {
