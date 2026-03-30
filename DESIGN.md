@@ -19,7 +19,7 @@
 - **Data/Tables:** SF Mono / Fira Code with tabular-nums — clean number alignment
 - **Code:** SF Mono / Fira Code
 - **Loading:** Satoshi via Fontshare CDN (`https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap`). All other fonts are system fonts (zero load).
-- **Scale:** 10px (labels) / 12px (mono UI) / 12.5px (table data) / 14.5px (body) / 16px (lead) / 36px (specimen) / 52px (hero)
+- **Scale:** 10px (labels) / 12px (mono UI) / 15px (secondary text, table data) / 16px (body) / 28px (h2) / 36px (mobile hero) / 52px (hero)
 
 ## Color
 - **Approach:** Restrained — amber is the only color, used sparingly
