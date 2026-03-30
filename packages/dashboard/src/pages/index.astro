@@ -1,0 +1,519 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Flarelytics Dashboard">
+  <!-- Auth gate -->
+  <div id="auth-gate" style="max-width:400px;margin:5rem auto;text-align:center;">
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="margin:0 auto 1rem;">
+      <rect width="40" height="40" rx="8" fill="#f97316"/>
+      <path d="M12 28V16l8-6 8 6v12H12z" fill="white" opacity="0.9"/>
+      <circle cx="20" cy="21" r="3" fill="#f97316"/>
+    </svg>
+    <h1 style="font-size:1.75rem;font-weight:700;margin-bottom:0.5rem;">Flarelytics</h1>
+    <p style="font-size:0.875rem;color:var(--ink-muted);margin-bottom:1.5rem;">Enter your API key to view analytics.</p>
+    <form id="auth-form" style="display:flex;flex-direction:column;gap:0.75rem;">
+      <input
+        id="api-key"
+        type="password"
+        placeholder="API key"
+        required
+        style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-size:0.875rem;color:var(--ink);outline:none;"
+      />
+      <input
+        id="worker-url"
+        type="url"
+        placeholder="Worker URL (e.g. https://flarelytics.you.workers.dev)"
+        style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-size:0.875rem;color:var(--ink);outline:none;"
+      />
+      <button
+        type="submit"
+        style="min-height:44px;border-radius:var(--radius-lg);background:var(--accent);color:white;font-size:0.875rem;font-weight:600;border:none;cursor:pointer;"
+      >
+        View Dashboard
+      </button>
+      <p id="auth-error" style="display:none;font-size:0.875rem;color:var(--red);">Could not connect. Check your API key and worker URL.</p>
+    </form>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" style="display:none;">
+    <!-- Header -->
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.5rem;">
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+          <rect width="40" height="40" rx="8" fill="#f97316"/>
+          <path d="M12 28V16l8-6 8 6v12H12z" fill="white" opacity="0.9"/>
+          <circle cx="20" cy="21" r="3" fill="#f97316"/>
+        </svg>
+        <h1 style="font-size:1.5rem;font-weight:700;">Flarelytics</h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <div id="period-group" style="display:flex;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+          <button class="period-btn active" data-period="7d">7d</button>
+          <button class="period-btn" data-period="30d">30d</button>
+          <button class="period-btn" data-period="90d">90d</button>
+        </div>
+        <button id="refresh-btn" class="icon-btn" title="Refresh">↻</button>
+        <button id="export-btn" class="icon-btn" title="Export CSV">↓</button>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div id="kpi-cards" style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:2rem;">
+      <div class="card kpi" data-kpi="views">
+        <span class="kpi-label">Pageviews</span>
+        <span class="kpi-value">-</span>
+      </div>
+      <div class="card kpi" data-kpi="visitors">
+        <span class="kpi-label">Unique Visitors</span>
+        <span class="kpi-value">-</span>
+      </div>
+      <div class="card kpi" data-kpi="events">
+        <span class="kpi-label">Custom Events</span>
+        <span class="kpi-value">-</span>
+      </div>
+      <div class="card kpi" data-kpi="bounce">
+        <span class="kpi-label">Pages / Visit</span>
+        <span class="kpi-value">-</span>
+      </div>
+    </div>
+
+    <!-- Traffic Chart -->
+    <div class="section">
+      <h2 class="section-title">Traffic</h2>
+      <div class="card"><div id="chart-traffic" style="height:240px;width:100%;"></div></div>
+    </div>
+
+    <!-- Two-column: Top Pages + Referrers -->
+    <div style="display:grid;grid-template-columns:1fr;gap:1.5rem;margin-bottom:1.5rem;" class="two-col">
+      <div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h2 class="section-title">Top Pages</h2>
+          <button class="csv-btn" data-table="table-pages">CSV</button>
+        </div>
+        <div class="card table-wrap">
+          <table class="tbl" id="table-pages">
+            <thead><tr><th style="text-align:left;">Path</th><th style="text-align:right;">Views</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h2 class="section-title">Referrers</h2>
+          <button class="csv-btn" data-table="table-referrers">CSV</button>
+        </div>
+        <div class="card table-wrap">
+          <table class="tbl" id="table-referrers">
+            <thead><tr><th style="text-align:left;">Source</th><th style="text-align:right;">Visits</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two-column: Countries + Custom Events -->
+    <div style="display:grid;grid-template-columns:1fr;gap:1.5rem;margin-bottom:1.5rem;" class="two-col">
+      <div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h2 class="section-title">Countries</h2>
+          <button class="csv-btn" data-table="table-countries">CSV</button>
+        </div>
+        <div class="card table-wrap">
+          <table class="tbl" id="table-countries">
+            <thead><tr><th style="text-align:left;">Country</th><th style="text-align:right;">Views</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h2 class="section-title">Custom Events</h2>
+          <button class="csv-btn" data-table="table-events">CSV</button>
+        </div>
+        <div class="card table-wrap">
+          <table class="tbl" id="table-events">
+            <thead><tr><th style="text-align:left;">Event</th><th style="text-align:left;">Properties</th><th style="text-align:right;">Count</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- UTM + Outbound -->
+    <div style="display:grid;grid-template-columns:1fr;gap:1.5rem;margin-bottom:1.5rem;" class="two-col">
+      <div class="section">
+        <h2 class="section-title">UTM Campaigns</h2>
+        <div class="card table-wrap">
+          <table class="tbl" id="table-utm">
+            <thead><tr><th style="text-align:left;">Source</th><th style="text-align:left;">Medium</th><th style="text-align:left;">Campaign</th><th style="text-align:right;">Visits</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="section">
+        <h2 class="section-title">Outbound Links</h2>
+        <div class="card table-wrap">
+          <table class="tbl" id="table-outbound">
+            <thead><tr><th style="text-align:left;">Destination</th><th style="text-align:right;">Clicks</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Funnel -->
+    <div class="section">
+      <h2 class="section-title">Conversion Funnel</h2>
+      <div class="card" id="funnel"></div>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  @media (min-width: 768px) {
+    .two-col { grid-template-columns: 1fr 1fr !important; }
+    #kpi-cards { grid-template-columns: repeat(4, 1fr) !important; }
+  }
+
+  .card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    padding: 1rem;
+  }
+
+  .kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .kpi-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
+  }
+  .kpi-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+
+  .section { margin-bottom: 1.5rem; }
+  .section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 0.5rem;
+  }
+
+  .table-wrap { overflow-x: auto; }
+
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+  }
+  .tbl thead th {
+    padding: 6px 10px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
+    border-bottom: 2px solid var(--border);
+  }
+  .tbl tbody td {
+    padding: 6px 10px;
+    color: var(--ink-secondary);
+    border-bottom: 1px solid var(--border-light);
+    font-variant-numeric: tabular-nums;
+  }
+  .tbl tbody tr:hover { background: var(--surface); }
+  .tbl tbody tr:last-child td { border-bottom: none; }
+
+  .period-btn {
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    background: transparent;
+    border: none;
+    color: var(--ink-secondary);
+    cursor: pointer;
+    transition: background 150ms, color 150ms;
+  }
+  .period-btn:not(:last-child) { border-right: 1px solid var(--border); }
+  .period-btn.active { background: var(--accent); color: white; }
+  .period-btn:hover:not(.active) { background: var(--surface); }
+
+  .icon-btn {
+    min-height: 36px;
+    min-width: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    color: var(--ink-secondary);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 150ms;
+  }
+  .icon-btn:hover { background: var(--surface); }
+
+  .csv-btn {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--ink-muted);
+    cursor: pointer;
+  }
+  .csv-btn:hover { background: var(--surface); color: var(--ink-secondary); }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface) 25%, var(--border-light) 50%, var(--surface) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+    height: 1em;
+    display: inline-block;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  .funnel-row { margin-bottom: 0.75rem; }
+  .funnel-label { display: flex; justify-content: space-between; font-size: 0.8125rem; margin-bottom: 4px; }
+  .funnel-label span:first-child { font-weight: 500; color: var(--ink); }
+  .funnel-label span:last-child { font-variant-numeric: tabular-nums; color: var(--ink-secondary); }
+  .funnel-track { height: 28px; background: var(--surface); border-radius: var(--radius-md); overflow: hidden; }
+  .funnel-fill { height: 100%; border-radius: var(--radius-md); transition: width 600ms ease; }
+</style>
+
+<script is:inline>
+(function() {
+  var WORKER = '';
+  var apiKey = '';
+  var period = '7d';
+
+  var authGate = document.getElementById('auth-gate');
+  var dashboard = document.getElementById('dashboard');
+  var authForm = document.getElementById('auth-form');
+  var authError = document.getElementById('auth-error');
+
+  // Restore session
+  var saved = sessionStorage.getItem('flarelytics_session');
+  if (saved) {
+    try {
+      var s = JSON.parse(saved);
+      WORKER = s.url; apiKey = s.key;
+      authGate.style.display = 'none';
+      dashboard.style.display = 'block';
+      loadAll();
+    } catch(e) {}
+  }
+
+  // Auth
+  authForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var key = document.getElementById('api-key').value.trim();
+    var url = document.getElementById('worker-url').value.trim().replace(/\/$/, '');
+    if (!key || !url) return;
+
+    fetch(url + '/query?q=daily-views&period=7d', { headers: { 'X-API-Key': key } })
+      .then(function(r) {
+        if (r.status === 401) throw new Error('Unauthorized');
+        return r.json();
+      })
+      .then(function() {
+        authError.style.display = 'none';
+        WORKER = url; apiKey = key;
+        sessionStorage.setItem('flarelytics_session', JSON.stringify({ url: url, key: key }));
+        authGate.style.display = 'none';
+        dashboard.style.display = 'block';
+        loadAll();
+      })
+      .catch(function() { authError.style.display = 'block'; });
+  });
+
+  // Period buttons
+  document.querySelectorAll('.period-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      period = btn.dataset.period;
+      loadAll();
+    });
+  });
+
+  document.getElementById('refresh-btn').addEventListener('click', loadAll);
+
+  // CSV export
+  document.querySelectorAll('.csv-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var table = document.getElementById(btn.dataset.table);
+      if (!table) return;
+      var rows = [];
+      table.querySelectorAll('tr').forEach(function(tr) {
+        var cells = [];
+        tr.querySelectorAll('th, td').forEach(function(td) { cells.push('"' + td.textContent.replace(/"/g, '""') + '"'); });
+        rows.push(cells.join(','));
+      });
+      var blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = btn.dataset.table + '-' + period + '.csv';
+      a.click();
+    });
+  });
+
+  // Full CSV export
+  document.getElementById('export-btn').addEventListener('click', function() {
+    document.querySelectorAll('.csv-btn').forEach(function(btn) { btn.click(); });
+  });
+
+  function query(q) {
+    return fetch(WORKER + '/query?q=' + q + '&period=' + period, { headers: { 'X-API-Key': apiKey } })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; });
+  }
+
+  function rows(d) { return d && Array.isArray(d) ? d : (d && d.data ? d.data : []); }
+  function num(n) { return n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'); }
+  function esc(s) { return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
+  function skel(w) { return '<span class="skeleton" style="width:' + (w||60) + 'px">&nbsp;</span>'; }
+  function sum(arr, f) { return arr.reduce(function(a, r) { return a + (parseFloat(r[f]) || 0); }, 0); }
+
+  function fillTable(id, data, cols) {
+    var tbody = document.querySelector('#' + id + ' tbody');
+    if (!tbody) return;
+    var r = rows(data);
+    if (!r.length) { tbody.innerHTML = '<tr><td colspan="' + cols.length + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>'; return; }
+    var html = '';
+    r.forEach(function(row) {
+      html += '<tr>';
+      cols.forEach(function(c) {
+        var v = row[c.key];
+        var align = c.align || 'left';
+        if (c.fmt === 'num') v = num(v);
+        else if (c.fmt === 'pct') v = (parseFloat(v) || 0).toFixed(1) + '%';
+        else v = esc(v) || '-';
+        html += '<td style="text-align:' + align + '">' + v + '</td>';
+      });
+      html += '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  function loadAll() {
+    // Skeletons
+    document.querySelectorAll('.kpi-value').forEach(function(el) { el.innerHTML = skel(70); });
+    document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-size:0.875rem;">Loading...</div>';
+
+    var qs = ['daily-views','daily-unique-visitors','top-pages','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel'];
+
+    Promise.all(qs.map(function(q) {
+      return query(q).then(function(d) { return { q: q, d: d }; });
+    })).then(function(results) {
+      var m = {};
+      results.forEach(function(r) { m[r.q] = r.d; });
+
+      // KPIs
+      var dv = rows(m['daily-views']);
+      var duv = rows(m['daily-unique-visitors']);
+      var funnel = rows(m['conversion-funnel']);
+      var totalViews = sum(dv, 'views');
+      var totalVisitors = sum(duv, 'unique_visitors');
+      var totalEvents = sum(funnel, 'conversions');
+      var pagesPerVisit = totalVisitors > 0 ? (totalViews / totalVisitors).toFixed(1) : '0';
+
+      document.querySelector('[data-kpi="views"] .kpi-value').textContent = num(totalViews);
+      document.querySelector('[data-kpi="visitors"] .kpi-value').textContent = num(totalVisitors);
+      document.querySelector('[data-kpi="events"] .kpi-value').textContent = num(totalEvents);
+      document.querySelector('[data-kpi="bounce"] .kpi-value').textContent = pagesPerVisit;
+
+      // Traffic chart
+      renderChart(dv);
+
+      // Tables
+      fillTable('table-pages', m['top-pages'], [{ key: 'path' }, { key: 'views', align: 'right', fmt: 'num' }]);
+      fillTable('table-referrers', m['referrers'], [{ key: 'referrer' }, { key: 'visits', align: 'right', fmt: 'num' }]);
+      fillTable('table-countries', m['countries'], [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }]);
+      fillTable('table-events', m['custom-events'], [{ key: 'event' }, { key: 'properties' }, { key: 'count', align: 'right', fmt: 'num' }]);
+      fillTable('table-outbound', m['outbound-links'], [{ key: 'destination' }, { key: 'clicks', align: 'right', fmt: 'num' }]);
+      fillTable('table-utm', m['utm-campaigns'], [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
+
+      // Funnel
+      renderFunnel(funnel);
+    });
+  }
+
+  function renderChart(data) {
+    var el = document.getElementById('chart-traffic');
+    var r = rows(data);
+    if (!r.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-size:0.875rem;">No traffic data</div>'; return; }
+
+    var max = Math.max.apply(null, r.map(function(d) { return parseFloat(d.views) || 0; }));
+    if (max === 0) max = 1;
+    var bw = Math.max(4, Math.floor((el.clientWidth - 60) / r.length) - 2);
+    var ch = 200;
+    var sw = r.length * (bw + 2) + 60;
+
+    var bars = '', xLabels = '', yLabels = '';
+    var step = Math.max(1, Math.floor(r.length / 7));
+
+    for (var i = 0; i <= 4; i++) {
+      var val = Math.round(max * (1 - i / 4));
+      var yp = 10 + (ch / 4) * i;
+      yLabels += '<text x="45" y="' + (yp + 4) + '" text-anchor="end" fill="var(--ink-muted)" font-size="10" font-family="var(--font-sans)">' + num(val) + '</text>';
+      yLabels += '<line x1="50" x2="' + sw + '" y1="' + yp + '" y2="' + yp + '" stroke="var(--border-light)" stroke-dasharray="4,4"/>';
+    }
+
+    r.forEach(function(row, i) {
+      var v = parseFloat(row.views) || 0;
+      var h = Math.max(1, (v / max) * ch);
+      var x = 50 + i * (bw + 2);
+      var y = ch - h + 10;
+      bars += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + h + '" fill="var(--accent)" rx="2" opacity="0.85"><title>' + esc(row.date || '') + ': ' + num(v) + '</title></rect>';
+      if (i % step === 0 || i === r.length - 1) {
+        xLabels += '<text x="' + (x + bw / 2) + '" y="' + (ch + 26) + '" text-anchor="middle" fill="var(--ink-muted)" font-size="10" font-family="var(--font-sans)">' + esc((row.date || '').slice(5)) + '</text>';
+      }
+    });
+
+    el.innerHTML = '<svg width="100%" viewBox="0 0 ' + Math.max(sw, el.clientWidth) + ' ' + (ch + 35) + '" preserveAspectRatio="xMinYMin meet">' + yLabels + bars + xLabels + '</svg>';
+  }
+
+  function renderFunnel(data) {
+    var el = document.getElementById('funnel');
+    var r = rows(data);
+    if (!r.length) { el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--ink-muted);font-size:0.875rem;">No funnel data</div>'; return; }
+
+    var pv = sum(r, 'pageviews');
+    var conv = sum(r, 'conversions');
+    var max = Math.max(pv, 1);
+
+    var steps = [
+      { label: 'Pageviews', value: pv, color: 'var(--accent)' },
+      { label: 'Custom Events', value: conv, color: 'var(--green)' },
+    ];
+
+    var html = '';
+    steps.forEach(function(s) {
+      var w = Math.max(2, (s.value / max) * 100);
+      var rate = pv > 0 ? (s.value / pv * 100).toFixed(2) : '0';
+      html += '<div class="funnel-row">';
+      html += '<div class="funnel-label"><span>' + esc(s.label) + '</span><span>' + num(s.value) + ' (' + rate + '%)</span></div>';
+      html += '<div class="funnel-track"><div class="funnel-fill" style="width:' + w + '%;background:' + s.color + ';opacity:0.8;"></div></div>';
+      html += '</div>';
+    });
+    el.innerHTML = html;
+  }
+})();
+</script>

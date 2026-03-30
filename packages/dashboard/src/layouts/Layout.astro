@@ -1,0 +1,61 @@
+---
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>{title}</title>
+  <style>
+    :root {
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+      --ink: #1a1a1a;
+      --ink-secondary: #4a4a4a;
+      --ink-muted: #8a8a8a;
+      --surface: #fafaf9;
+      --surface-raised: #ffffff;
+      --border: #e5e5e3;
+      --border-light: #f0f0ee;
+      --accent: #f97316;
+      --accent-hover: #ea580c;
+      --accent-light: #fff7ed;
+      --green: #16a34a;
+      --green-light: #f0fdf4;
+      --red: #dc2626;
+      --red-light: #fef2f2;
+      --blue: #2563eb;
+      --radius-sm: 2px;
+      --radius-md: 4px;
+      --radius-lg: 6px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--surface);
+      color: var(--ink);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container { max-width: 1280px; margin: 0 auto; padding: 2rem 1rem; }
+
+    @media (min-width: 640px) { .container { padding: 2rem 1.5rem; } }
+    @media (min-width: 1024px) { .container { padding: 2rem 2rem; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <slot />
+  </div>
+</body>
+</html>
