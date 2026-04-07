@@ -152,6 +152,9 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
   const ip = request.headers.get('CF-Connecting-IP') || '0.0.0.0';
   const vid = await visitorHash(ip, ua);
 
+  // Derive site from Origin header, strip www. prefix
+  const site = origin ? (() => { try { return new URL(origin).hostname.replace(/^www\./, ''); } catch { return origin; } })() : '';
+
   env.ANALYTICS.writeDataPoint({
     blobs: [
       path,                                      // blob1: path
@@ -163,6 +166,7 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
       (body.utm_medium || '').slice(0, 200),     // blob7: utm_medium
       (body.utm_campaign || '').slice(0, 200),   // blob8: utm_campaign
       vid,                                       // blob9: visitor_id
+      site,                                      // blob10: site hostname
     ],
     doubles: [1],
     indexes: [path],
@@ -172,75 +176,75 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
 }
 
 // Query templates
-const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p: string) => string }> = {
+const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p: string, site: string) => string }> = {
   'top-pages': {
     description: 'Most viewed pages',
-    sql: (ds, p) => `
+    sql: (ds, p, site) => `
       SELECT blob1 AS path, SUM(_sample_interval * double1) AS views
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview'
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
       GROUP BY path ORDER BY views DESC LIMIT 20
     `,
   },
   'daily-views': {
     description: 'Pageviews per day',
-    sql: (ds, p) => `
+    sql: (ds, p, site) => `
       SELECT toDate(timestamp) AS date, SUM(_sample_interval * double1) AS views
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview'
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
       GROUP BY date ORDER BY date ASC
     `,
   },
   'daily-unique-visitors': {
     description: 'Unique visitors per day',
-    sql: (ds, p) => `
+    sql: (ds, p, site) => `
       SELECT toDate(timestamp) AS date,
         COUNT(DISTINCT blob9) AS unique_visitors,
         SUM(_sample_interval * double1) AS total_views
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview'
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
       GROUP BY date ORDER BY date ASC
     `,
   },
   'referrers': {
     description: 'Top referrer hostnames',
-    sql: (ds, p) => `
+    sql: (ds, p, site) => `
       SELECT blob2 AS referrer, SUM(_sample_interval * double1) AS visits
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob2 != 'direct'
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob2 != 'direct' AND blob10 = '${site}'
       GROUP BY referrer ORDER BY visits DESC LIMIT 20
     `,
   },
   'countries': {
     description: 'Views by country',
-    sql: (ds, p) => `
+    sql: (ds, p, site) => `
       SELECT blob3 AS country, SUM(_sample_interval * double1) AS views
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview'
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
       GROUP BY country ORDER BY views DESC LIMIT 20
     `,
   },
   'custom-events': {
     description: 'Custom event counts by name',
-    sql: (ds, p) => `
+    sql: (ds, p, site) => `
       SELECT blob4 AS event, blob5 AS properties, SUM(_sample_interval * double1) AS count
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 != 'pageview' AND blob4 != 'outbound'
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 != 'pageview' AND blob4 != 'outbound' AND blob10 = '${site}'
       GROUP BY event, properties ORDER BY count DESC LIMIT 50
     `,
   },
   'outbound-links': {
     description: 'Clicks to external URLs',
-    sql: (ds, p) => `
+    sql: (ds, p, site) => `
       SELECT blob5 AS destination, SUM(_sample_interval * double1) AS clicks
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'outbound' AND blob5 != ''
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'outbound' AND blob5 != '' AND blob10 = '${site}'
       GROUP BY destination ORDER BY clicks DESC LIMIT 30
     `,
   },
   'page-performance': {
     description: 'Page views vs custom event clicks with CTR',
-    sql: (ds, p) => `
+    sql: (ds, p, site) => `
       SELECT
         pages.path AS path, pages.views AS views,
         COALESCE(events.events, 0) AS events,
@@ -250,13 +254,13 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
       FROM (
         SELECT blob1 AS path, SUM(_sample_interval * double1) AS views
         FROM ${ds}
-        WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview'
+        WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
         GROUP BY path HAVING views >= 10
       ) AS pages
       LEFT JOIN (
         SELECT blob1 AS path, SUM(_sample_interval * double1) AS events
         FROM ${ds}
-        WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 != 'pageview' AND blob4 != 'outbound'
+        WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 != 'pageview' AND blob4 != 'outbound' AND blob10 = '${site}'
         GROUP BY path
       ) AS events ON pages.path = events.path
       ORDER BY pages.views DESC LIMIT 30
@@ -264,22 +268,22 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'utm-campaigns': {
     description: 'UTM campaign breakdown',
-    sql: (ds, p) => `
+    sql: (ds, p, site) => `
       SELECT blob6 AS utm_source, blob7 AS utm_medium, blob8 AS utm_campaign,
         SUM(_sample_interval * double1) AS visits
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p} AND blob6 != ''
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob6 != '' AND blob10 = '${site}'
       GROUP BY utm_source, utm_medium, utm_campaign ORDER BY visits DESC LIMIT 30
     `,
   },
   'conversion-funnel': {
     description: 'Daily funnel: pageviews to custom events',
-    sql: (ds, p) => `
+    sql: (ds, p, site) => `
       SELECT toDate(timestamp) AS date,
         SUM(CASE WHEN blob4 = 'pageview' THEN _sample_interval * double1 ELSE 0 END) AS pageviews,
         SUM(CASE WHEN blob4 != 'pageview' AND blob4 != 'outbound' THEN _sample_interval * double1 ELSE 0 END) AS conversions
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob10 = '${site}'
       GROUP BY date ORDER BY date ASC
     `,
   },
@@ -303,6 +307,7 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const queryName = url.searchParams.get('q');
   const periodParam = url.searchParams.get('period') || '30d';
+  const siteParam = url.searchParams.get('site');
 
   if (!queryName || !QUERY_TEMPLATES[queryName]) {
     return Response.json(
@@ -319,12 +324,21 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     );
   }
 
+  if (!siteParam) {
+    return Response.json({ error: 'Missing required param: site (e.g. ?site=yoursite.com)' }, { status: 400, headers: cors });
+  }
+
+  // Validate site param: only allow hostname-safe characters to prevent SQL injection
+  if (!/^[a-zA-Z0-9.\-]+$/.test(siteParam)) {
+    return Response.json({ error: 'Invalid site param' }, { status: 400, headers: cors });
+  }
+
   const dataset = env.DATASET_NAME;
   if (!dataset) {
     return Response.json({ error: 'DATASET_NAME not configured' }, { status: 500, headers: cors });
   }
 
-  const sql = QUERY_TEMPLATES[queryName].sql(dataset, period);
+  const sql = QUERY_TEMPLATES[queryName].sql(dataset, period, siteParam);
 
   try {
     const response = await fetch(

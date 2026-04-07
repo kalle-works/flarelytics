@@ -27,6 +27,13 @@ import Layout from '../layouts/Layout.astro';
         placeholder="Worker URL (e.g. https://analytics.yoursite.com)"
         style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-family:var(--mono);font-size:0.8125rem;color:var(--ink);outline:none;"
       />
+      <input
+        id="site-hostname"
+        type="text"
+        placeholder="Site hostname (e.g. yoursite.com)"
+        required
+        style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-family:var(--mono);font-size:0.8125rem;color:var(--ink);outline:none;"
+      />
       <button
         type="submit"
         style="min-height:44px;border-radius:var(--radius-lg);background:#1c1917;color:white;font-family:var(--mono);font-size:0.8125rem;font-weight:600;border:none;cursor:pointer;transition:background 120ms;"
@@ -316,6 +323,7 @@ import Layout from '../layouts/Layout.astro';
 (function() {
   var WORKER = '';
   var apiKey = '';
+  var site = '';
   var period = '7d';
 
   var authGate = document.getElementById('auth-gate');
@@ -328,7 +336,7 @@ import Layout from '../layouts/Layout.astro';
   if (saved) {
     try {
       var s = JSON.parse(saved);
-      WORKER = s.url; apiKey = s.key;
+      WORKER = s.url; apiKey = s.key; site = s.site || '';
       authGate.style.display = 'none';
       dashboard.style.display = 'block';
       loadAll();
@@ -340,17 +348,18 @@ import Layout from '../layouts/Layout.astro';
     e.preventDefault();
     var key = document.getElementById('api-key').value.trim();
     var url = document.getElementById('worker-url').value.trim().replace(/\/$/, '');
-    if (!key || !url) return;
+    var siteInput = document.getElementById('site-hostname').value.trim().replace(/^www\./, '');
+    if (!key || !url || !siteInput) return;
 
-    fetch(url + '/query?q=daily-views&period=7d', { headers: { 'X-API-Key': key } })
+    fetch(url + '/query?q=daily-views&period=7d&site=' + encodeURIComponent(siteInput), { headers: { 'X-API-Key': key } })
       .then(function(r) {
         if (r.status === 401) throw new Error('Unauthorized');
         return r.json();
       })
       .then(function() {
         authError.style.display = 'none';
-        WORKER = url; apiKey = key;
-        sessionStorage.setItem('flarelytics_session', JSON.stringify({ url: url, key: key }));
+        WORKER = url; apiKey = key; site = siteInput;
+        sessionStorage.setItem('flarelytics_session', JSON.stringify({ url: url, key: key, site: siteInput }));
         authGate.style.display = 'none';
         dashboard.style.display = 'block';
         loadAll();
@@ -395,7 +404,7 @@ import Layout from '../layouts/Layout.astro';
   });
 
   function query(q) {
-    return fetch(WORKER + '/query?q=' + q + '&period=' + period, { headers: { 'X-API-Key': apiKey } })
+    return fetch(WORKER + '/query?q=' + q + '&period=' + period + '&site=' + encodeURIComponent(site), { headers: { 'X-API-Key': apiKey } })
       .then(function(r) { return r.json(); })
       .catch(function() { return null; });
   }
