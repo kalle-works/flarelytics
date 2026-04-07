@@ -34,6 +34,12 @@ import Layout from '../layouts/Layout.astro';
         required
         style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-family:var(--mono);font-size:0.8125rem;color:var(--ink);outline:none;"
       />
+      <input
+        id="site-label"
+        type="text"
+        placeholder="Label (optional, e.g. My Blog)"
+        style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-family:var(--mono);font-size:0.8125rem;color:var(--ink);outline:none;"
+      />
       <button
         type="submit"
         style="min-height:44px;border-radius:var(--radius-lg);background:#1c1917;color:white;font-family:var(--mono);font-size:0.8125rem;font-weight:600;border:none;cursor:pointer;transition:background 120ms;"
@@ -50,7 +56,7 @@ import Layout from '../layouts/Layout.astro';
   <div id="dashboard" style="display:none;">
     <!-- Header -->
     <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.5rem;">
-      <div style="display:flex;align-items:center;gap:0.5rem;">
+      <div style="display:flex;align-items:center;gap:0.75rem;">
         <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
           <rect width="32" height="32" rx="6" fill="#1c1917"/>
           <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
@@ -58,6 +64,7 @@ import Layout from '../layouts/Layout.astro';
           <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
         </svg>
         <h1 style="font-family:var(--mono);font-size:1rem;font-weight:500;">flarelytics</h1>
+        <select id="site-switcher" style="display:none;font-family:var(--mono);font-size:0.8125rem;border:1px solid var(--border);background:var(--surface-raised);border-radius:var(--radius-lg);padding:0.25rem 0.5rem;color:var(--ink);cursor:pointer;"></select>
       </div>
       <div style="display:flex;align-items:center;gap:0.5rem;">
         <div id="period-group" style="display:flex;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
@@ -65,8 +72,8 @@ import Layout from '../layouts/Layout.astro';
           <button class="period-btn" data-period="30d">30d</button>
           <button class="period-btn" data-period="90d">90d</button>
         </div>
-        <button id="refresh-btn" class="icon-btn" title="Refresh">↻</button>
-        <button id="export-btn" class="icon-btn" title="Export CSV">↓</button>
+        <button id="refresh-btn" class="icon-btn" title="Refresh">&#x21BB;</button>
+        <button id="export-btn" class="icon-btn" title="Export CSV">&#x2193;</button>
       </div>
     </div>
 
@@ -75,10 +82,12 @@ import Layout from '../layouts/Layout.astro';
       <div class="card kpi" data-kpi="views">
         <span class="kpi-label">Pageviews</span>
         <span class="kpi-value">-</span>
+        <span class="kpi-wow" data-wow="views"></span>
       </div>
       <div class="card kpi" data-kpi="visitors">
         <span class="kpi-label">Unique Visitors</span>
         <span class="kpi-value">-</span>
+        <span class="kpi-wow" data-wow="visitors"></span>
       </div>
       <div class="card kpi" data-kpi="events">
         <span class="kpi-label">Custom Events</span>
@@ -176,7 +185,12 @@ import Layout from '../layouts/Layout.astro';
 
     <!-- Funnel -->
     <div class="section">
-      <h2 class="section-title">Conversion Funnel</h2>
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+        <h2 class="section-title" style="margin-bottom:0;">Conversion Funnel</h2>
+        <select id="funnel-event-select" style="font-family:var(--mono);font-size:0.8125rem;border:1px solid var(--border);background:var(--surface-raised);border-radius:var(--radius-lg);padding:0.25rem 0.5rem;color:var(--ink);cursor:pointer;">
+          <option value="">Kaikki eventit</option>
+        </select>
+      </div>
       <div class="card" id="funnel"></div>
     </div>
   </div>
@@ -186,6 +200,11 @@ import Layout from '../layouts/Layout.astro';
   @media (min-width: 768px) {
     .two-col { grid-template-columns: 1fr 1fr !important; }
     #kpi-cards { grid-template-columns: repeat(4, 1fr) !important; }
+  }
+
+  :root {
+    --green: #16a34a;
+    --red: #dc2626;
   }
 
   .card {
@@ -214,6 +233,11 @@ import Layout from '../layouts/Layout.astro';
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
+  }
+  .kpi-wow {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    min-height: 1em;
   }
 
   .section { margin-bottom: 1.5rem; }
@@ -326,20 +350,71 @@ import Layout from '../layouts/Layout.astro';
   var site = '';
   var period = '7d';
 
+  // Session: { sites: [{url, key, site, label}], current: 0 }
+  var session = { sites: [], current: 0 };
+
   var authGate = document.getElementById('auth-gate');
   var dashboard = document.getElementById('dashboard');
   var authForm = document.getElementById('auth-form');
   var authError = document.getElementById('auth-error');
+  var siteSwitcher = document.getElementById('site-switcher');
 
-  // Restore session
+  function applySession() {
+    if (!session.sites.length) return;
+    var idx = session.current;
+    var s = session.sites[idx];
+    WORKER = s.url;
+    apiKey = s.key;
+    site = s.site;
+    renderSiteSwitcher();
+  }
+
+  function saveSession() {
+    sessionStorage.setItem('flarelytics_session', JSON.stringify(session));
+  }
+
+  function renderSiteSwitcher() {
+    if (session.sites.length <= 1) {
+      siteSwitcher.style.display = 'none';
+      return;
+    }
+    siteSwitcher.style.display = '';
+    var html = '';
+    session.sites.forEach(function(s, i) {
+      var label = s.label || s.site;
+      html += '<option value="' + i + '"' + (i === session.current ? ' selected' : '') + '>' + esc(label) + '</option>';
+    });
+    siteSwitcher.innerHTML = html;
+  }
+
+  siteSwitcher.addEventListener('change', function() {
+    session.current = parseInt(this.value, 10);
+    saveSession();
+    applySession();
+    loadAll();
+  });
+
+  // Restore session with backwards-compatibility
   var saved = sessionStorage.getItem('flarelytics_session');
   if (saved) {
     try {
-      var s = JSON.parse(saved);
-      WORKER = s.url; apiKey = s.key; site = s.site || '';
-      authGate.style.display = 'none';
-      dashboard.style.display = 'block';
-      loadAll();
+      var raw = JSON.parse(saved);
+      // Backwards-compat: old format { url, key, site }
+      if (raw && raw.url && !raw.sites) {
+        session = {
+          sites: [{ url: raw.url, key: raw.key, site: raw.site || '', label: raw.site || '' }],
+          current: 0
+        };
+        saveSession();
+      } else if (raw && Array.isArray(raw.sites)) {
+        session = raw;
+      }
+      if (session.sites.length) {
+        applySession();
+        authGate.style.display = 'none';
+        dashboard.style.display = 'block';
+        loadAll();
+      }
     } catch(e) {}
   }
 
@@ -349,6 +424,7 @@ import Layout from '../layouts/Layout.astro';
     var key = document.getElementById('api-key').value.trim();
     var url = document.getElementById('worker-url').value.trim().replace(/\/$/, '');
     var siteInput = document.getElementById('site-hostname').value.trim().replace(/^www\./, '');
+    var labelInput = document.getElementById('site-label').value.trim();
     if (!key || !url || !siteInput) return;
 
     fetch(url + '/query?q=daily-views&period=7d&site=' + encodeURIComponent(siteInput), { headers: { 'X-API-Key': key } })
@@ -358,8 +434,24 @@ import Layout from '../layouts/Layout.astro';
       })
       .then(function() {
         authError.style.display = 'none';
-        WORKER = url; apiKey = key; site = siteInput;
-        sessionStorage.setItem('flarelytics_session', JSON.stringify({ url: url, key: key, site: siteInput }));
+
+        // Check if url+site already in list
+        var existing = -1;
+        for (var i = 0; i < session.sites.length; i++) {
+          if (session.sites[i].url === url && session.sites[i].site === siteInput) {
+            existing = i;
+            break;
+          }
+        }
+        if (existing >= 0) {
+          session.current = existing;
+        } else {
+          session.sites.push({ url: url, key: key, site: siteInput, label: labelInput || siteInput });
+          session.current = session.sites.length - 1;
+        }
+
+        saveSession();
+        applySession();
         authGate.style.display = 'none';
         dashboard.style.display = 'block';
         loadAll();
@@ -403,8 +495,21 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.csv-btn').forEach(function(btn) { btn.click(); });
   });
 
+  // Funnel event selector
+  var funnelEventSelect = document.getElementById('funnel-event-select');
+  funnelEventSelect.addEventListener('change', function() {
+    loadFunnelByEvent(this.value);
+  });
+
   function query(q) {
     return fetch(WORKER + '/query?q=' + q + '&period=' + period + '&site=' + encodeURIComponent(site), { headers: { 'X-API-Key': apiKey } })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; });
+  }
+
+  function queryWow(q) {
+    var wowPeriod = period === '7d' ? '14d' : period === '30d' ? '60d' : '180d';
+    return fetch(WORKER + '/query?q=' + q + '&period=' + wowPeriod + '&site=' + encodeURIComponent(site), { headers: { 'X-API-Key': apiKey } })
       .then(function(r) { return r.json(); })
       .catch(function() { return null; });
   }
@@ -414,6 +519,33 @@ import Layout from '../layouts/Layout.astro';
   function esc(s) { return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
   function skel(w) { return '<span class="skeleton" style="width:' + (w||60) + 'px">&nbsp;</span>'; }
   function sum(arr, f) { return arr.reduce(function(a, r) { return a + (parseFloat(r[f]) || 0); }, 0); }
+
+  function computeWow(allRows, valueField) {
+    if (!allRows.length) return null;
+    // Sort by date ascending
+    var sorted = allRows.slice().sort(function(a, b) {
+      return (a.date || '') < (b.date || '') ? -1 : 1;
+    });
+    var half = Math.floor(sorted.length / 2);
+    if (half === 0) return null;
+    var prev = sorted.slice(0, half);
+    var curr = sorted.slice(sorted.length - half);
+    var prevSum = sum(prev, valueField);
+    var currSum = sum(curr, valueField);
+    if (prevSum === 0) return null;
+    return ((currSum - prevSum) / prevSum) * 100;
+  }
+
+  function renderWow(selector, pct) {
+    var el = document.querySelector(selector);
+    if (!el) return;
+    if (pct == null) { el.textContent = ''; return; }
+    var sign = pct >= 0 ? '+' : '';
+    el.textContent = sign + pct.toFixed(1) + '%';
+    el.style.color = pct >= 0 ? 'var(--green)' : 'var(--red)';
+    el.style.fontFamily = 'var(--mono)';
+    el.style.fontSize = '0.75rem';
+  }
 
   function fillTable(id, data, cols) {
     var tbody = document.querySelector('#' + id + ' tbody');
@@ -436,16 +568,113 @@ import Layout from '../layouts/Layout.astro';
     tbody.innerHTML = html;
   }
 
+  function fillTopPages(pagesData, eventsData) {
+    var pageRows = rows(pagesData);
+    var eventRows = rows(eventsData);
+
+    // Build share map from custom events
+    var shareMap = {};
+    var hasShares = false;
+    eventRows.forEach(function(row) {
+      if (row.event === 'share' && row.properties) {
+        var url;
+        try {
+          var parts = String(row.properties).split('|');
+          var rawUrl = parts[1] || '';
+          if (rawUrl) {
+            var u = new URL(rawUrl);
+            url = u.pathname;
+          }
+        } catch(e) {
+          url = null;
+        }
+        if (url) {
+          hasShares = true;
+          shareMap[url] = (shareMap[url] || 0) + (parseFloat(row.count) || 1);
+        }
+      }
+    });
+
+    var thead = document.querySelector('#table-pages thead tr');
+    var tbody = document.querySelector('#table-pages tbody');
+    if (!thead || !tbody) return;
+
+    if (hasShares) {
+      thead.innerHTML = '<th style="text-align:left;">Path</th><th style="text-align:right;">Views</th><th style="text-align:right;">Jaot</th>';
+    } else {
+      thead.innerHTML = '<th style="text-align:left;">Path</th><th style="text-align:right;">Views</th>';
+    }
+
+    if (!pageRows.length) {
+      var cols = hasShares ? 3 : 2;
+      tbody.innerHTML = '<tr><td colspan="' + cols + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>';
+      return;
+    }
+
+    var html = '';
+    pageRows.forEach(function(row) {
+      var path = esc(row.path) || '-';
+      var views = num(row.views);
+      html += '<tr><td style="text-align:left;">' + path + '</td><td style="text-align:right;">' + views + '</td>';
+      if (hasShares) {
+        var shares = shareMap[row.path] || 0;
+        html += '<td style="text-align:right;">' + (shares > 0 ? num(shares) : '-') + '</td>';
+      }
+      html += '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  function populateFunnelEventSelect(eventsData) {
+    var eventRows = rows(eventsData);
+    var names = {};
+    eventRows.forEach(function(row) {
+      if (row.event) names[row.event] = true;
+    });
+    var select = document.getElementById('funnel-event-select');
+    var html = '<option value="">Kaikki eventit</option>';
+    Object.keys(names).sort().forEach(function(name) {
+      html += '<option value="' + esc(name) + '">' + esc(name) + '</option>';
+    });
+    select.innerHTML = html;
+  }
+
+  function loadFunnelByEvent(eventName) {
+    var funnelEl = document.getElementById('funnel');
+    funnelEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
+
+    if (!eventName) {
+      query('conversion-funnel').then(function(d) {
+        renderFunnel(rows(d));
+      });
+      return;
+    }
+
+    var url = WORKER + '/query?q=funnel-by-event&period=' + period + '&site=' + encodeURIComponent(site) + '&event_name=' + encodeURIComponent(eventName);
+    fetch(url, { headers: { 'X-API-Key': apiKey } })
+      .then(function(r) { return r.json(); })
+      .then(function(d) { renderFunnel(rows(d)); })
+      .catch(function() { renderFunnel([]); });
+  }
+
   function loadAll() {
     // Skeletons
     document.querySelectorAll('.kpi-value').forEach(function(el) { el.innerHTML = skel(70); });
+    document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
     var qs = ['daily-views','daily-unique-visitors','top-pages','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel'];
 
-    Promise.all(qs.map(function(q) {
+    var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
-    })).then(function(results) {
+    }));
+
+    var wowPromise = Promise.all([
+      queryWow('daily-views').then(function(d) { return { q: 'daily-views', d: d }; }),
+      queryWow('daily-unique-visitors').then(function(d) { return { q: 'daily-unique-visitors', d: d }; })
+    ]);
+
+    mainPromise.then(function(results) {
       var m = {};
       results.forEach(function(r) { m[r.q] = r.d; });
 
@@ -466,8 +695,10 @@ import Layout from '../layouts/Layout.astro';
       // Traffic chart
       renderChart(dv);
 
-      // Tables
-      fillTable('table-pages', m['top-pages'], [{ key: 'path' }, { key: 'views', align: 'right', fmt: 'num' }]);
+      // Top pages with share column
+      fillTopPages(m['top-pages'], m['custom-events']);
+
+      // Other tables
       fillTable('table-referrers', m['referrers'], [{ key: 'referrer' }, { key: 'visits', align: 'right', fmt: 'num' }]);
       fillTable('table-countries', m['countries'], [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }]);
       fillTable('table-events', m['custom-events'], [{ key: 'event' }, { key: 'properties' }, { key: 'count', align: 'right', fmt: 'num' }]);
@@ -475,7 +706,31 @@ import Layout from '../layouts/Layout.astro';
       fillTable('table-utm', m['utm-campaigns'], [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
 
       // Funnel
+      var currentFunnelEvent = document.getElementById('funnel-event-select').value;
       renderFunnel(funnel);
+
+      // Populate funnel event selector
+      populateFunnelEventSelect(m['custom-events']);
+      // Restore selection if it existed
+      if (currentFunnelEvent) {
+        var sel = document.getElementById('funnel-event-select');
+        sel.value = currentFunnelEvent;
+      }
+    });
+
+    // WoW badges — resolve independently
+    wowPromise.then(function(results) {
+      var wm = {};
+      results.forEach(function(r) { wm[r.q] = r.d; });
+
+      var dvWow = rows(wm['daily-views']);
+      var duvWow = rows(wm['daily-unique-visitors']);
+
+      var viewsPct = computeWow(dvWow, 'views');
+      var visitorsPct = computeWow(duvWow, 'unique_visitors');
+
+      renderWow('[data-wow="views"]', viewsPct);
+      renderWow('[data-wow="visitors"]', visitorsPct);
     });
   }
 
