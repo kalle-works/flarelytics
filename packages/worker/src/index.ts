@@ -59,6 +59,17 @@ function deviceType(ua: string): string {
   return 'desktop';
 }
 
+function browserName(ua: string): string {
+  if (/Edg\//.test(ua)) return 'Edge';
+  if (/OPR\/|Opera/.test(ua)) return 'Opera';
+  if (/DuckDuckGo/.test(ua)) return 'DuckDuckGo';
+  if (/Chrome\//.test(ua)) return 'Chrome';
+  if (/Firefox\//.test(ua)) return 'Firefox';
+  if (/Mobile.*Safari/.test(ua)) return 'Safari Mobile';
+  if (/Safari\//.test(ua)) return 'Safari';
+  return 'Other';
+}
+
 function isBot(ua: string): boolean {
   if (!ua) return true;
   const lower = ua.toLowerCase();
@@ -167,6 +178,7 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
   // For timing events, extract seconds into double2 for AVG queries
   const timingSeconds = eventName === 'timing' ? (parseFloat(body.props?.seconds || '0') || 0) : 0;
   const device = deviceType(ua);
+  const browser = browserName(ua);
 
   env.ANALYTICS.writeDataPoint({
     blobs: [
@@ -181,6 +193,7 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
       vid,                                       // blob9: visitor_id
       site,                                      // blob10: site hostname
       device,                                    // blob11: device type (mobile/tablet/desktop)
+      browser,                                   // blob12: browser name
     ],
     doubles: [1, timingSeconds],               // double1: event count, double2: timing seconds
     indexes: [path],
@@ -308,6 +321,26 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
       GROUP BY device ORDER BY views DESC
+    `,
+  },
+  'browsers': {
+    description: 'Pageviews by browser',
+    sql: (ds, p, site, _eventName) => `
+      SELECT blob12 AS browser, SUM(_sample_interval * double1) AS views
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
+      GROUP BY browser ORDER BY views DESC LIMIT 10
+    `,
+  },
+  'top-pages-visitors': {
+    description: 'Top pages with both views and unique visitor counts',
+    sql: (ds, p, site, _eventName) => `
+      SELECT blob1 AS path,
+        SUM(_sample_interval * double1) AS views,
+        COUNT(DISTINCT blob9) AS visitors
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
+      GROUP BY path ORDER BY views DESC LIMIT 20
     `,
   },
   'page-timing': {
