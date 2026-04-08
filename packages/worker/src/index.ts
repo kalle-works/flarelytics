@@ -53,6 +53,12 @@ const DEFAULT_BOT_PATTERNS = [
   'whatsapp', 'telegrambot', 'bytespider', 'gptbot', 'claudebot',
 ];
 
+function deviceType(ua: string): string {
+  if (/Mobi|Android/i.test(ua)) return 'mobile';
+  if (/Tablet|iPad/i.test(ua)) return 'tablet';
+  return 'desktop';
+}
+
 function isBot(ua: string): boolean {
   if (!ua) return true;
   const lower = ua.toLowerCase();
@@ -160,6 +166,7 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
 
   // For timing events, extract seconds into double2 for AVG queries
   const timingSeconds = eventName === 'timing' ? (parseFloat(body.props?.seconds || '0') || 0) : 0;
+  const device = deviceType(ua);
 
   env.ANALYTICS.writeDataPoint({
     blobs: [
@@ -173,6 +180,7 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
       (body.utm_campaign || '').slice(0, 200),   // blob8: utm_campaign
       vid,                                       // blob9: visitor_id
       site,                                      // blob10: site hostname
+      device,                                    // blob11: device type (mobile/tablet/desktop)
     ],
     doubles: [1, timingSeconds],               // double1: event count, double2: timing seconds
     indexes: [path],
@@ -291,6 +299,15 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob10 = '${site}'
       GROUP BY date ORDER BY date ASC
+    `,
+  },
+  'devices': {
+    description: 'Pageviews by device type (mobile/tablet/desktop)',
+    sql: (ds, p, site, _eventName) => `
+      SELECT blob11 AS device, SUM(_sample_interval * double1) AS views
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
+      GROUP BY device ORDER BY views DESC
     `,
   },
   'page-timing': {

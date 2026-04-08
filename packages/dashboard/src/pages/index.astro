@@ -136,9 +136,15 @@ import Layout from '../layouts/Layout.astro';
     <!-- Two-column: Countries + Custom Events -->
     <div style="display:grid;grid-template-columns:1fr;gap:1.5rem;margin-bottom:1.5rem;" class="two-col">
       <div class="section">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <h2 class="section-title">Countries</h2>
-          <button class="csv-btn" data-table="table-countries">CSV</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
+          <div style="display:flex;gap:1rem;">
+            <h2 class="section-title">Countries</h2>
+            <button class="csv-btn" data-table="table-countries">CSV</button>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <span style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);">Laitteet</span>
+            <span id="device-badges" style="display:flex;gap:0.375rem;"></span>
+          </div>
         </div>
         <div class="card table-wrap">
           <table class="tbl" id="table-countries">
@@ -581,6 +587,19 @@ import Layout from '../layouts/Layout.astro';
     tbody.innerHTML = html;
   }
 
+  function renderDeviceBadges(data) {
+    var el = document.getElementById('device-badges');
+    if (!el) return;
+    var r = rows(data);
+    if (!r.length) { el.innerHTML = ''; return; }
+    var icons = { mobile: '📱', tablet: '⬜', desktop: '💻' };
+    var total = r.reduce(function(a, row) { return a + (parseFloat(row.views) || 0); }, 0);
+    el.innerHTML = r.map(function(row) {
+      var pct = total > 0 ? Math.round((parseFloat(row.views) || 0) / total * 100) : 0;
+      return '<span style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-secondary);white-space:nowrap;">' + (icons[row.device] || '?') + ' ' + row.device + ' ' + pct + '%</span>';
+    }).join('');
+  }
+
   function fillTable(id, data, cols) {
     var tbody = document.querySelector('#' + id + ' tbody');
     if (!tbody) return;
@@ -697,7 +716,7 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing'];
+    var qs = ['daily-views','daily-unique-visitors','top-pages','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices'];
 
     var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
@@ -735,6 +754,7 @@ import Layout from '../layouts/Layout.astro';
       // Other tables
       fillTable('table-referrers', m['referrers'], [{ key: 'referrer' }, { key: 'visits', align: 'right', fmt: 'num' }]);
       fillTable('table-countries', m['countries'], [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }]);
+      renderDeviceBadges(m['devices']);
       fillTable('table-events', m['custom-events'], [{ key: 'event' }, { key: 'properties' }, { key: 'count', align: 'right', fmt: 'num' }]);
       fillTable('table-outbound', m['outbound-links'], [{ key: 'destination' }, { key: 'clicks', align: 'right', fmt: 'num' }]);
       fillTable('table-utm', m['utm-campaigns'], [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
