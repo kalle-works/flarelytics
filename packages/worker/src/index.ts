@@ -158,6 +158,9 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
   const rawReferrer = (body.referrer || 'direct').slice(0, 500);
   const referrer = rawReferrer === site ? 'direct' : rawReferrer;
 
+  // For timing events, extract seconds into double2 for AVG queries
+  const timingSeconds = eventName === 'timing' ? (parseFloat(body.props?.seconds || '0') || 0) : 0;
+
   env.ANALYTICS.writeDataPoint({
     blobs: [
       path,                                      // blob1: path
@@ -171,7 +174,7 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
       vid,                                       // blob9: visitor_id
       site,                                      // blob10: site hostname
     ],
-    doubles: [1],
+    doubles: [1, timingSeconds],               // double1: event count, double2: timing seconds
     indexes: [path],
   });
 
@@ -294,7 +297,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
     description: 'Average time on page in seconds',
     sql: (ds, p, site, _eventName) => `
       SELECT blob1 AS path,
-        ROUND(AVG(toFloat64(blob5)), 0) AS avg_seconds,
+        ROUND(AVG(_sample_interval * double2), 0) AS avg_seconds,
         COUNT() AS sessions
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'timing' AND blob10 = '${site}'
