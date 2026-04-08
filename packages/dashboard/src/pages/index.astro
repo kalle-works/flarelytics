@@ -203,6 +203,20 @@ import Layout from '../layouts/Layout.astro';
       </div>
     </div>
 
+    <!-- Selaimet -->
+    <div class="section" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 class="section-title">Selaimet</h2>
+        <button class="csv-btn" data-table="table-browsers">CSV</button>
+      </div>
+      <div class="card table-wrap">
+        <table class="tbl" id="table-browsers">
+          <thead><tr><th style="text-align:left;">Selain</th><th style="text-align:right;">Views</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Funnel -->
     <div class="section">
       <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
@@ -676,7 +690,7 @@ import Layout from '../layouts/Layout.astro';
           var faviconUrl = 'https://www.google.com/s2/favicons?sz=16&domain=' + esc(rawVal);
           html += '<td style="font-family:var(--mono);font-size:0.8125rem;">' +
             '<span style="display:flex;align-items:center;gap:0.375rem;">' +
-            '<img src="' + faviconUrl + '" width="16" height="16" style="border-radius:2px;flex-shrink:0;" onerror="this.style.display='none'">' +
+            '<img src="' + faviconUrl + '" width="16" height="16" style="border-radius:2px;flex-shrink:0;" onerror="this.style.display=\'none\'">' +
             esc(rawVal) + '</span></td>';
         } else if (c.fmt === 'num') {
           var rawNum = parseFloat(row[c.key]) || 0;
@@ -825,7 +839,7 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices'];
+    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers'];
 
     var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
@@ -865,7 +879,7 @@ import Layout from '../layouts/Layout.astro';
 
       // Other tables
       tablePages['table-referrers'] = 0;
-      fillTable('table-referrers', m['referrers'], [{ key: 'referrer' }, { key: 'visits', align: 'right', fmt: 'num' }], true);
+      fillTable('table-referrers', m['referrers'], [{ key: 'referrer', favicon: true }, { key: 'visits', align: 'right', fmt: 'num' }], true);
       tablePages['table-countries'] = 0;
       fillTable('table-countries', m['countries'], [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }], true);
       renderDeviceBadges(m['devices']);
@@ -876,6 +890,12 @@ import Layout from '../layouts/Layout.astro';
 
       // Time on page
       fillTimingTable(m['page-timing']);
+
+      // Browsers
+      fillTable('table-browsers', m['browsers'], [
+        { key: 'browser' },
+        { key: 'views', align: 'right', fmt: 'num' }
+      ]);
 
       // Funnel
       var currentFunnelEvent = document.getElementById('funnel-event-select').value;
