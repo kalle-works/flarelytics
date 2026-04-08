@@ -183,6 +183,20 @@ import Layout from '../layouts/Layout.astro';
       </div>
     </div>
 
+    <!-- Time on Page -->
+    <div class="section" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 class="section-title">Aika sivulla</h2>
+        <button class="csv-btn" data-table="table-timing">CSV</button>
+      </div>
+      <div class="card table-wrap">
+        <table class="tbl" id="table-timing">
+          <thead><tr><th style="text-align:left;">Path</th><th style="text-align:right;">Keskim. aika</th><th style="text-align:right;">Mittauksia</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Funnel -->
     <div class="section">
       <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
@@ -547,6 +561,26 @@ import Layout from '../layouts/Layout.astro';
     el.style.fontSize = '0.75rem';
   }
 
+  function fmtSeconds(s) {
+    var n = Math.round(s);
+    if (n < 60) return n + 's';
+    return Math.floor(n / 60) + 'm ' + (n % 60) + 's';
+  }
+
+  function fillTimingTable(data) {
+    var tbody = document.querySelector('#table-timing tbody');
+    if (!tbody) return;
+    var r = rows(data);
+    if (!r.length) { tbody.innerHTML = '<tr><td colspan="3" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data — timing events accumulate as visitors browse</td></tr>'; return; }
+    var html = '';
+    r.forEach(function(row) {
+      html += '<tr><td style="font-family:var(--mono);font-size:0.8125rem;">' + esc(row.path) + '</td>';
+      html += '<td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;">' + fmtSeconds(parseFloat(row.avg_seconds) || 0) + '</td>';
+      html += '<td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;">' + num(row.sessions) + '</td></tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
   function fillTable(id, data, cols) {
     var tbody = document.querySelector('#' + id + ' tbody');
     if (!tbody) return;
@@ -663,7 +697,7 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel'];
+    var qs = ['daily-views','daily-unique-visitors','top-pages','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing'];
 
     var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
@@ -704,6 +738,9 @@ import Layout from '../layouts/Layout.astro';
       fillTable('table-events', m['custom-events'], [{ key: 'event' }, { key: 'properties' }, { key: 'count', align: 'right', fmt: 'num' }]);
       fillTable('table-outbound', m['outbound-links'], [{ key: 'destination' }, { key: 'clicks', align: 'right', fmt: 'num' }]);
       fillTable('table-utm', m['utm-campaigns'], [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
+
+      // Time on page
+      fillTimingTable(m['page-timing']);
 
       // Funnel
       var currentFunnelEvent = document.getElementById('funnel-event-select').value;

@@ -290,6 +290,17 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
       GROUP BY date ORDER BY date ASC
     `,
   },
+  'page-timing': {
+    description: 'Average time on page in seconds',
+    sql: (ds, p, site, _eventName) => `
+      SELECT blob1 AS path,
+        ROUND(AVG(toFloat64(blob5)), 0) AS avg_seconds,
+        COUNT() AS sessions
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'timing' AND blob10 = '${site}'
+      GROUP BY path ORDER BY sessions DESC LIMIT 20
+    `,
+  },
   'funnel-by-event': {
     description: 'Daily funnel: pageviews to a specific custom event',
     sql: (ds, p, site, eventName) => `
@@ -393,7 +404,7 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
 }
 
 // Auto-configured tracking script served from the worker
-const TRACKER_SCRIPT = `!function(){var e="__ENDPOINT__",n=function(n,t){var r=Object.assign({event:n,path:location.pathname},t||{});var i=document.referrer;if(n==="pageview"){if(i)try{r.referrer=new URL(i).hostname}catch(e){r.referrer=i}else r.referrer="direct";var o=new URLSearchParams(location.search);["utm_source","utm_medium","utm_campaign"].forEach(function(e){var n=o.get(e);if(n)r[e]=n})}var a=JSON.stringify(r),s=new Blob([a],{type:"application/json"});navigator.sendBeacon?navigator.sendBeacon(e+"/track",s):fetch(e+"/track",{method:"POST",body:a,headers:{"Content-Type":"application/json"},keepalive:!0})};n("pageview");document.addEventListener("click",function(e){var t=e.target.closest("a[href]");if(!t)return;try{var r=new URL(t.href);if(r.hostname===location.hostname)return;n("outbound",{props:{url:r.hostname+r.pathname}})}catch(e){}});window.flarelytics={track:n}}();`;
+const TRACKER_SCRIPT = `!function(){var e="__ENDPOINT__",n=function(n,t){var r=Object.assign({event:n,path:location.pathname},t||{});var i=document.referrer;if(n==="pageview"){if(i)try{r.referrer=new URL(i).hostname}catch(e){r.referrer=i}else r.referrer="direct";var o=new URLSearchParams(location.search);["utm_source","utm_medium","utm_campaign"].forEach(function(e){var n=o.get(e);if(n)r[e]=n})}var a=JSON.stringify(r),s=new Blob([a],{type:"application/json"});navigator.sendBeacon?navigator.sendBeacon(e+"/track",s):fetch(e+"/track",{method:"POST",body:a,headers:{"Content-Type":"application/json"},keepalive:!0})};n("pageview");document.addEventListener("click",function(e){var t=e.target.closest("a[href]");if(!t)return;try{var r=new URL(t.href);if(r.hostname===location.hostname)return;n("outbound",{props:{url:r.hostname+r.pathname}})}catch(e){}});var _s=Date.now();document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden"){var t=Math.round((Date.now()-_s)/1000);if(t>1&&t<3600)n("timing",{props:{seconds:String(t)}})}else{_s=Date.now()}});window.flarelytics={track:n}}();`;
 
 function handleTrackerJs(request: Request): Response {
   const url = new URL(request.url);
