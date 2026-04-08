@@ -16,7 +16,7 @@ const comparisons = [
   { feature: 'Custom events', flarelytics: true, ga: true, plausible: true, counterscale: false },
   { feature: 'Email reports', flarelytics: true, ga: true, plausible: true, counterscale: false },
   { feature: 'Dashboard', flarelytics: true, ga: true, plausible: true, counterscale: true },
-  { feature: 'CSV export', flarelytics: true, ga: true, plausible: true, counterscale: false },
+  { feature: 'CSV export', flarelytics: false, ga: true, plausible: true, counterscale: false },
   { feature: 'Open source', flarelytics: true, ga: false, plausible: true, counterscale: true },
   { feature: 'Free tier', flarelytics: true, ga: true, plausible: false, counterscale: true },
 ];
@@ -226,6 +226,7 @@ const comparisons = [
       .privacy-grid { grid-template-columns: 1fr; }
       .cmp-table { font-size: 12px; }
       .cmp-table thead th, .cmp-table tbody td { padding: 0.5rem; }
+      .nav-links a:not(.btn-primary) { display: none; }
     }
   </style>
 </head>
