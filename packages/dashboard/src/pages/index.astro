@@ -94,7 +94,7 @@ import Layout from '../layouts/Layout.astro';
         <span class="kpi-value">-</span>
       </div>
       <div class="card kpi" data-kpi="bounce">
-        <span class="kpi-label">Pages / Visit</span>
+        <span class="kpi-label">Bounce Rate</span>
         <span class="kpi-value">-</span>
       </div>
     </div>
@@ -114,7 +114,7 @@ import Layout from '../layouts/Layout.astro';
         </div>
         <div class="card table-wrap">
           <table class="tbl" id="table-pages">
-            <thead><tr><th style="text-align:left;">Path</th><th style="text-align:right;">Views</th></tr></thead>
+            <thead><tr><th style="text-align:left;">Path</th><th style="text-align:right;">Views</th><th style="text-align:right;">Visitors</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -534,11 +534,63 @@ import Layout from '../layouts/Layout.astro';
       .catch(function() { return null; });
   }
 
+  var tablePages = {};
+  var tableData = {};
+  var PAGE_SIZE = 10;
+
   function rows(d) { return d && Array.isArray(d) ? d : (d && d.data ? d.data : []); }
   function num(n) { return n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'); }
   function esc(s) { return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
   function skel(w) { return '<span class="skeleton" style="width:' + (w||60) + 'px">&nbsp;</span>'; }
   function sum(arr, f) { return arr.reduce(function(a, r) { return a + (parseFloat(r[f]) || 0); }, 0); }
+
+  function renderPagination(id, page, total) {
+    var pages = Math.ceil(total / PAGE_SIZE);
+    var wrap = document.getElementById(id);
+    if (!wrap) return;
+    var tableWrap = wrap.closest('.table-wrap');
+    if (!tableWrap) return;
+    var el = document.getElementById('pag-' + id);
+    if (pages <= 1) {
+      if (el) el.remove();
+      return;
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'pag-' + id;
+      el.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);';
+      tableWrap.appendChild(el);
+    }
+    var start = page * PAGE_SIZE + 1;
+    var end = Math.min((page + 1) * PAGE_SIZE, total);
+    el.innerHTML =
+      '<span>' + start + '\u2013' + end + ' / ' + total + '</span>' +
+      '<span style="display:flex;gap:0.5rem;">' +
+      '<button onclick="tablePrev(\'' + id + '\')" ' + (page === 0 ? 'disabled' : '') + ' style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-family:var(--mono);cursor:pointer;">\u2190</button>' +
+      '<button onclick="tableNext(\'' + id + '\',' + pages + ')" ' + (page >= pages - 1 ? 'disabled' : '') + ' style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-family:var(--mono);cursor:pointer;">\u2192</button>' +
+      '</span>';
+  }
+
+  window.tablePrev = function(id) {
+    tablePages[id] = Math.max(0, (tablePages[id] || 0) - 1);
+    if (id === 'table-pages') {
+      var saved = tableData['table-pages'];
+      if (saved) fillTopPages(saved.pagesData, saved.eventsData, tablePages['table-pages']);
+      return;
+    }
+    var saved = tableData[id];
+    if (saved) fillTable(id, saved.data, saved.cols, true);
+  };
+  window.tableNext = function(id, pages) {
+    tablePages[id] = Math.min(pages - 1, (tablePages[id] || 0) + 1);
+    if (id === 'table-pages') {
+      var saved = tableData['table-pages'];
+      if (saved) fillTopPages(saved.pagesData, saved.eventsData, tablePages['table-pages']);
+      return;
+    }
+    var saved = tableData[id];
+    if (saved) fillTable(id, saved.data, saved.cols, true);
+  };
 
   function computeWow(allRows, valueField) {
     if (!allRows.length) return null;
@@ -600,30 +652,79 @@ import Layout from '../layouts/Layout.astro';
     }).join('');
   }
 
-  function fillTable(id, data, cols) {
-    var tbody = document.querySelector('#' + id + ' tbody');
-    if (!tbody) return;
-    var r = rows(data);
-    if (!r.length) { tbody.innerHTML = '<tr><td colspan="' + cols.length + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>'; return; }
+  function computeMaxVals(allRows, cols) {
+    var maxVals = {};
+    cols.forEach(function(c) {
+      if (c.fmt === 'num') {
+        maxVals[c.key] = Math.max.apply(null, allRows.map(function(row) { return parseFloat(row[c.key]) || 0; }));
+      }
+    });
+    return maxVals;
+  }
+
+  function renderTableRows(r, cols, maxVals) {
     var html = '';
     r.forEach(function(row) {
       html += '<tr>';
       cols.forEach(function(c) {
         var v = row[c.key];
         var align = c.align || 'left';
-        if (c.fmt === 'num') v = num(v);
-        else if (c.fmt === 'pct') v = (parseFloat(v) || 0).toFixed(1) + '%';
-        else v = esc(v) || '-';
-        html += '<td style="text-align:' + align + '">' + v + '</td>';
+        var styleAttr = 'text-align:' + align;
+
+        if (c.favicon) {
+          var rawVal = v == null ? '' : String(v);
+          var faviconUrl = 'https://www.google.com/s2/favicons?sz=16&domain=' + esc(rawVal);
+          html += '<td style="font-family:var(--mono);font-size:0.8125rem;">' +
+            '<span style="display:flex;align-items:center;gap:0.375rem;">' +
+            '<img src="' + faviconUrl + '" width="16" height="16" style="border-radius:2px;flex-shrink:0;" onerror="this.style.display='none'">' +
+            esc(rawVal) + '</span></td>';
+        } else if (c.fmt === 'num') {
+          var rawNum = parseFloat(row[c.key]) || 0;
+          var pct = (maxVals && maxVals[c.key] > 0) ? rawNum / maxVals[c.key] * 100 : 0;
+          var bg = 'background:linear-gradient(to right,rgba(217,119,6,0.15) ' + pct + '%,transparent ' + pct + '%)';
+          html += '<td style="' + styleAttr + ';' + bg + '">' + num(v) + '</td>';
+        } else if (c.fmt === 'pct') {
+          html += '<td style="' + styleAttr + '">' + (parseFloat(v) || 0).toFixed(1) + '%</td>';
+        } else {
+          html += '<td style="' + styleAttr + '">' + (esc(v) || '-') + '</td>';
+        }
       });
       html += '</tr>';
     });
-    tbody.innerHTML = html;
+    return html;
   }
 
-  function fillTopPages(pagesData, eventsData) {
-    var pageRows = rows(pagesData);
+  function fillTable(id, data, cols, paginated) {
+    var tbody = document.querySelector('#' + id + ' tbody');
+    if (!tbody) return;
+    var allRows = rows(data);
+    if (paginated) {
+      tableData[id] = { data: data, cols: cols };
+      var page = tablePages[id] || 0;
+      var total = allRows.length;
+      var start = page * PAGE_SIZE;
+      var r = allRows.slice(start, start + PAGE_SIZE);
+      if (!allRows.length) {
+        tbody.innerHTML = '<tr><td colspan="' + cols.length + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>';
+        renderPagination(id, 0, 0);
+        return;
+      }
+      var maxVals = computeMaxVals(allRows, cols);
+      tbody.innerHTML = renderTableRows(r, cols, maxVals);
+      renderPagination(id, page, total);
+      return;
+    }
+    var r = allRows;
+    if (!r.length) { tbody.innerHTML = '<tr><td colspan="' + cols.length + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>'; return; }
+    var maxVals = computeMaxVals(r, cols);
+    tbody.innerHTML = renderTableRows(r, cols, maxVals);
+  }
+
+  function fillTopPages(pagesData, eventsData, page) {
+    var allPageRows = rows(pagesData);
     var eventRows = rows(eventsData);
+    if (page === undefined) page = tablePages['table-pages'] || 0;
+    tableData['table-pages'] = { pagesData: pagesData, eventsData: eventsData };
 
     // Build share map from custom events
     var shareMap = {};
@@ -653,22 +754,29 @@ import Layout from '../layouts/Layout.astro';
     if (!thead || !tbody) return;
 
     if (hasShares) {
-      thead.innerHTML = '<th style="text-align:left;">Path</th><th style="text-align:right;">Views</th><th style="text-align:right;">Jaot</th>';
+      thead.innerHTML = '<th style="text-align:left;">Path</th><th style="text-align:right;">Views</th><th style="text-align:right;">Visitors</th><th style="text-align:right;">Jaot</th>';
     } else {
-      thead.innerHTML = '<th style="text-align:left;">Path</th><th style="text-align:right;">Views</th>';
+      thead.innerHTML = '<th style="text-align:left;">Path</th><th style="text-align:right;">Views</th><th style="text-align:right;">Visitors</th>';
     }
 
-    if (!pageRows.length) {
-      var cols = hasShares ? 3 : 2;
-      tbody.innerHTML = '<tr><td colspan="' + cols + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>';
+    var colCount = hasShares ? 4 : 3;
+
+    if (!allPageRows.length) {
+      tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>';
+      renderPagination('table-pages', 0, 0);
       return;
     }
+
+    var total = allPageRows.length;
+    var start = page * PAGE_SIZE;
+    var pageRows = allPageRows.slice(start, start + PAGE_SIZE);
 
     var html = '';
     pageRows.forEach(function(row) {
       var path = esc(row.path) || '-';
       var views = num(row.views);
-      html += '<tr><td style="text-align:left;">' + path + '</td><td style="text-align:right;">' + views + '</td>';
+      var visitors = num(row.visitors);
+      html += '<tr><td style="text-align:left;">' + path + '</td><td style="text-align:right;">' + views + '</td><td style="text-align:right;">' + visitors + '</td>';
       if (hasShares) {
         var shares = shareMap[row.path] || 0;
         html += '<td style="text-align:right;">' + (shares > 0 ? num(shares) : '-') + '</td>';
@@ -676,6 +784,7 @@ import Layout from '../layouts/Layout.astro';
       html += '</tr>';
     });
     tbody.innerHTML = html;
+    renderPagination('table-pages', page, total);
   }
 
   function populateFunnelEventSelect(eventsData) {
@@ -716,7 +825,7 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices'];
+    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices'];
 
     var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
@@ -738,24 +847,30 @@ import Layout from '../layouts/Layout.astro';
       var totalViews = sum(dv, 'views');
       var totalVisitors = sum(duv, 'unique_visitors');
       var totalEvents = sum(funnel, 'conversions');
-      var pagesPerVisit = totalVisitors > 0 ? (totalViews / totalVisitors).toFixed(1) : '0';
+      var bounceRate = totalVisitors > 0
+        ? Math.max(0, Math.round((2 - Math.min(totalViews / totalVisitors, 2)) * 100)) + '%'
+        : '-';
 
       document.querySelector('[data-kpi="views"] .kpi-value').textContent = num(totalViews);
       document.querySelector('[data-kpi="visitors"] .kpi-value').textContent = num(totalVisitors);
       document.querySelector('[data-kpi="events"] .kpi-value').textContent = num(totalEvents);
-      document.querySelector('[data-kpi="bounce"] .kpi-value').textContent = pagesPerVisit;
+      document.querySelector('[data-kpi="bounce"] .kpi-value').textContent = bounceRate;
 
       // Traffic chart
       renderChart(dv);
 
-      // Top pages with share column
-      fillTopPages(m['top-pages'], m['custom-events']);
+      // Top pages with share column and visitors
+      tablePages['table-pages'] = 0;
+      fillTopPages(m['top-pages-visitors'], m['custom-events'], 0);
 
       // Other tables
-      fillTable('table-referrers', m['referrers'], [{ key: 'referrer' }, { key: 'visits', align: 'right', fmt: 'num' }]);
-      fillTable('table-countries', m['countries'], [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }]);
+      tablePages['table-referrers'] = 0;
+      fillTable('table-referrers', m['referrers'], [{ key: 'referrer' }, { key: 'visits', align: 'right', fmt: 'num' }], true);
+      tablePages['table-countries'] = 0;
+      fillTable('table-countries', m['countries'], [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }], true);
       renderDeviceBadges(m['devices']);
-      fillTable('table-events', m['custom-events'], [{ key: 'event' }, { key: 'properties' }, { key: 'count', align: 'right', fmt: 'num' }]);
+      tablePages['table-events'] = 0;
+      fillTable('table-events', m['custom-events'], [{ key: 'event' }, { key: 'properties' }, { key: 'count', align: 'right', fmt: 'num' }], true);
       fillTable('table-outbound', m['outbound-links'], [{ key: 'destination' }, { key: 'clicks', align: 'right', fmt: 'num' }]);
       fillTable('table-utm', m['utm-campaigns'], [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
 
