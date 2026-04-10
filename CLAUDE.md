@@ -36,13 +36,12 @@ packages/
 
 ## Event Types
 
-Default events (all optional, configurable):
-- `pageview` — Page views with referrer and UTM tracking
-- `custom` — Any custom event with name + properties
-- `outbound` — External link clicks
-
-Site-specific events users can add:
-- Affiliate clicks, newsletter signups, quiz completions, etc.
+Events written to Analytics Engine:
+- `pageview` — Page views with referrer, UTM params, device, browser, country
+- `outbound` — External link clicks (destination in blob5)
+- `timing` — Time on page in seconds (fires on `visibilitychange`); seconds stored in `double2`
+- `scroll_depth` — Scroll milestones 25/50/75/100% via IntersectionObserver (opt-in); depth in blob5
+- `(custom)` — Any event via `flarelytics.track('event', { props })` — name in blob4, props in blob5
 
 ## Privacy
 
@@ -93,6 +92,45 @@ DATASET_NAME = "my-site"
 - `CF_API_TOKEN` — Cloudflare API token with Analytics Engine read access
 - `CF_ACCOUNT_ID` — Your Cloudflare account ID
 
+## Analytics Engine Schema
+
+Each event writes one row. Always use these field names in queries:
+
+| Field | Content |
+|---|---|
+| `blob1` | Page path |
+| `blob2` | Referrer hostname (`direct` if none) |
+| `blob3` | Country code (from CF headers) |
+| `blob4` | Event name (`pageview`, `timing`, `scroll_depth`, custom) |
+| `blob5` | Event properties (pipe-separated values) |
+| `blob6` | `utm_source` |
+| `blob7` | `utm_medium` |
+| `blob8` | `utm_campaign` |
+| `blob9` | Visitor hash (daily-rotating SHA-256) |
+| `blob10` | Site hostname — REQUIRED in all WHERE clauses for multi-site support |
+| `blob11` | Device type (`mobile`/`tablet`/`desktop`) |
+| `blob12` | Browser name (Chrome/Firefox/Safari/Edge/Opera/DuckDuckGo/Other) |
+| `double1` | Event count (always 1) |
+| `double2` | Time on page in seconds (only for `timing` events, use AVG) |
+
+All queries must include `AND blob10 = '${site}'` to scope to a single site.
+
+## Available Queries
+
+23 queries available via `GET /query?q=<name>&period=<period>&site=<hostname>`:
+
+**Traffic:** `top-pages`, `top-pages-visitors`, `top-pages-stories`, `daily-views`, `daily-unique-visitors`, `new-vs-returning`
+
+**Referrers:** `referrers`, `utm-campaigns`, `utm-campaign-trend`
+
+**Content:** `page-views-over-time` (?page=), `page-timing`, `bounce-rate-by-page` (?event_name=seconds), `scroll-depth`, `scroll-depth-by-page`
+
+**Geo/Devices:** `countries`, `countries-by-page` (?page=), `devices`, `browsers`
+
+**Conversions:** `outbound-links`, `page-performance`, `custom-events`, `conversion-funnel`, `funnel-by-event` (?event_name=)
+
+Periods: `7d`, `14d`, `30d`, `60d`, `90d`, `180d`
+
 ## Design System
 
 Always read DESIGN.md before making any visual or UI decisions.
@@ -101,8 +139,9 @@ Do not deviate without explicit user approval.
 In QA mode, flag any code that doesn't match DESIGN.md.
 
 Key rules:
-- **Accent is amber (#d97706), NOT orange** — orange on dark = wrong association
-- **CTA buttons are dark (#1c1917), not amber** — amber is highlight, not action
+- **Accent is burnt orange (#dc6b14)** — warm, distinct from every competitor
+- **Accent hover is #b45309** — for body-text links use #b45309 (WCAG AA), #dc6b14 for large/decorative
+- **CTA buttons are dark (#1c1917), not orange** — orange is highlight, not action
 - **All UI labels use monospace** — nav, buttons, section headers, data labels
 - **Light mode landing page, dark code blocks** — the contrast is intentional
 - **Satoshi for display only** — everything else is system fonts or monospace
@@ -114,14 +153,9 @@ Key rules:
 - README targets developers who want to deploy in 5 minutes
 - Every claim about features must be accurate
 
-## Extracted From
+## Multi-Site Support
 
-Originally built for [MailToolFinder](https://mailtoolfinder.com). The analytics worker, dashboard, and tracking scripts were extracted and generalized into this standalone product.
-
-Source files in mailtoolfinder repo:
-- `analytics/src/index.ts` — Original worker (486 lines)
-- `src/pages/dashboard.astro` — Original dashboard (740 lines)
-- `src/layouts/BaseLayout.astro` — Original tracking scripts
+One worker can serve multiple sites. The site hostname is derived from the `Origin` header on each `/track` request and stored in `blob10`. All queries accept `?site=hostname.com` and filter by `blob10`. The dashboard has a site switcher for switching between configured sites.
 
 ## Skill routing
 
