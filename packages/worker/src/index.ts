@@ -203,10 +203,14 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
 }
 
 // Query templates
-const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p: string, site: string, eventName: string) => string }> = {
+const QUERY_TEMPLATES: Record<string, {
+  description: string;
+  sql: (ds: string, p: string, site: string, eventName: string, page: string) => string;
+  requiresPage?: boolean;
+}> = {
   'top-pages': {
     description: 'Most viewed pages',
-    sql: (ds, p, site, _eventName: string) => `
+    sql: (ds, p, site) => `
       SELECT blob1 AS path, SUM(_sample_interval * double1) AS views
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
@@ -215,7 +219,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'daily-views': {
     description: 'Pageviews per day',
-    sql: (ds, p, site, _eventName: string) => `
+    sql: (ds, p, site) => `
       SELECT toDate(timestamp) AS date, SUM(_sample_interval * double1) AS views
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
@@ -224,7 +228,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'daily-unique-visitors': {
     description: 'Unique visitors per day',
-    sql: (ds, p, site, _eventName: string) => `
+    sql: (ds, p, site) => `
       SELECT toDate(timestamp) AS date,
         COUNT(DISTINCT blob9) AS unique_visitors,
         SUM(_sample_interval * double1) AS total_views
@@ -235,7 +239,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'referrers': {
     description: 'Top referrer hostnames',
-    sql: (ds, p, site, _eventName: string) => `
+    sql: (ds, p, site) => `
       SELECT blob2 AS referrer, SUM(_sample_interval * double1) AS visits
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob2 != 'direct' AND blob10 = '${site}'
@@ -244,7 +248,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'countries': {
     description: 'Views by country',
-    sql: (ds, p, site, _eventName: string) => `
+    sql: (ds, p, site) => `
       SELECT blob3 AS country, SUM(_sample_interval * double1) AS views
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
@@ -253,7 +257,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'custom-events': {
     description: 'Custom event counts by name',
-    sql: (ds, p, site, _eventName: string) => `
+    sql: (ds, p, site) => `
       SELECT blob4 AS event, blob5 AS properties, SUM(_sample_interval * double1) AS count
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 != 'pageview' AND blob4 != 'outbound' AND blob10 = '${site}'
@@ -262,7 +266,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'outbound-links': {
     description: 'Clicks to external URLs',
-    sql: (ds, p, site, _eventName: string) => `
+    sql: (ds, p, site) => `
       SELECT blob5 AS destination, SUM(_sample_interval * double1) AS clicks
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'outbound' AND blob5 != '' AND blob10 = '${site}'
@@ -271,7 +275,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'page-performance': {
     description: 'Page views vs custom event clicks with CTR',
-    sql: (ds, p, site, _eventName: string) => `
+    sql: (ds, p, site) => `
       SELECT
         pages.path AS path, pages.views AS views,
         COALESCE(events.events, 0) AS events,
@@ -294,8 +298,8 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
     `,
   },
   'utm-campaigns': {
-    description: 'UTM campaign breakdown',
-    sql: (ds, p, site, _eventName: string) => `
+    description: 'UTM campaign breakdown (totals)',
+    sql: (ds, p, site) => `
       SELECT blob6 AS utm_source, blob7 AS utm_medium, blob8 AS utm_campaign,
         SUM(_sample_interval * double1) AS visits
       FROM ${ds}
@@ -303,9 +307,19 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
       GROUP BY utm_source, utm_medium, utm_campaign ORDER BY visits DESC LIMIT 30
     `,
   },
+  'utm-campaign-trend': {
+    description: 'Daily UTM campaign visits — see exactly when each Bluesky post drove traffic',
+    sql: (ds, p, site) => `
+      SELECT toDate(timestamp) AS date, blob6 AS utm_source, blob8 AS utm_campaign,
+        SUM(_sample_interval * double1) AS visits
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob6 != '' AND blob10 = '${site}'
+      GROUP BY date, utm_source, utm_campaign ORDER BY date ASC, visits DESC LIMIT 200
+    `,
+  },
   'conversion-funnel': {
     description: 'Daily funnel: pageviews to custom events',
-    sql: (ds, p, site, _eventName: string) => `
+    sql: (ds, p, site) => `
       SELECT toDate(timestamp) AS date,
         SUM(CASE WHEN blob4 = 'pageview' THEN _sample_interval * double1 ELSE 0 END) AS pageviews,
         SUM(CASE WHEN blob4 != 'pageview' AND blob4 != 'outbound' THEN _sample_interval * double1 ELSE 0 END) AS conversions
@@ -316,7 +330,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'devices': {
     description: 'Pageviews by device type (mobile/tablet/desktop)',
-    sql: (ds, p, site, _eventName) => `
+    sql: (ds, p, site) => `
       SELECT blob11 AS device, SUM(_sample_interval * double1) AS views
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
@@ -325,7 +339,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'browsers': {
     description: 'Pageviews by browser',
-    sql: (ds, p, site, _eventName) => `
+    sql: (ds, p, site) => `
       SELECT blob12 AS browser, SUM(_sample_interval * double1) AS views
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
@@ -334,7 +348,7 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
   },
   'top-pages-visitors': {
     description: 'Top pages with both views and unique visitor counts',
-    sql: (ds, p, site, _eventName) => `
+    sql: (ds, p, site) => `
       SELECT blob1 AS path,
         SUM(_sample_interval * double1) AS views,
         COUNT(DISTINCT blob9) AS visitors
@@ -343,9 +357,20 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
       GROUP BY path ORDER BY views DESC LIMIT 20
     `,
   },
+  'top-pages-stories': {
+    description: 'Top story pages (path starts with /a/) with views and unique visitors',
+    sql: (ds, p, site) => `
+      SELECT blob1 AS path,
+        SUM(_sample_interval * double1) AS views,
+        COUNT(DISTINCT blob9) AS visitors
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}' AND blob1 LIKE '/a/%'
+      GROUP BY path ORDER BY views DESC LIMIT 20
+    `,
+  },
   'page-timing': {
     description: 'Average time on page in seconds',
-    sql: (ds, p, site, _eventName) => `
+    sql: (ds, p, site) => `
       SELECT blob1 AS path,
         ROUND(AVG(_sample_interval * double2), 0) AS avg_seconds,
         COUNT() AS sessions
@@ -354,8 +379,45 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
       GROUP BY path ORDER BY sessions DESC LIMIT 20
     `,
   },
+  'bounce-rate-by-page': {
+    description: 'Bounce rate per page — % of visits under threshold seconds (default 10s, override with ?event_name=N)',
+    sql: (ds, p, site, eventName) => {
+      const threshold = /^\d+$/.test(eventName) ? parseInt(eventName, 10) : 10;
+      return `
+        SELECT blob1 AS path,
+          SUM(CASE WHEN double2 < ${threshold} THEN _sample_interval ELSE 0 END) AS bounced,
+          COUNT() AS sessions,
+          ROUND(SUM(CASE WHEN double2 < ${threshold} THEN _sample_interval ELSE 0 END) * 100.0 / COUNT(), 1) AS bounce_pct
+        FROM ${ds}
+        WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'timing' AND blob10 = '${site}'
+        GROUP BY path ORDER BY sessions DESC LIMIT 20
+      `;
+    },
+  },
+  'page-views-over-time': {
+    description: 'Daily pageviews and visitors for a specific page (?page=/your/path)',
+    requiresPage: true,
+    sql: (ds, p, site, _eventName, page) => `
+      SELECT toDate(timestamp) AS date,
+        SUM(_sample_interval * double1) AS views,
+        COUNT(DISTINCT blob9) AS visitors
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}' AND blob1 = '${page}'
+      GROUP BY date ORDER BY date ASC
+    `,
+  },
+  'countries-by-page': {
+    description: 'Country breakdown for a specific page (?page=/your/path)',
+    requiresPage: true,
+    sql: (ds, p, site, _eventName, page) => `
+      SELECT blob3 AS country, SUM(_sample_interval * double1) AS views
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}' AND blob1 = '${page}'
+      GROUP BY country ORDER BY views DESC LIMIT 20
+    `,
+  },
   'funnel-by-event': {
-    description: 'Daily funnel: pageviews to a specific custom event',
+    description: 'Daily funnel: pageviews to a specific custom event (?event_name=my_event)',
     sql: (ds, p, site, eventName) => `
       SELECT toDate(timestamp) AS date,
         SUM(CASE WHEN blob4 = 'pageview' THEN _sample_interval * double1 ELSE 0 END) AS pageviews,
@@ -365,6 +427,25 @@ const QUERY_TEMPLATES: Record<string, { description: string; sql: (ds: string, p
       GROUP BY date ORDER BY date ASC
     `,
   },
+  'scroll-depth': {
+    description: 'Scroll depth distribution: how far visitors scroll (25/50/75/100%)',
+    sql: (ds, p, site) => `
+      SELECT blob5 AS depth, SUM(_sample_interval * double1) AS count
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'scroll_depth' AND blob10 = '${site}'
+      GROUP BY depth ORDER BY depth ASC
+    `,
+  },
+  'scroll-depth-by-page': {
+    description: 'Scroll depth per page — which pages get read furthest',
+    sql: (ds, p, site) => `
+      SELECT blob1 AS path, blob5 AS depth, SUM(_sample_interval * double1) AS count
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'scroll_depth' AND blob10 = '${site}'
+      GROUP BY path, depth ORDER BY path ASC, depth ASC
+    `,
+  },
+  // new-vs-returning is handled separately (requires two CF API calls)
 };
 
 const PERIOD_MAP: Record<string, string> = {
@@ -375,6 +456,52 @@ const PERIOD_MAP: Record<string, string> = {
   '90d': "'90' DAY",
   '180d': "'180' DAY",
 };
+
+async function runCFQuery(sql: string, env: Env): Promise<any> {
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/analytics_engine/sql`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` },
+      body: sql.trim(),
+      signal: AbortSignal.timeout(10000),
+    },
+  );
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`CF SQL API error ${response.status}: ${errorText}`);
+  }
+  return response.json();
+}
+
+async function handleNewVsReturning(env: Env, site: string, period: string, dataset: string, cors: Record<string, string>): Promise<Response> {
+  const currentSql = `SELECT DISTINCT blob9 AS vid FROM ${dataset} WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'`;
+  const priorSql   = `SELECT DISTINCT blob9 AS vid FROM ${dataset} WHERE timestamp <= NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'`;
+
+  try {
+    const [currentData, priorData] = await Promise.all([
+      runCFQuery(currentSql, env),
+      runCFQuery(priorSql, env),
+    ]);
+
+    const currentVids: string[] = (currentData.data ?? []).map((r: any) => r.vid);
+    const priorVids = new Set<string>((priorData.data ?? []).map((r: any) => r.vid));
+
+    let newVisitors = 0, returningVisitors = 0;
+    for (const vid of currentVids) {
+      if (priorVids.has(vid)) returningVisitors++;
+      else newVisitors++;
+    }
+
+    return Response.json(
+      { data: [{ new_visitors: newVisitors, returning_visitors: returningVisitors, total: currentVids.length }] },
+      { headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' } },
+    );
+  } catch (err) {
+    console.log(`[new-vs-returning] error: ${err}`);
+    return Response.json({ error: 'Query execution failed' }, { status: 502, headers: cors });
+  }
+}
 
 async function handleQuery(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get('Origin');
@@ -390,10 +517,18 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   const periodParam = url.searchParams.get('period') || '30d';
   const siteParam = url.searchParams.get('site');
   const eventNameParam = url.searchParams.get('event_name') || '';
+  const pageParam = url.searchParams.get('page') || '';
 
-  if (!queryName || !QUERY_TEMPLATES[queryName]) {
+  const validQueries = [...Object.keys(QUERY_TEMPLATES), 'new-vs-returning'];
+  if (!queryName || !validQueries.includes(queryName)) {
     return Response.json(
-      { error: 'Invalid query', available: Object.keys(QUERY_TEMPLATES).map((k) => ({ name: k, description: QUERY_TEMPLATES[k].description })) },
+      {
+        error: 'Invalid query',
+        available: [
+          ...Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
+          { name: 'new-vs-returning', description: 'New vs returning visitors in the selected period' },
+        ],
+      },
       { status: 400, headers: cors },
     );
   }
@@ -415,6 +550,18 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     return Response.json({ error: 'Invalid site param' }, { status: 400, headers: cors });
   }
 
+  const dataset = env.DATASET_NAME;
+  if (!dataset) {
+    return Response.json({ error: 'DATASET_NAME not configured' }, { status: 500, headers: cors });
+  }
+
+  // new-vs-returning requires two CF API calls — handled separately
+  if (queryName === 'new-vs-returning') {
+    return handleNewVsReturning(env, siteParam, period, dataset, cors);
+  }
+
+  const template = QUERY_TEMPLATES[queryName];
+
   // funnel-by-event requires a valid event_name param
   if (queryName === 'funnel-by-event') {
     if (!eventNameParam || !/^[a-zA-Z0-9_\-]+$/.test(eventNameParam)) {
@@ -422,12 +569,14 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  const dataset = env.DATASET_NAME;
-  if (!dataset) {
-    return Response.json({ error: 'DATASET_NAME not configured' }, { status: 500, headers: cors });
+  // Some queries require a ?page= param
+  if (template.requiresPage) {
+    if (!pageParam || !/^\/[a-zA-Z0-9.\-_/]*$/.test(pageParam)) {
+      return Response.json({ error: 'Missing or invalid param: page (must start with / and contain only URL-safe characters)' }, { status: 400, headers: cors });
+    }
   }
 
-  const sql = QUERY_TEMPLATES[queryName].sql(dataset, period, siteParam, eventNameParam);
+  const sql = template.sql(dataset, period, siteParam, eventNameParam, pageParam);
 
   try {
     const response = await fetch(
@@ -457,7 +606,7 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
 }
 
 // Auto-configured tracking script served from the worker
-const TRACKER_SCRIPT = `!function(){var e="__ENDPOINT__",n=function(n,t){var r=Object.assign({event:n,path:location.pathname},t||{});var i=document.referrer;if(n==="pageview"){if(i)try{r.referrer=new URL(i).hostname}catch(e){r.referrer=i}else r.referrer="direct";var o=new URLSearchParams(location.search);["utm_source","utm_medium","utm_campaign"].forEach(function(e){var n=o.get(e);if(n)r[e]=n})}var a=JSON.stringify(r),s=new Blob([a],{type:"application/json"});navigator.sendBeacon?navigator.sendBeacon(e+"/track",s):fetch(e+"/track",{method:"POST",body:a,headers:{"Content-Type":"application/json"},keepalive:!0})};n("pageview");document.addEventListener("click",function(e){var t=e.target.closest("a[href]");if(!t)return;try{var r=new URL(t.href);if(r.hostname===location.hostname)return;n("outbound",{props:{url:r.hostname+r.pathname}})}catch(e){}});var _s=Date.now();document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden"){var t=Math.round((Date.now()-_s)/1000);if(t>1&&t<3600)n("timing",{props:{seconds:String(t)}})}else{_s=Date.now()}});window.flarelytics={track:n}}();`;
+const TRACKER_SCRIPT = `!function(){var sc=document.currentScript,e="__ENDPOINT__",sd=sc&&"scrollDepth"in sc.dataset,n=function(n,t){var r=Object.assign({event:n,path:location.pathname},t||{});var i=document.referrer;if(n==="pageview"){if(i)try{r.referrer=new URL(i).hostname}catch(e){r.referrer=i}else r.referrer="direct";var o=new URLSearchParams(location.search);["utm_source","utm_medium","utm_campaign"].forEach(function(e){var n=o.get(e);if(n)r[e]=n})}var a=JSON.stringify(r),s=new Blob([a],{type:"application/json"});navigator.sendBeacon?navigator.sendBeacon(e+"/track",s):fetch(e+"/track",{method:"POST",body:a,headers:{"Content-Type":"application/json"},keepalive:!0})};n("pageview");document.addEventListener("click",function(e){var t=e.target.closest("a[href]");if(!t)return;try{var r=new URL(t.href);if(r.hostname===location.hostname)return;n("outbound",{props:{url:r.hostname+r.pathname}})}catch(e){}});var _s=Date.now();document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden"){var t=Math.round((Date.now()-_s)/1000);if(t>1&&t<3600)n("timing",{props:{seconds:String(t)}})}else{_s=Date.now()}});if(sd&&"IntersectionObserver"in window){var _f=new Set,_obs=new IntersectionObserver(function(es){es.forEach(function(e){if(!e.isIntersecting)return;var d=parseInt(e.target.dataset.sd||"0",10);if(d&&!_f.has(d)){_f.add(d);n("scroll_depth",{props:{depth:String(d)}});if(_f.size===4)_obs.disconnect()}})});function _sd(){var h=document.documentElement.scrollHeight;[25,50,75,100].forEach(function(p){var el=document.createElement("div");el.dataset.sd=String(p);el.style.cssText="position:absolute;top:"+(p<100?Math.round(h*p/100):h-2)+"px;left:0;width:1px;height:1px;pointer-events:none;z-index:-1";document.body.appendChild(el);_obs.observe(el)})};document.readyState==="complete"?_sd():window.addEventListener("load",_sd,{once:true})}window.flarelytics={track:n}}();`;
 
 function handleTrackerJs(request: Request): Response {
   const url = new URL(request.url);

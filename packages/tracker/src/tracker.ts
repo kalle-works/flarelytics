@@ -17,6 +17,11 @@ interface TrackOptions {
   path?: string;
 }
 
+export interface InitOptions {
+  /** Track scroll depth at 25/50/75/100% milestones using IntersectionObserver */
+  scrollDepth?: boolean;
+}
+
 function send(event: string, data: Record<string, unknown> = {}): void {
   if (!endpoint) return;
 
@@ -59,8 +64,45 @@ function send(event: string, data: Record<string, unknown> = {}): void {
   }
 }
 
+function initScrollDepth(): void {
+  if (!('IntersectionObserver' in window)) return;
+
+  const fired = new Set<number>();
+  const depths = [25, 50, 75, 100];
+
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const depth = parseInt((entry.target as HTMLElement).dataset.sd || '0', 10);
+      if (depth && !fired.has(depth)) {
+        fired.add(depth);
+        send('scroll_depth', { props: { depth: String(depth) } });
+        if (fired.size === depths.length) observer.disconnect();
+      }
+    }
+  });
+
+  function setup(): void {
+    const docHeight = document.documentElement.scrollHeight;
+    for (const pct of depths) {
+      const el = document.createElement('div');
+      el.dataset.sd = String(pct);
+      const top = pct < 100 ? Math.round(docHeight * pct / 100) : docHeight - 2;
+      el.style.cssText = `position:absolute;top:${top}px;left:0;width:1px;height:1px;pointer-events:none;z-index:-1;`;
+      document.body.appendChild(el);
+      observer.observe(el);
+    }
+  }
+
+  if (document.readyState === 'complete') {
+    setup();
+  } else {
+    window.addEventListener('load', setup, { once: true });
+  }
+}
+
 /** Initialize Flarelytics with your worker endpoint */
-export function init(workerEndpoint: string): void {
+export function init(workerEndpoint: string, options: InitOptions = {}): void {
   endpoint = workerEndpoint.replace(/\/$/, '');
 
   // Auto-track pageview
@@ -76,6 +118,8 @@ export function init(workerEndpoint: string): void {
       send('outbound', { props: { url: url.hostname + url.pathname } });
     } catch {}
   });
+
+  if (options.scrollDepth) initScrollDepth();
 }
 
 /** Track a custom event */
@@ -86,11 +130,15 @@ export function track(event: string, options: TrackOptions = {}): void {
   });
 }
 
-// Auto-init from script tag: <script data-endpoint="..." src="tracker.js"></script>
+// Auto-init from script tag: <script data-endpoint="..." data-scroll-depth src="tracker.js"></script>
 if (typeof document !== 'undefined') {
   const script = document.currentScript as HTMLScriptElement | null;
   const ep = script?.dataset?.endpoint;
-  if (ep) init(ep);
+  if (ep) {
+    init(ep, {
+      scrollDepth: 'scrollDepth' in (script?.dataset ?? {}),
+    });
+  }
 }
 
 // Expose global API
