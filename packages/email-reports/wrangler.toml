@@ -1,0 +1,35 @@
+name = "flarelytics-reports"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Weekly cron: every Monday at 8:00 UTC
+[triggers]
+crons = ["0 8 * * 1"]
+
+# KV namespace for storing recipient emails
+# Create with: npx wrangler kv namespace create REPORT_RECIPIENTS
+[[kv_namespaces]]
+binding = "REPORT_RECIPIENTS"
+id = "your-kv-namespace-id"
+
+[vars]
+# URL of your deployed Flarelytics analytics worker
+ANALYTICS_WORKER_URL = "https://your-analytics-worker.workers.dev"
+
+# Your site name (shown in email subject and header)
+SITE_NAME = "Your Site"
+
+# Your site URL (shown in email links and page paths)
+SITE_URL = "https://yoursite.com"
+
+# Email service API endpoint (Euromail, Resend, SendGrid, etc.)
+EMAIL_API_URL = "https://api.euromail.dev"
+
+# Sender email address
+EMAIL_FROM = "analytics@yoursite.com"
+
+# Secrets (set via `wrangler secret put`):
+#   ANALYTICS_API_KEY  — Flarelytics worker query API key
+#   EMAIL_API_KEY      — Email service API key
+#   ADMIN_API_KEY      — API key for managing recipients
