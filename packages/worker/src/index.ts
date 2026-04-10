@@ -479,6 +479,16 @@ const QUERY_TEMPLATES: Record<string, {
       GROUP BY hour ORDER BY hour ASC
     `,
   },
+  'live-referrers': {
+    description: 'Top referrers in the last 30 minutes',
+    live: true,
+    sql: (ds, _p, site) => `
+      SELECT blob2 AS referrer, SUM(_sample_interval * double1) AS visits
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL '30' MINUTE AND blob4 = 'pageview' AND blob2 != 'direct' AND blob10 = '${site}'
+      GROUP BY referrer ORDER BY visits DESC LIMIT 8
+    `,
+  },
 };
 
 const PERIOD_MAP: Record<string, string> = {

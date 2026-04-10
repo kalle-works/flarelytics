@@ -121,10 +121,14 @@ import Layout from '../layouts/Layout.astro';
             <div id="live-pageviews" style="font-family:var(--mono);font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;">-</div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;" class="live-bottom-grid">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;" class="live-bottom-grid">
           <div>
             <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">Active Pages</div>
             <div id="live-pages-list" style="font-size:13px;color:var(--ink-secondary);"></div>
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">Mistä tulevat</div>
+            <div id="live-referrers-list" style="font-size:13px;color:var(--ink-secondary);"></div>
           </div>
           <div>
             <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">Last 24 Hours</div>
@@ -429,7 +433,7 @@ import Layout from '../layouts/Layout.astro';
 
   @media (min-width: 768px) {
     .live-kpi-grid { grid-template-columns: auto auto 1fr !important; }
-    .live-bottom-grid { grid-template-columns: 1fr 1.5fr !important; }
+    .live-bottom-grid { grid-template-columns: 1fr 1fr 1.5fr !important; }
   }
 </style>
 
@@ -1106,6 +1110,27 @@ import Layout from '../layouts/Layout.astro';
     el.innerHTML = html;
   }
 
+  function renderLiveReferrers(refData) {
+    var el = document.getElementById('live-referrers-list');
+    if (!el) return;
+    var r = rows(refData);
+    if (!r.length) { el.innerHTML = '<div style="color:var(--ink-muted);font-family:var(--mono);font-size:11px;">Direct / no referrer</div>'; return; }
+    var max = parseFloat(r[0].visits) || 1;
+    var html = '';
+    r.slice(0, 6).forEach(function(row) {
+      var pct = Math.max(4, Math.round(((parseFloat(row.visits) || 0) / max) * 100));
+      var host = esc(row.referrer || 'direct');
+      html += '<div style="margin-bottom:6px;">';
+      html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">';
+      html += '<span style="font-family:var(--mono);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80%;">' + host + '</span>';
+      html += '<span style="font-family:var(--mono);color:var(--ink-muted);font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">' + num(row.visits) + '</span>';
+      html += '</div>';
+      html += '<div style="background:var(--surface);border-radius:3px;overflow:hidden;height:4px;"><div style="background:#b45309;height:100%;width:' + pct + '%;border-radius:3px;"></div></div>';
+      html += '</div>';
+    });
+    el.innerHTML = html;
+  }
+
   function loadLive() {
     if (!liveActive) return;
     var pulse = document.getElementById('live-pulse');
@@ -1114,11 +1139,13 @@ import Layout from '../layouts/Layout.astro';
     Promise.all([
       liveQuery('live-visitors'),
       liveQuery('live-pages'),
-      liveQuery('hourly-today')
+      liveQuery('hourly-today'),
+      liveQuery('live-referrers')
     ]).then(function(results) {
       var visitorData = rows(results[0]);
       var pagesData = results[1];
       var hourlyData = results[2];
+      var referrersData = results[3];
 
       var visitors = visitorData.length ? (visitorData[0].visitors || 0) : 0;
       var pageviews = visitorData.length ? (visitorData[0].pageviews || 0) : 0;
@@ -1137,6 +1164,7 @@ import Layout from '../layouts/Layout.astro';
       if (updEl) updEl.textContent = 'Updated ' + hh + ':' + mm + ':' + ss;
 
       renderLivePages(pagesData);
+      renderLiveReferrers(referrersData);
       renderLiveChart(hourlyData);
 
       if (pulse) { pulse.classList.remove('live-pulse'); }
