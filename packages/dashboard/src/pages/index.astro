@@ -72,6 +72,10 @@ import Layout from '../layouts/Layout.astro';
           <button class="period-btn" data-period="30d">30d</button>
           <button class="period-btn" data-period="90d">90d</button>
         </div>
+        <button id="live-btn" class="icon-btn" title="Live view" style="font-size:0.75rem;font-family:var(--mono);font-weight:600;gap:6px;padding:0 12px;min-width:auto;">
+          <span id="live-dot" style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block;"></span>
+          LIVE
+        </button>
         <button id="refresh-btn" class="icon-btn" title="Refresh">&#x21BB;</button>
         <button id="export-btn" class="icon-btn" title="Export CSV">&#x2193;</button>
       </div>
@@ -96,6 +100,37 @@ import Layout from '../layouts/Layout.astro';
       <div class="card kpi" data-kpi="bounce">
         <span class="kpi-label">Bounce Rate</span>
         <span class="kpi-value">-</span>
+      </div>
+    </div>
+
+    <!-- Live Panel -->
+    <div id="live-panel" style="display:none;margin-bottom:1.5rem;">
+      <div class="card" style="border-color:var(--accent);position:relative;overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+          <span id="live-pulse" style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block;"></span>
+          <span style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-muted);">Live &mdash; last 30 min</span>
+          <span id="live-updated" style="font-family:var(--mono);font-size:10px;color:var(--ink-muted);margin-left:auto;"></span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;" class="live-kpi-grid">
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:4px;">Visitors</div>
+            <div id="live-visitors" style="font-family:var(--mono);font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;">-</div>
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:4px;">Pageviews</div>
+            <div id="live-pageviews" style="font-family:var(--mono);font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;">-</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;" class="live-bottom-grid">
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">Active Pages</div>
+            <div id="live-pages-list" style="font-size:13px;color:var(--ink-secondary);"></div>
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">Last 24 Hours</div>
+            <div id="live-chart" style="height:80px;"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -388,6 +423,14 @@ import Layout from '../layouts/Layout.astro';
   .funnel-label span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-secondary); }
   .funnel-track { height: 28px; background: var(--surface); border-radius: var(--radius-lg); overflow: hidden; }
   .funnel-fill { height: 100%; border-radius: var(--radius-lg); transition: width 600ms ease; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .live-pulse { animation: pulse 1.5s ease-in-out infinite; }
+
+  @media (min-width: 768px) {
+    .live-kpi-grid { grid-template-columns: auto auto 1fr !important; }
+    .live-bottom-grid { grid-template-columns: 1fr 1.5fr !important; }
+  }
 </style>
 
 <script is:inline>
@@ -1005,6 +1048,128 @@ import Layout from '../layouts/Layout.astro';
 
     el.innerHTML = '<svg width="100%" viewBox="0 0 ' + Math.max(sw, el.clientWidth) + ' ' + (ch + 35) + '" preserveAspectRatio="xMinYMin meet">' + yLabels + bars + xLabels + '</svg>';
   }
+
+  // ---- Live panel ----
+  var liveActive = false;
+  var liveTimer = null;
+
+  function liveQuery(q) {
+    var url = WORKER + '/query?q=' + q + '&period=7d&site=' + encodeURIComponent(site);
+    return fetch(url, { headers: { 'X-API-Key': apiKey } })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return { data: [] }; });
+  }
+
+  function renderLiveChart(hourlyData) {
+    var el = document.getElementById('live-chart');
+    if (!el) return;
+    var r = rows(hourlyData);
+    if (!r.length) { el.innerHTML = '<div style="color:var(--ink-muted);font-family:var(--mono);font-size:11px;padding-top:20px;">No data yet</div>'; return; }
+    var max = Math.max.apply(null, r.map(function(d) { return parseFloat(d.views) || 0; }));
+    if (max === 0) max = 1;
+    var ch = 70;
+    var bw = Math.max(3, Math.floor((el.clientWidth - 10) / r.length) - 1);
+    var sw = r.length * (bw + 1) + 10;
+    var bars = '', xLabels = '';
+    var step = Math.max(1, Math.floor(r.length / 6));
+    r.forEach(function(row, i) {
+      var v = parseFloat(row.views) || 0;
+      var h = Math.max(1, (v / max) * ch);
+      var x = i * (bw + 1);
+      var y = ch - h;
+      var label = (row.hour || '').toString().slice(11, 16); // "HH:MM" from ISO
+      bars += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + h + '" fill="var(--accent)" rx="1" opacity="0.85"><title>' + esc(label) + ': ' + num(v) + '</title></rect>';
+      if (i % step === 0 || i === r.length - 1) {
+        xLabels += '<text x="' + (x + bw / 2) + '" y="' + (ch + 12) + '" text-anchor="middle" fill="var(--ink-muted)" font-size="9" font-family="var(--mono)">' + esc(label) + '</text>';
+      }
+    });
+    el.innerHTML = '<svg width="100%" viewBox="0 0 ' + Math.max(sw, el.clientWidth) + ' ' + (ch + 18) + '" preserveAspectRatio="xMinYMin meet">' + bars + xLabels + '</svg>';
+  }
+
+  function renderLivePages(pagesData) {
+    var el = document.getElementById('live-pages-list');
+    if (!el) return;
+    var r = rows(pagesData);
+    if (!r.length) { el.innerHTML = '<div style="color:var(--ink-muted);font-family:var(--mono);font-size:11px;">No activity</div>'; return; }
+    var max = parseFloat(r[0].views) || 1;
+    var html = '';
+    r.slice(0, 6).forEach(function(row) {
+      var pct = Math.max(4, Math.round(((parseFloat(row.views) || 0) / max) * 100));
+      html += '<div style="margin-bottom:6px;">';
+      html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">';
+      html += '<span style="font-family:var(--mono);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80%;">' + esc(row.path) + '</span>';
+      html += '<span style="font-family:var(--mono);color:var(--ink-muted);font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">' + num(row.views) + '</span>';
+      html += '</div>';
+      html += '<div style="background:var(--surface);border-radius:3px;overflow:hidden;height:4px;"><div style="background:var(--accent);height:100%;width:' + pct + '%;border-radius:3px;"></div></div>';
+      html += '</div>';
+    });
+    el.innerHTML = html;
+  }
+
+  function loadLive() {
+    if (!liveActive) return;
+    var pulse = document.getElementById('live-pulse');
+    if (pulse) { pulse.classList.add('live-pulse'); }
+
+    Promise.all([
+      liveQuery('live-visitors'),
+      liveQuery('live-pages'),
+      liveQuery('hourly-today')
+    ]).then(function(results) {
+      var visitorData = rows(results[0]);
+      var pagesData = results[1];
+      var hourlyData = results[2];
+
+      var visitors = visitorData.length ? (visitorData[0].visitors || 0) : 0;
+      var pageviews = visitorData.length ? (visitorData[0].pageviews || 0) : 0;
+
+      var vEl = document.getElementById('live-visitors');
+      var pvEl = document.getElementById('live-pageviews');
+      var updEl = document.getElementById('live-updated');
+
+      if (vEl) vEl.textContent = num(visitors);
+      if (pvEl) pvEl.textContent = num(pageviews);
+
+      var now = new Date();
+      var hh = String(now.getHours()).padStart(2, '0');
+      var mm = String(now.getMinutes()).padStart(2, '0');
+      var ss = String(now.getSeconds()).padStart(2, '0');
+      if (updEl) updEl.textContent = 'Updated ' + hh + ':' + mm + ':' + ss;
+
+      renderLivePages(pagesData);
+      renderLiveChart(hourlyData);
+
+      if (pulse) { pulse.classList.remove('live-pulse'); }
+      if (liveActive) { liveTimer = setTimeout(loadLive, 60000); }
+    });
+  }
+
+  function startLive() {
+    liveActive = true;
+    var panel = document.getElementById('live-panel');
+    var btn = document.getElementById('live-btn');
+    var dot = document.getElementById('live-dot');
+    if (panel) panel.style.display = '';
+    if (btn) { btn.style.background = '#1c1917'; btn.style.color = 'white'; }
+    if (dot) { dot.style.background = 'white'; }
+    loadLive();
+  }
+
+  function stopLive() {
+    liveActive = false;
+    if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
+    var panel = document.getElementById('live-panel');
+    var btn = document.getElementById('live-btn');
+    var dot = document.getElementById('live-dot');
+    if (panel) panel.style.display = 'none';
+    if (btn) { btn.style.background = ''; btn.style.color = ''; }
+    if (dot) { dot.style.background = '#dc2626'; }
+  }
+
+  document.getElementById('live-btn').addEventListener('click', function() {
+    if (liveActive) { stopLive(); } else { startLive(); }
+  });
+  // ---- end live panel ----
 
   function renderFunnel(data) {
     var el = document.getElementById('funnel');

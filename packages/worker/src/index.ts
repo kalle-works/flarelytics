@@ -207,6 +207,8 @@ const QUERY_TEMPLATES: Record<string, {
   description: string;
   sql: (ds: string, p: string, site: string, eventName: string, page: string) => string;
   requiresPage?: boolean;
+  /** Live queries ignore the period param and use hardcoded short intervals */
+  live?: boolean;
 }> = {
   'top-pages': {
     description: 'Most viewed pages',
@@ -446,6 +448,37 @@ const QUERY_TEMPLATES: Record<string, {
     `,
   },
   // new-vs-returning is handled separately (requires two CF API calls)
+
+  // Live queries — ignore period param, use hardcoded short intervals
+  'live-visitors': {
+    description: 'Visitors and pageviews in the last 30 minutes',
+    live: true,
+    sql: (ds, _p, site) => `
+      SELECT COUNT(DISTINCT blob9) AS visitors, SUM(_sample_interval * double1) AS pageviews
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL '30' MINUTE AND blob4 = 'pageview' AND blob10 = '${site}'
+    `,
+  },
+  'live-pages': {
+    description: 'Most visited pages in the last 30 minutes',
+    live: true,
+    sql: (ds, _p, site) => `
+      SELECT blob1 AS path, SUM(_sample_interval * double1) AS views
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL '30' MINUTE AND blob4 = 'pageview' AND blob10 = '${site}'
+      GROUP BY path ORDER BY views DESC LIMIT 10
+    `,
+  },
+  'hourly-today': {
+    description: 'Pageviews by hour for the last 24 hours',
+    live: true,
+    sql: (ds, _p, site) => `
+      SELECT toStartOfHour(timestamp) AS hour, SUM(_sample_interval * double1) AS views
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL '24' HOUR AND blob4 = 'pageview' AND blob10 = '${site}'
+      GROUP BY hour ORDER BY hour ASC
+    `,
+  },
 };
 
 const PERIOD_MAP: Record<string, string> = {
@@ -533,8 +566,11 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     );
   }
 
-  const period = PERIOD_MAP[periodParam];
-  if (!period) {
+  const template = QUERY_TEMPLATES[queryName];
+  const isLive = template?.live === true;
+
+  const period = isLive ? "'unused'" : PERIOD_MAP[periodParam];
+  if (!isLive && !period) {
     return Response.json(
       { error: 'Invalid period', available: Object.keys(PERIOD_MAP) },
       { status: 400, headers: cors },
@@ -559,8 +595,6 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   if (queryName === 'new-vs-returning') {
     return handleNewVsReturning(env, siteParam, period, dataset, cors);
   }
-
-  const template = QUERY_TEMPLATES[queryName];
 
   // funnel-by-event requires a valid event_name param
   if (queryName === 'funnel-by-event') {
@@ -596,8 +630,9 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     }
 
     const data = await response.text();
+    const cacheControl = isLive ? 'no-store' : 'public, max-age=300';
     return new Response(data, {
-      headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' },
+      headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': cacheControl },
     });
   } catch (err) {
     console.log(`[query] fetch error: ${err}`);
