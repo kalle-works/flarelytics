@@ -321,8 +321,8 @@ const QUERY_TEMPLATES: Record<string, {
     description: 'Daily funnel: pageviews to custom events',
     sql: (ds, p, site) => `
       SELECT toDate(timestamp) AS date,
-        SUM(CASE WHEN blob4 = 'pageview' THEN _sample_interval * double1 ELSE 0 END) AS pageviews,
-        SUM(CASE WHEN blob4 != 'pageview' AND blob4 != 'outbound' THEN _sample_interval * double1 ELSE 0 END) AS conversions
+        sumIf(_sample_interval * double1, blob4 = 'pageview') AS pageviews,
+        sumIf(_sample_interval * double1, blob4 != 'pageview' AND blob4 != 'outbound') AS conversions
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob10 = '${site}'
       GROUP BY date ORDER BY date ASC
@@ -385,9 +385,9 @@ const QUERY_TEMPLATES: Record<string, {
       const threshold = /^\d+$/.test(eventName) ? parseInt(eventName, 10) : 10;
       return `
         SELECT blob1 AS path,
-          SUM(CASE WHEN double2 < ${threshold} THEN _sample_interval ELSE 0 END) AS bounced,
+          sumIf(_sample_interval, double2 < ${threshold}) AS bounced,
           COUNT() AS sessions,
-          ROUND(SUM(CASE WHEN double2 < ${threshold} THEN _sample_interval ELSE 0 END) * 100.0 / COUNT(), 1) AS bounce_pct
+          ROUND(sumIf(_sample_interval, double2 < ${threshold}) * 100.0 / COUNT(), 1) AS bounce_pct
         FROM ${ds}
         WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'timing' AND blob10 = '${site}'
         GROUP BY path ORDER BY sessions DESC LIMIT 20
@@ -420,8 +420,8 @@ const QUERY_TEMPLATES: Record<string, {
     description: 'Daily funnel: pageviews to a specific custom event (?event_name=my_event)',
     sql: (ds, p, site, eventName) => `
       SELECT toDate(timestamp) AS date,
-        SUM(CASE WHEN blob4 = 'pageview' THEN _sample_interval * double1 ELSE 0 END) AS pageviews,
-        SUM(CASE WHEN blob4 = '${eventName}' THEN _sample_interval * double1 ELSE 0 END) AS conversions
+        sumIf(_sample_interval * double1, blob4 = 'pageview') AS pageviews,
+        sumIf(_sample_interval * double1, blob4 = '${eventName}') AS conversions
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob10 = '${site}'
       GROUP BY date ORDER BY date ASC
@@ -475,8 +475,8 @@ async function runCFQuery(sql: string, env: Env): Promise<any> {
 }
 
 async function handleNewVsReturning(env: Env, site: string, period: string, dataset: string, cors: Record<string, string>): Promise<Response> {
-  const currentSql = `SELECT DISTINCT blob9 AS vid FROM ${dataset} WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'`;
-  const priorSql   = `SELECT DISTINCT blob9 AS vid FROM ${dataset} WHERE timestamp <= NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'`;
+  const currentSql = `SELECT blob9 AS vid FROM ${dataset} WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}' GROUP BY blob9`;
+  const priorSql   = `SELECT blob9 AS vid FROM ${dataset} WHERE timestamp <= NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}' GROUP BY blob9`;
 
   try {
     const [currentData, priorData] = await Promise.all([
