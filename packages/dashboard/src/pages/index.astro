@@ -133,6 +133,19 @@ import Layout from '../layouts/Layout.astro';
       </div>
     </div>
 
+    <!-- Top Articles (hidden if no /a/ paths) -->
+    <div id="section-top-stories" class="section" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 class="section-title">Top Articles</h2>
+      </div>
+      <div class="card table-wrap">
+        <table class="tbl" id="table-stories">
+          <thead><tr><th style="text-align:left;">Article</th><th style="text-align:right;">Views</th><th style="text-align:right;">Visitors</th><th style="width:80px;"></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Two-column: Countries + Custom Events -->
     <div style="display:grid;grid-template-columns:1fr;gap:1.5rem;margin-bottom:1.5rem;" class="two-col">
       <div class="section">
@@ -801,11 +814,39 @@ import Layout from '../layouts/Layout.astro';
     renderPagination('table-pages', page, total);
   }
 
+  var INTERNAL_EVENTS = { scroll_depth: true, timing: true };
+
+  function fillTopStories(storiesData) {
+    var storyRows = rows(storiesData);
+    var section = document.getElementById('section-top-stories');
+    if (!section) return;
+    if (!storyRows.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    var tbody = document.querySelector('#table-stories tbody');
+    if (!tbody) return;
+    var maxViews = Math.max.apply(null, storyRows.map(function(r) { return parseFloat(r.views) || 0; }));
+    if (maxViews === 0) maxViews = 1;
+    var html = '';
+    storyRows.slice(0, 10).forEach(function(row) {
+      var pct = Math.round(((parseFloat(row.views) || 0) / maxViews) * 100);
+      html += '<tr>';
+      html += '<td style="text-align:left;">' + esc(row.path) + '</td>';
+      html += '<td style="text-align:right;">' + num(row.views) + '</td>';
+      html += '<td style="text-align:right;">' + num(row.visitors) + '</td>';
+      html += '<td style="width:80px;padding-right:12px;"><div style="background:var(--surface);border-radius:4px;overflow:hidden;height:6px;"><div style="background:var(--accent);height:100%;width:' + pct + '%;border-radius:4px;"></div></div></td>';
+      html += '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
   function populateFunnelEventSelect(eventsData) {
     var eventRows = rows(eventsData);
     var names = {};
     eventRows.forEach(function(row) {
-      if (row.event) names[row.event] = true;
+      if (row.event && !INTERNAL_EVENTS[row.event]) names[row.event] = true;
     });
     var select = document.getElementById('funnel-event-select');
     var html = '<option value="">Kaikki eventit</option>';
@@ -839,7 +880,7 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers'];
+    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','top-pages-stories'];
 
     var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
@@ -884,7 +925,8 @@ import Layout from '../layouts/Layout.astro';
       fillTable('table-countries', m['countries'], [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }], true);
       renderDeviceBadges(m['devices']);
       tablePages['table-events'] = 0;
-      fillTable('table-events', m['custom-events'], [{ key: 'event' }, { key: 'properties' }, { key: 'count', align: 'right', fmt: 'num' }], true);
+      var filteredEvents = { data: rows(m['custom-events']).filter(function(r) { return !INTERNAL_EVENTS[r.event]; }) };
+      fillTable('table-events', filteredEvents, [{ key: 'event' }, { key: 'properties' }, { key: 'count', align: 'right', fmt: 'num' }], true);
       fillTable('table-outbound', m['outbound-links'], [{ key: 'destination' }, { key: 'clicks', align: 'right', fmt: 'num' }]);
       fillTable('table-utm', m['utm-campaigns'], [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
 
@@ -896,6 +938,9 @@ import Layout from '../layouts/Layout.astro';
         { key: 'browser' },
         { key: 'views', align: 'right', fmt: 'num' }
       ]);
+
+      // Top Articles (only shown if data exists)
+      fillTopStories(m['top-pages-stories']);
 
       // Funnel
       var currentFunnelEvent = document.getElementById('funnel-event-select').value;
