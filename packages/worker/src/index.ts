@@ -448,6 +448,14 @@ const QUERY_TEMPLATES: Record<string, {
     `,
   },
   // new-vs-returning is handled separately (requires two CF API calls)
+  'total-sessions': {
+    description: 'Total sessions in period (based on timing events)',
+    sql: (ds, p, site) => `
+      SELECT SUM(_sample_interval * double1) AS sessions
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'timing' AND blob10 = '${site}'
+    `,
+  },
 
   // Live queries — ignore period param, use hardcoded short intervals
   'live-visitors': {

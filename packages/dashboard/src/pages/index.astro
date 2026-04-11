@@ -93,12 +93,12 @@ import Layout from '../layouts/Layout.astro';
         <span class="kpi-value">-</span>
         <span class="kpi-wow" data-wow="visitors"></span>
       </div>
-      <div class="card kpi" data-kpi="events">
-        <span class="kpi-label">Custom Events</span>
+      <div class="card kpi" data-kpi="sessions">
+        <span class="kpi-label">Sessions</span>
         <span class="kpi-value">-</span>
       </div>
-      <div class="card kpi" data-kpi="bounce">
-        <span class="kpi-label">Bounce Rate</span>
+      <div class="card kpi" data-kpi="convrate">
+        <span class="kpi-label">Conv. Rate</span>
         <span class="kpi-value">-</span>
       </div>
     </div>
@@ -759,6 +759,17 @@ import Layout from '../layouts/Layout.astro';
           html += '<td style="' + styleAttr + ';' + bg + '">' + num(v) + '</td>';
         } else if (c.fmt === 'pct') {
           html += '<td style="' + styleAttr + '">' + (parseFloat(v) || 0).toFixed(1) + '%</td>';
+        } else if (c.fmt === 'props') {
+          var rawStr = v == null ? '' : String(v).trim();
+          if (!rawStr) {
+            html += '<td style="' + styleAttr + '">-</td>';
+          } else {
+            var parts = rawStr.split('|').filter(function(p) { return p.trim(); });
+            var tags = parts.map(function(p) {
+              return '<span style="display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:var(--mono);font-size:11px;color:var(--ink-secondary);margin:1px 2px 1px 0;">' + esc(p.trim()) + '</span>';
+            }).join('');
+            html += '<td style="' + styleAttr + '">' + tags + '</td>';
+          }
         } else {
           html += '<td style="' + styleAttr + '">' + (esc(v) || '-') + '</td>';
         }
@@ -927,7 +938,7 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','top-pages-stories'];
+    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','top-pages-stories','total-sessions'];
 
     var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
@@ -946,17 +957,24 @@ import Layout from '../layouts/Layout.astro';
       var dv = rows(m['daily-views']);
       var duv = rows(m['daily-unique-visitors']);
       var funnel = rows(m['conversion-funnel']);
+      var sessionsData = rows(m['total-sessions']);
       var totalViews = sum(dv, 'views');
       var totalVisitors = sum(duv, 'unique_visitors');
-      var totalEvents = sum(funnel, 'conversions');
-      var bounceRate = totalVisitors > 0
-        ? Math.max(0, Math.round((2 - Math.min(totalViews / totalVisitors, 2)) * 100)) + '%'
+      var totalSessions = sessionsData.length ? (parseFloat(sessionsData[0].sessions) || 0) : 0;
+
+      // Conversion rate: real custom events (exclude scroll_depth, timing) / pageviews
+      var allEventRows = rows(m['custom-events']);
+      var realEventCount = allEventRows
+        .filter(function(r) { return !INTERNAL_EVENTS[r.event]; })
+        .reduce(function(acc, r) { return acc + (parseFloat(r.count) || 0); }, 0);
+      var convRate = totalViews > 0
+        ? (realEventCount / totalViews * 100).toFixed(1) + '%'
         : '-';
 
       document.querySelector('[data-kpi="views"] .kpi-value').textContent = num(totalViews);
       document.querySelector('[data-kpi="visitors"] .kpi-value').textContent = num(totalVisitors);
-      document.querySelector('[data-kpi="events"] .kpi-value').textContent = num(totalEvents);
-      document.querySelector('[data-kpi="bounce"] .kpi-value').textContent = bounceRate;
+      document.querySelector('[data-kpi="sessions"] .kpi-value').textContent = num(totalSessions);
+      document.querySelector('[data-kpi="convrate"] .kpi-value').textContent = convRate;
 
       // Traffic chart
       renderChart(dv);
@@ -973,7 +991,7 @@ import Layout from '../layouts/Layout.astro';
       renderDeviceBadges(m['devices']);
       tablePages['table-events'] = 0;
       var filteredEvents = { data: rows(m['custom-events']).filter(function(r) { return !INTERNAL_EVENTS[r.event]; }) };
-      fillTable('table-events', filteredEvents, [{ key: 'event' }, { key: 'properties' }, { key: 'count', align: 'right', fmt: 'num' }], true);
+      fillTable('table-events', filteredEvents, [{ key: 'event' }, { key: 'properties', fmt: 'props' }, { key: 'count', align: 'right', fmt: 'num' }], true);
       fillTable('table-outbound', m['outbound-links'], [{ key: 'destination' }, { key: 'clicks', align: 'right', fmt: 'num' }]);
       fillTable('table-utm', m['utm-campaigns'], [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
 
