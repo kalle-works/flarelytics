@@ -37,6 +37,8 @@
 - **Code block bg:** #1c1917 (dark, high contrast)
 - **Code text:** #d6d3d1
 - **Code accent:** #fbbf24 (bright amber for strings/highlights in code)
+- **Data viz (secondary):** #57534e (stone-600) — for secondary/negative data like bot traffic. Keeps accent for real traffic, muted stone for blocked/filtered data.
+- **Overlay backdrop:** rgba(0,0,0,0.5) — used for drill-down modal focus
 - **Semantic:** success #16a34a, error #dc2626, warning #dc6b14 (same as accent)
 - **Dark mode:** Not planned for v1. Dashboard will be dark by default (separate palette).
 
@@ -73,6 +75,10 @@
 - **Code blocks:** Dark bg (#1c1917), amber highlights for strings/success, gray for comments
 - **Badges:** Amber light bg (#fffbeb), dark amber text (#92400e for WCAG AA 7.8:1), pill shape (border-radius: 20px), monospace font
 - **KPI cards:** Monospace label (uppercase, muted), large monospace value
+- **Progress/category bars:** Full-width track (border-light bg), filled bar (accent for positive data, stone-600 for secondary/filtered data), 2px radius. Label left, value right, monospace.
+- **Scroll depth funnel:** Horizontal bars at 25/50/75/100% milestones. Accent fill, border-light track, monospace labels.
+- **Overlay/drill-down modal:** Backdrop rgba(0,0,0,0.5), max-width 720px, surface-raised bg, border, radius-lg. Close on Escape, click-outside, or X button.
+- **Data viz charts:** SVG bar charts. Accent fill for real traffic, stone-600 fill for bot/filtered data. Monospace axis labels, border-light grid lines (dashed).
 
 ## Anti-patterns (never use)
 - Orange accent on dark background (wrong association)
@@ -103,3 +109,5 @@
 | 2026-03-30 | Dark CTA buttons (not amber) | Amber is accent/highlight, not action. Dark buttons have better contrast and avoid "warning button" feel. |
 | 2026-03-30 | WCAG AA contrast fixes | Muted text darkened (#a8a29e → #78716c), accent text tier added (#b45309 for body text), badge text darkened (#92400e). All text now meets 4.5:1 minimum. |
 | 2026-03-30 | Burnt orange accent (#dc6b14) | Shifted from amber (#d97706) to burnt orange. More energy, still warm. WCAG 3.8:1 on light (better than amber's 3.0:1). |
+| 2026-04-12 | Stone-600 (#57534e) for bot data viz | Bot/blocked traffic uses muted stone, real traffic uses accent orange. Visual separation without adding a new hue to the palette. |
+| 2026-04-12 | Added overlay, progress bar, chart patterns | Dashboard expanded with bot analytics and article drill-down. Documented new component patterns to keep system coherent. |
