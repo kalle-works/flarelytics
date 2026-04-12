@@ -10,7 +10,8 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "test": "turbo test",
-    "lint": "turbo lint"
+    "lint": "turbo lint",
+    "check": "cd packages/worker && npx tsc --noEmit && npx vitest run && cd ../tracker && npx tsc --noEmit && npx vitest run"
   },
   "devDependencies": {
     "turbo": "^2.4.0",
@@ -18,7 +19,7 @@
   },
   "packageManager": "npm@10.9.3",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "repository": {
     "type": "git",

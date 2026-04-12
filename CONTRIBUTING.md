@@ -11,7 +11,19 @@ npm install
 npm run dev
 ```
 
-Requires Node.js 20+ and a Cloudflare account for worker development.
+Requires Node.js 22+ and a Cloudflare account for worker development.
+
+## Development tools
+
+- **Node.js 22+** — version pinned in `.nvmrc`, run `nvm use` to switch
+- **EditorConfig** — formatting rules in `.editorconfig`, supported by most editors
+- **Type check:** `npx tsc --noEmit` in any package directory
+- **Tests:** `npx vitest run` in worker or tracker directories
+- **Full check:** `npm run check` from the root (type-checks and tests all packages)
+- **Pre-commit:** Run `bash scripts/pre-commit.sh` before committing, or set up as a git hook:
+  ```bash
+  ln -s ../../scripts/pre-commit.sh .git/hooks/pre-commit
+  ```
 
 ## Project structure
 
