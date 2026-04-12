@@ -119,6 +119,17 @@ export function init(workerEndpoint: string, options: InitOptions = {}): void {
     } catch {}
   });
 
+  // Auto-track time on page via visibilitychange
+  const pageStart = Date.now();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      const seconds = Math.round((Date.now() - pageStart) / 1000);
+      if (seconds > 0 && seconds < 3600) {
+        send('timing', { props: { seconds: String(seconds) } });
+      }
+    }
+  });
+
   if (options.scrollDepth) initScrollDepth();
 }
 
