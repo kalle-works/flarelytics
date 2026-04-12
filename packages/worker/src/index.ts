@@ -540,6 +540,33 @@ const QUERY_TEMPLATES: Record<string, {
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'bot_hit' AND blob10 = '${site}'
     `,
   },
+  'bot-pages': {
+    description: 'Top pages targeted by bots',
+    sql: (ds, p, site) => `
+      SELECT blob1 AS path, SUM(_sample_interval * double1) AS hits
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'bot_hit' AND blob10 = '${site}'
+      GROUP BY path ORDER BY hits DESC LIMIT 15
+    `,
+  },
+  'bot-daily': {
+    description: 'Bot hits per day (trend)',
+    sql: (ds, p, site) => `
+      SELECT toDate(timestamp) AS date, SUM(_sample_interval * double1) AS hits
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'bot_hit' AND blob10 = '${site}'
+      GROUP BY date ORDER BY date ASC
+    `,
+  },
+  'bot-countries': {
+    description: 'Countries where bot traffic originates',
+    sql: (ds, p, site) => `
+      SELECT blob3 AS country, SUM(_sample_interval * double1) AS hits
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'bot_hit' AND blob10 = '${site}'
+      GROUP BY country ORDER BY hits DESC LIMIT 15
+    `,
+  },
 };
 
 const PERIOD_MAP: Record<string, string> = {

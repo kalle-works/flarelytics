@@ -284,18 +284,60 @@ import Layout from '../layouts/Layout.astro';
     <div class="section" style="margin-top:1.5rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <h2 class="section-title">Bot Traffic</h2>
-        <button class="csv-btn" data-table="table-bots">CSV</button>
       </div>
-      <div style="display:flex;align-items:baseline;gap:0.75rem;margin-bottom:0.75rem;">
+      <div style="display:flex;align-items:baseline;gap:0.75rem;margin-bottom:1rem;">
         <span id="bot-total" style="font-family:var(--mono);font-size:1.5rem;font-weight:700;">-</span>
         <span style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);">blocked requests</span>
         <span id="bot-pct" style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);"></span>
       </div>
-      <div class="card table-wrap">
-        <table class="tbl" id="table-bots">
-          <thead><tr><th style="text-align:left;">User-Agent</th><th style="text-align:right;">Hits</th></tr></thead>
-          <tbody></tbody>
-        </table>
+
+      <!-- Bot trend chart -->
+      <div class="card" style="margin-bottom:1rem;"><div id="chart-bot-daily" style="height:180px;width:100%;"></div></div>
+
+      <!-- Bot categories -->
+      <div class="card" style="margin-bottom:1rem;padding:1rem;">
+        <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.75rem;">Categories</div>
+        <div id="bot-categories"></div>
+      </div>
+
+      <!-- Bot tables: pages + countries + user-agents -->
+      <div style="display:grid;grid-template-columns:1fr;gap:1rem;" class="two-col">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+            <span style="font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);">Top Pages</span>
+            <button class="csv-btn" data-table="table-bot-pages">CSV</button>
+          </div>
+          <div class="card table-wrap">
+            <table class="tbl" id="table-bot-pages">
+              <thead><tr><th style="text-align:left;">Path</th><th style="text-align:right;">Hits</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+            <span style="font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);">Countries</span>
+            <button class="csv-btn" data-table="table-bot-countries">CSV</button>
+          </div>
+          <div class="card table-wrap">
+            <table class="tbl" id="table-bot-countries">
+              <thead><tr><th style="text-align:left;">Country</th><th style="text-align:right;">Hits</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+            <span style="font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);">Top User-Agents</span>
+            <button class="csv-btn" data-table="table-bots">CSV</button>
+          </div>
+          <div class="card table-wrap">
+            <table class="tbl" id="table-bots">
+              <thead><tr><th style="text-align:left;">User-Agent</th><th style="text-align:right;">Hits</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -957,7 +999,7 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','top-pages-stories','total-sessions','bot-hits','bot-hits-total'];
+    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','top-pages-stories','total-sessions','bot-hits','bot-hits-total','bot-pages','bot-daily','bot-countries'];
 
     var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
@@ -1027,7 +1069,7 @@ import Layout from '../layouts/Layout.astro';
       fillTopStories(m['top-pages-stories']);
 
       // Bot Traffic
-      renderBotTraffic(m['bot-hits'], m['bot-hits-total'], totalViews);
+      renderBotTraffic(m['bot-hits'], m['bot-hits-total'], m['bot-pages'], m['bot-daily'], m['bot-countries'], totalViews);
 
       // Funnel
       var currentFunnelEvent = document.getElementById('funnel-event-select').value;
@@ -1058,7 +1100,25 @@ import Layout from '../layouts/Layout.astro';
     });
   }
 
-  function renderBotTraffic(botHits, botTotal, totalViews) {
+  var BOT_CATEGORIES = [
+    { label: 'Hakukoneet', patterns: ['googlebot', 'bingbot', 'yandex', 'baidu', 'slurp'] },
+    { label: 'AI-crawlerit', patterns: ['gptbot', 'claudebot', 'bytespider'] },
+    { label: 'SEO-ty\u00f6kalut', patterns: ['ahrefs', 'semrush', 'moz.com', 'dotbot'] },
+    { label: 'Some', patterns: ['facebookexternalhit', 'twitterbot', 'linkedinbot', 'whatsapp', 'telegrambot'] },
+    { label: 'Monitorointi', patterns: ['lighthouse', 'pagespeed', 'gtmetrix', 'pingdom', 'uptimerobot'] },
+  ];
+
+  function categorizeBot(ua) {
+    var lower = (ua || '').toLowerCase();
+    for (var i = 0; i < BOT_CATEGORIES.length; i++) {
+      for (var j = 0; j < BOT_CATEGORIES[i].patterns.length; j++) {
+        if (lower.includes(BOT_CATEGORIES[i].patterns[j])) return BOT_CATEGORIES[i].label;
+      }
+    }
+    return 'Muu';
+  }
+
+  function renderBotTraffic(botHits, botTotal, botPages, botDaily, botCountries, totalViews) {
     var bots = rows(botHits);
     var totalBotHits = botTotal && rows(botTotal).length ? (parseFloat(rows(botTotal)[0].total_bot_hits) || 0) : 0;
     document.getElementById('bot-total').textContent = num(totalBotHits);
@@ -1068,8 +1128,86 @@ import Layout from '../layouts/Layout.astro';
     } else {
       pctEl.textContent = '';
     }
+
+    // Bot daily trend chart
+    renderBotChart(botDaily);
+
+    // Bot categories (computed from bot-hits UA data)
+    renderBotCategories(bots, totalBotHits);
+
+    // Tables
+    tablePages['table-bot-pages'] = 0;
+    fillTable('table-bot-pages', botPages, [{ key: 'path' }, { key: 'hits', align: 'right', fmt: 'num' }], true);
+    tablePages['table-bot-countries'] = 0;
+    fillTable('table-bot-countries', botCountries, [{ key: 'country' }, { key: 'hits', align: 'right', fmt: 'num' }], true);
     tablePages['table-bots'] = 0;
     fillTable('table-bots', botHits, [{ key: 'user_agent' }, { key: 'hits', align: 'right', fmt: 'num' }], true);
+  }
+
+  function renderBotChart(data) {
+    var el = document.getElementById('chart-bot-daily');
+    var r = rows(data);
+    if (!r.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No bot data yet</div>'; return; }
+
+    var max = Math.max.apply(null, r.map(function(d) { return parseFloat(d.hits) || 0; }));
+    if (max === 0) max = 1;
+    var bw = Math.max(4, Math.floor((el.clientWidth - 60) / r.length) - 2);
+    var ch = 140;
+    var sw = r.length * (bw + 2) + 60;
+
+    var bars = '', xLabels = '', yLabels = '';
+    var step = Math.max(1, Math.floor(r.length / 7));
+
+    for (var i = 0; i <= 4; i++) {
+      var val = Math.round(max * (1 - i / 4));
+      var yp = 10 + (ch / 4) * i;
+      yLabels += '<text x="45" y="' + (yp + 4) + '" text-anchor="end" fill="var(--ink-muted)" font-size="10" font-family="var(--mono)">' + num(val) + '</text>';
+      yLabels += '<line x1="50" x2="' + sw + '" y1="' + yp + '" y2="' + yp + '" stroke="var(--border-light)" stroke-dasharray="4,4"/>';
+    }
+
+    r.forEach(function(row, i) {
+      var v = parseFloat(row.hits) || 0;
+      var h = Math.max(1, (v / max) * ch);
+      var x = 50 + i * (bw + 2);
+      var y = ch - h + 10;
+      bars += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + h + '" fill="#78716c" rx="2" opacity="0.7"><title>' + esc(row.date || '') + ': ' + num(v) + ' bot hits</title></rect>';
+      if (i % step === 0 || i === r.length - 1) {
+        xLabels += '<text x="' + (x + bw / 2) + '" y="' + (ch + 26) + '" text-anchor="middle" fill="var(--ink-muted)" font-size="10" font-family="var(--mono)">' + esc((row.date || '').slice(5)) + '</text>';
+      }
+    });
+
+    el.innerHTML = '<svg width="100%" viewBox="0 0 ' + Math.max(sw, el.clientWidth) + ' ' + (ch + 35) + '" preserveAspectRatio="xMinYMin meet">' + yLabels + bars + xLabels + '</svg>';
+  }
+
+  function renderBotCategories(bots, totalBotHits) {
+    var el = document.getElementById('bot-categories');
+    if (!bots.length || !totalBotHits) { el.innerHTML = '<div style="font-family:var(--mono);font-size:12px;color:var(--ink-muted);">No data</div>'; return; }
+
+    // Aggregate hits per category
+    var cats = {};
+    bots.forEach(function(b) {
+      var cat = categorizeBot(b.user_agent);
+      cats[cat] = (cats[cat] || 0) + (parseFloat(b.hits) || 0);
+    });
+
+    // Sort by hits descending
+    var sorted = Object.keys(cats).map(function(k) { return { label: k, hits: cats[k] }; });
+    sorted.sort(function(a, b) { return b.hits - a.hits; });
+
+    var maxHits = sorted[0] ? sorted[0].hits : 1;
+    var html = '';
+    sorted.forEach(function(cat) {
+      var pct = totalBotHits > 0 ? (cat.hits / totalBotHits * 100).toFixed(0) : 0;
+      var barWidth = (cat.hits / maxHits * 100).toFixed(1);
+      html += '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:6px;">';
+      html += '<span style="font-family:var(--mono);font-size:12px;color:var(--ink-secondary);min-width:100px;">' + esc(cat.label) + '</span>';
+      html += '<div style="flex:1;height:16px;background:var(--border-light);border-radius:2px;overflow:hidden;">';
+      html += '<div style="height:100%;width:' + barWidth + '%;background:#78716c;border-radius:2px;"></div>';
+      html += '</div>';
+      html += '<span style="font-family:var(--mono);font-size:11px;color:var(--ink-muted);min-width:60px;text-align:right;">' + num(cat.hits) + ' (' + pct + '%)</span>';
+      html += '</div>';
+    });
+    el.innerHTML = html;
   }
 
   function renderChart(data) {
