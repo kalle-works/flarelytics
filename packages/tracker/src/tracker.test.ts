@@ -10,7 +10,7 @@ globalThis.Blob = class FakeBlob extends OrigBlob {
   }
 } as typeof Blob;
 
-const beaconSpy = vi.fn(() => true);
+const beaconSpy = vi.fn((_url: string, _data?: BodyInit | null) => true);
 Object.defineProperty(navigator, 'sendBeacon', { value: beaconSpy, writable: true });
 
 describe('tracker', () => {
