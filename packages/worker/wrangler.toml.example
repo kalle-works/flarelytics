@@ -11,6 +11,8 @@ dataset = "flarelytics"
 # Comma-separated list of allowed origins for CORS
 ALLOWED_ORIGINS = "https://yoursite.com,http://localhost:4321"
 DATASET_NAME = "flarelytics"
+# Comma-separated hostnames whose stats are public (optional)
+# PUBLIC_STATS_SITES = "flarelytics.dev"
 
 # Secrets (set via `wrangler secret put`):
 #   QUERY_API_KEY  — random string for dashboard authentication

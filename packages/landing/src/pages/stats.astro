@@ -1,0 +1,269 @@
+---
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Stats — Flarelytics</title>
+  <meta name="description" content="Real-time analytics for flarelytics.dev, powered by Flarelytics." />
+  <link rel="canonical" href="https://flarelytics.dev/stats" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231c1917'/%3E%3Crect x='7' y='12' width='4' height='12' rx='1' fill='%23fbbf24'/%3E%3Crect x='14' y='8' width='4' height='16' rx='1' fill='%23fbbf24'/%3E%3Crect x='21' y='16' width='4' height='8' rx='1' fill='%23fbbf24'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
+  <style is:inline>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:var(--font);font-size:16px;background:var(--bg);color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased}
+    a{color:var(--accent-text);text-decoration:none} a:hover{color:var(--accent)}
+    .container{max-width:880px;margin:0 auto;padding:0 1.5rem}
+    nav{padding:1rem 0;border-bottom:1px solid var(--border)}
+    nav .inner{display:flex;align-items:center;justify-content:space-between}
+    .logo{display:flex;align-items:center;gap:.5rem;font-family:var(--mono);font-weight:500;font-size:15px;color:var(--ink);text-decoration:none;padding:8px 0}
+    .logo-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center}
+    .nav-links{display:flex;gap:1.5rem;align-items:center}
+    .nav-links a{font-family:var(--mono);font-size:12px;color:var(--ink2);padding:12px 0}
+    .nav-links a:hover,.nav-links a.active{color:var(--ink)}
+    .nav-links .btn-primary,.nav-links .btn-primary:hover{color:white}
+    .btn{display:inline-flex;align-items:center;min-height:40px;padding:0 1.25rem;border-radius:6px;font-family:var(--mono);font-size:12px;font-weight:600;transition:all 120ms;text-decoration:none}
+    .btn-primary{background:var(--ink);color:white} .btn-primary:hover{background:#292524;color:white}
+    .page-header{padding:3rem 0 2rem}
+    .page-header h1{font-family:var(--display);font-size:40px;font-weight:900;line-height:1.1;letter-spacing:-.035em}
+    .page-header .subtitle{margin-top:.5rem;font-size:16px;color:var(--ink2)}
+    .page-header .update-note{margin-top:.5rem;font-family:var(--mono);font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:2rem}
+    .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:16px 20px}
+    .mono-label{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:6px}
+    .kpi-value{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--ink);line-height:1;font-variant-numeric:tabular-nums}
+    .kpi-sub{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:4px}
+    .panel{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:16px 20px;margin-bottom:2rem}
+    .panel h2{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:12px}
+    #traffic-chart{width:100%;height:140px;display:block;margin-top:4px}
+    .cols-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:2rem}
+    .data-table{width:100%;border-collapse:collapse}
+    .data-table tr{border-bottom:1px solid var(--border)} .data-table tr:last-child{border-bottom:none}
+    .data-table td{padding:6px 0;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+    .data-table td:first-child{color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
+    .data-table td:last-child{text-align:right;color:var(--ink);font-weight:600}
+    .device-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+    .device-row:last-child{margin-bottom:0}
+    .device-label{font-family:var(--mono);font-size:12px;color:var(--ink2);width:64px}
+    .device-track{flex:1;height:6px;background:var(--border);border-radius:2px;overflow:hidden}
+    .device-bar{height:100%;background:var(--accent);border-radius:2px;transition:width 400ms}
+    .device-pct{font-family:var(--mono);font-size:12px;color:var(--ink);font-weight:600;width:36px;text-align:right;font-variant-numeric:tabular-nums}
+    .footer-cta{border:1px solid var(--border);border-radius:6px;padding:2rem;text-align:center;margin-bottom:3rem;background:var(--card)}
+    .footer-cta p{font-size:15px;color:var(--ink2);margin-bottom:1.25rem}
+    footer{padding:2rem 0;border-top:1px solid var(--border);text-align:center}
+    footer p{font-family:var(--mono);font-size:12px;color:var(--ink3)}
+    footer a{color:var(--accent);padding:8px 0;display:inline-block} footer a:hover{color:var(--accent2)}
+    .skeleton{background:linear-gradient(90deg,var(--border) 25%,#f5f5f4 50%,var(--border) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .error-banner{background:#fff5f5;border:1px solid #fecaca;border-radius:6px;padding:1rem 1.25rem;font-family:var(--mono);font-size:12px;color:var(--red);margin-bottom:2rem;display:none}
+    @media(max-width:640px){
+      .page-header h1{font-size:28px} .kpi-grid{grid-template-columns:repeat(2,1fr)}
+      .cols-3{grid-template-columns:1fr} .nav-links a:not(.btn-primary){display:none}
+    }
+    @media(min-width:641px) and (max-width:768px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+  </style>
+</head>
+<body style="--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--display:'Satoshi',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mono:'SF Mono','Fira Code','Menlo',monospace;--ink:#1c1917;--ink2:#57534e;--ink3:#78716c;--bg:#fafaf9;--card:#ffffff;--border:#e7e5e4;--accent:#dc6b14;--accent2:#b45309;--accent-text:#b45309;--accent-light:#fffbeb;--green:#16a34a;--red:#dc2626;">
+
+  <nav>
+    <div class="container inner">
+      <a href="/" class="logo">
+        <div class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="6" fill="#1c1917"/>
+            <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+            <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+            <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+          </svg>
+        </div>
+        flarelytics
+      </a>
+      <div class="nav-links">
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a>
+        <a href="/docs/">Docs</a>
+        <a href="/stats" class="active">Stats</a>
+        <a href="https://github.com/kalle-works/flarelytics" class="btn btn-primary">Get Started</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="page-header">
+      <h1>Live Stats</h1>
+      <p class="subtitle">flarelytics.dev analytics, powered by Flarelytics</p>
+      <p class="update-note">Updated every 5 minutes &middot; Last 30 days</p>
+    </div>
+
+    <div class="error-banner" id="error-banner">
+      Stats unavailable — could not reach the analytics endpoint. Try again in a moment.
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="mono-label">Pageviews</div>
+        <div class="kpi-value skeleton" id="kpi-pageviews" style="height:34px;width:80px;">&nbsp;</div>
+        <div class="kpi-sub">30-day total</div>
+      </div>
+      <div class="kpi-card">
+        <div class="mono-label">Visitors</div>
+        <div class="kpi-value skeleton" id="kpi-visitors" style="height:34px;width:64px;">&nbsp;</div>
+        <div class="kpi-sub">unique, 30 days</div>
+      </div>
+      <div class="kpi-card">
+        <div class="mono-label">Bot hits blocked</div>
+        <div class="kpi-value skeleton" id="kpi-bots" style="height:34px;width:72px;">&nbsp;</div>
+        <div class="kpi-sub">30-day total</div>
+      </div>
+      <div class="kpi-card">
+        <div class="mono-label">Pages tracked</div>
+        <div class="kpi-value skeleton" id="kpi-pages" style="height:34px;width:48px;">&nbsp;</div>
+        <div class="kpi-sub">unique paths</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Daily pageviews</h2>
+      <svg id="traffic-chart" aria-label="Daily pageviews bar chart"></svg>
+    </div>
+
+    <div class="cols-3">
+      <div class="panel" style="margin-bottom:0">
+        <h2>Top Pages</h2>
+        <table class="data-table"><tbody id="tbody-pages">
+          <tr><td colspan="2"><div class="skeleton" style="height:12px;margin:6px 0">&nbsp;</div></td></tr>
+          <tr><td colspan="2"><div class="skeleton" style="height:12px;margin:6px 0">&nbsp;</div></td></tr>
+          <tr><td colspan="2"><div class="skeleton" style="height:12px;margin:6px 0">&nbsp;</div></td></tr>
+        </tbody></table>
+      </div>
+      <div class="panel" style="margin-bottom:0">
+        <h2>Referrers</h2>
+        <table class="data-table"><tbody id="tbody-referrers">
+          <tr><td colspan="2"><div class="skeleton" style="height:12px;margin:6px 0">&nbsp;</div></td></tr>
+          <tr><td colspan="2"><div class="skeleton" style="height:12px;margin:6px 0">&nbsp;</div></td></tr>
+          <tr><td colspan="2"><div class="skeleton" style="height:12px;margin:6px 0">&nbsp;</div></td></tr>
+        </tbody></table>
+      </div>
+      <div class="panel" style="margin-bottom:0">
+        <h2>Countries</h2>
+        <table class="data-table"><tbody id="tbody-countries">
+          <tr><td colspan="2"><div class="skeleton" style="height:12px;margin:6px 0">&nbsp;</div></td></tr>
+          <tr><td colspan="2"><div class="skeleton" style="height:12px;margin:6px 0">&nbsp;</div></td></tr>
+          <tr><td colspan="2"><div class="skeleton" style="height:12px;margin:6px 0">&nbsp;</div></td></tr>
+        </tbody></table>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:12px">
+      <h2>Devices</h2>
+      <div id="devices-bars">
+        <div class="device-row"><span class="device-label">desktop</span><div class="device-track"><div class="device-bar skeleton" style="width:100%"></div></div><span class="device-pct">—</span></div>
+        <div class="device-row"><span class="device-label">mobile</span><div class="device-track"><div class="device-bar skeleton" style="width:100%"></div></div><span class="device-pct">—</span></div>
+        <div class="device-row"><span class="device-label">tablet</span><div class="device-track"><div class="device-bar skeleton" style="width:100%"></div></div><span class="device-pct">—</span></div>
+      </div>
+    </div>
+
+    <div class="footer-cta">
+      <p>This page is powered by Flarelytics. Deploy your own in 5 minutes.</p>
+      <a href="/docs/getting-started" class="btn btn-primary" style="font-size:13px;">Get Started</a>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a> &middot;
+        <a href="https://github.com/kalle-works/flarelytics/discussions">Discussions</a> &middot;
+        <a href="https://github.com/kalle-works/flarelytics/issues/new?template=bug_report.md">Report a bug</a>
+      </p>
+    </div>
+  </footer>
+
+  <script defer src="https://analytics.flarelytics.dev/tracker.js"></script>
+  <script>
+    const API = 'https://analytics.flarelytics.dev/public-stats?site=flarelytics.dev';
+    const ACCENT = '#dc6b14';
+
+    const fmt = n => (n == null ? '—' : n.toLocaleString('en'));
+
+    function clearSkel(el) { el.classList.remove('skeleton'); el.style.height = ''; el.style.width = ''; }
+
+    function renderChart(daily) {
+      const svg = document.getElementById('traffic-chart');
+      const W = svg.clientWidth || 800, H = 140;
+      const P = { t: 8, r: 8, b: 28, l: 36 };
+      const cW = W - P.l - P.r, cH = H - P.t - P.b;
+      if (!daily || !daily.length) { svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" font-family="monospace" font-size="11" fill="#78716c">No data</text>'; return; }
+      const maxV = Math.max(...daily.map(d => d.views), 1);
+      const step = cW / daily.length;
+      const barW = Math.max(2, Math.floor(step) - 2);
+      let h = '';
+      [0, .25, .5, .75, 1].forEach(t => {
+        const y = P.t + cH - t * cH;
+        h += `<line x1="${P.l}" y1="${y}" x2="${W-P.r}" y2="${y}" stroke="#e7e5e4" stroke-width="1" stroke-dasharray="3,3"/>`;
+        h += `<text x="${P.l-4}" y="${y+4}" text-anchor="end" font-family="'SF Mono','Fira Code','Menlo',monospace" font-size="9" fill="#78716c">${t===0?'0':Math.round(t*maxV).toLocaleString('en')}</text>`;
+      });
+      daily.forEach((d, i) => {
+        const bH = Math.max(2, (d.views / maxV) * cH);
+        const x = P.l + i * step + (step - barW) / 2;
+        h += `<rect x="${x.toFixed(1)}" y="${(P.t+cH-bH).toFixed(1)}" width="${barW}" height="${bH.toFixed(1)}" rx="1" fill="${ACCENT}" opacity="0.85"/>`;
+      });
+      const lc = Math.min(5, daily.length), ls = Math.floor((daily.length - 1) / (lc - 1)) || 1;
+      for (let i = 0; i < daily.length; i += ls) {
+        const x = P.l + i * step + step / 2;
+        h += `<text x="${x.toFixed(1)}" y="${H-6}" text-anchor="middle" font-family="'SF Mono','Fira Code','Menlo',monospace" font-size="9" fill="#78716c">${(daily[i].date||'').slice(5)}</text>`;
+      }
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      svg.innerHTML = h;
+    }
+
+    function renderTable(id, rows, k1, k2) {
+      const tb = document.getElementById(id);
+      if (!rows || !rows.length) { tb.innerHTML = '<tr><td colspan="2" style="font-family:monospace;font-size:12px;color:#78716c">No data</td></tr>'; return; }
+      tb.innerHTML = rows.slice(0, 8).map(r => `<tr><td title="${r[k1]||''}">${r[k1]||'—'}</td><td>${fmt(r[k2])}</td></tr>`).join('');
+    }
+
+    function renderDevices(devs) {
+      const el = document.getElementById('devices-bars');
+      if (!devs || !devs.length) { el.innerHTML = '<p style="font-family:monospace;font-size:12px;color:#78716c">No data</p>'; return; }
+      const total = devs.reduce((s, d) => s + (d.views || 0), 0) || 1;
+      const order = ['desktop', 'mobile', 'tablet'];
+      const sorted = order.map(n => devs.find(d => d.device === n) || { device: n, views: 0 })
+                          .concat(devs.filter(d => !order.includes(d.device)));
+      el.innerHTML = sorted.map(d => {
+        const pct = Math.round((d.views / total) * 100);
+        return `<div class="device-row"><span class="device-label">${d.device}</span><div class="device-track"><div class="device-bar" style="width:${pct}%"></div></div><span class="device-pct">${pct}%</span></div>`;
+      }).join('');
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch(API);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { stats: s } = await res.json();
+        window.__flarelyticsDaily = s.dailyViews || [];
+        ['kpi-pageviews','kpi-visitors','kpi-bots','kpi-pages'].forEach(id => clearSkel(document.getElementById(id)));
+        document.getElementById('kpi-pageviews').textContent = fmt(s.pageviews);
+        document.getElementById('kpi-visitors').textContent = fmt(s.visitors);
+        document.getElementById('kpi-bots').textContent = fmt(s.botHitsTotal);
+        document.getElementById('kpi-pages').textContent = fmt(s.topPages ? s.topPages.length : 0);
+        renderChart(s.dailyViews || []);
+        renderTable('tbody-pages', s.topPages, 'path', 'views');
+        renderTable('tbody-referrers', s.referrers, 'referrer', 'visits');
+        renderTable('tbody-countries', s.countries, 'country', 'views');
+        renderDevices(s.devices || []);
+      } catch(e) {
+        console.error('Stats fetch failed:', e);
+        document.getElementById('error-banner').style.display = 'block';
+        ['kpi-pageviews','kpi-visitors','kpi-bots','kpi-pages'].forEach(id => { const el = document.getElementById(id); clearSkel(el); el.textContent = '—'; });
+        ['tbody-pages','tbody-referrers','tbody-countries'].forEach(id => { document.getElementById(id).innerHTML = '<tr><td colspan="2" style="font-family:monospace;font-size:12px;color:#78716c">Unavailable</td></tr>'; });
+        document.getElementById('devices-bars').innerHTML = '<p style="font-family:monospace;font-size:12px;color:#78716c">Unavailable</p>';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadStats);
+    let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { const k = document.getElementById('kpi-pageviews'); if (k && !k.classList.contains('skeleton') && k.textContent !== '—') renderChart(window.__flarelyticsDaily || []); }, 200); });
+  </script>
+</body>
+</html>
