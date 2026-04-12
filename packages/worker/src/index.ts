@@ -877,12 +877,15 @@ async function handlePublicStats(request: Request, env: Env): Promise<Response> 
   const site = siteParam;
 
   const queries = {
-    totals: `
-      SELECT
-        sumIf(_sample_interval * double1, blob4 = 'pageview') AS pageviews,
-        COUNT(DISTINCT CASE WHEN blob4 = 'pageview' THEN blob9 END) AS visitors
+    pageviews: `
+      SELECT SUM(_sample_interval * double1) AS pageviews
       FROM ${dataset}
-      WHERE timestamp > NOW() - INTERVAL ${period} AND blob10 = '${site}'
+      WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'
+    `,
+    visitors: `
+      SELECT COUNT(DISTINCT blob9) AS visitors
+      FROM ${dataset}
+      WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'
     `,
     topPages: `
       SELECT blob1 AS path, SUM(_sample_interval * double1) AS views
@@ -922,9 +925,10 @@ async function handlePublicStats(request: Request, env: Env): Promise<Response> 
   };
 
   try {
-    const [totalsData, topPagesData, referrersData, countriesData, devicesData, dailyViewsData, botHitsData] =
+    const [pageviewsData, visitorsData, topPagesData, referrersData, countriesData, devicesData, dailyViewsData, botHitsData] =
       await Promise.all([
-        runCFQuery(queries.totals, env),
+        runCFQuery(queries.pageviews, env),
+        runCFQuery(queries.visitors, env),
         runCFQuery(queries.topPages, env),
         runCFQuery(queries.referrers, env),
         runCFQuery(queries.countries, env),
@@ -933,15 +937,13 @@ async function handlePublicStats(request: Request, env: Env): Promise<Response> 
         runCFQuery(queries.botHitsTotal, env),
       ]);
 
-    const totalsRow = totalsData.data?.[0] ?? {};
-
     const result: PublicStatsResult = {
       period: '30d',
       site,
       generated: new Date().toISOString(),
       stats: {
-        pageviews: Number(totalsRow.pageviews ?? 0),
-        visitors: Number(totalsRow.visitors ?? 0),
+        pageviews: Number(pageviewsData.data?.[0]?.pageviews ?? 0),
+        visitors: Number(visitorsData.data?.[0]?.visitors ?? 0),
         topPages: (topPagesData.data ?? []).map((r: any) => ({ path: String(r.path), views: Number(r.views) })),
         referrers: (referrersData.data ?? []).map((r: any) => ({ referrer: String(r.referrer), visits: Number(r.visits) })),
         countries: (countriesData.data ?? []).map((r: any) => ({ country: String(r.country), views: Number(r.views) })),
