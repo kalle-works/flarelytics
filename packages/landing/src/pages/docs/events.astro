@@ -1,0 +1,259 @@
+---
+const schema = [
+  { field: 'blob1', content: 'Page path' },
+  { field: 'blob2', content: 'Referrer hostname (direct if none)' },
+  { field: 'blob3', content: 'Country code (from CF headers)' },
+  { field: 'blob4', content: 'Event name (pageview, timing, scroll_depth, custom)' },
+  { field: 'blob5', content: 'Event properties (pipe-separated values)' },
+  { field: 'blob6', content: 'utm_source' },
+  { field: 'blob7', content: 'utm_medium' },
+  { field: 'blob8', content: 'utm_campaign' },
+  { field: 'blob9', content: 'Visitor hash (daily-rotating SHA-256)' },
+  { field: 'blob10', content: 'Site hostname — required in all WHERE clauses' },
+  { field: 'blob11', content: 'Device type (mobile / tablet / desktop)' },
+  { field: 'blob12', content: 'Browser name (Chrome / Firefox / Safari / Edge / Other)' },
+  { field: 'double1', content: 'Event count (always 1)' },
+  { field: 'double2', content: 'Time on page in seconds (timing events only — use AVG)' },
+];
+
+const builtins = [
+  { name: 'pageview', trigger: 'Every page load', fields: 'path, referrer, country, device, browser, UTM params' },
+  { name: 'outbound', trigger: 'External link click', fields: 'path, destination URL (blob5)' },
+  { name: 'timing', trigger: 'visibilitychange (tab close/switch)', fields: 'path, seconds on page (double2)' },
+  { name: 'scroll_depth', trigger: '25 / 50 / 75 / 100% scroll milestone', fields: 'path, depth percentage (blob5)' },
+];
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Events & Schema — Flarelytics Docs</title>
+  <meta name="description" content="Flarelytics event types, custom event tracking with flarelytics.track(), and the Analytics Engine blob schema." />
+  <link rel="canonical" href="https://flarelytics.dev/docs/events" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231c1917'/%3E%3Crect x='7' y='12' width='4' height='12' rx='1' fill='%23fbbf24'/%3E%3Crect x='14' y='8' width='4' height='16' rx='1' fill='%23fbbf24'/%3E%3Crect x='21' y='16' width='4' height='8' rx='1' fill='%23fbbf24'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
+  <style is:inline>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font); font-size: 16px; background: var(--bg); color: var(--ink); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent-text); text-decoration: none; }
+    a:hover { color: var(--accent); }
+    .container { max-width: 880px; margin: 0 auto; padding: 0 1.5rem; }
+    nav { padding: 1rem 0; border-bottom: 1px solid var(--border); }
+    nav .inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 0.5rem; font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink); text-decoration: none; padding: 8px 0; }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 12px 0; }
+    .nav-links a:hover { color: var(--ink); }
+    .nav-links a.active { color: var(--ink); }
+    .btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 1.25rem; border-radius: 6px; font-family: var(--mono); font-size: 12px; font-weight: 600; transition: all 120ms; text-decoration: none; }
+    .btn-primary { background: var(--ink); color: white; }
+    .btn-primary:hover { background: #292524; color: white; }
+    .layout { display: grid; grid-template-columns: 200px 1fr; gap: 3rem; padding: 2rem 0 4rem; align-items: start; }
+    .sidebar { position: sticky; top: 1.5rem; }
+    .sidebar-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink3); margin-bottom: 0.75rem; }
+    .sidebar nav { padding: 0; border: none; }
+    .sidebar nav a { display: block; font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 5px 0; border-left: 2px solid transparent; padding-left: 10px; }
+    .sidebar nav a:hover { color: var(--ink); border-left-color: var(--border); }
+    .sidebar nav a.active { color: var(--accent-text); border-left-color: var(--accent); }
+    .breadcrumb { padding: 1.25rem 0 0; font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    .breadcrumb a { color: var(--ink3); }
+    .breadcrumb a:hover { color: var(--accent-text); }
+    .breadcrumb span { margin: 0 0.4rem; }
+    .content h1 { font-family: var(--display); font-size: 32px; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    .content h2 { font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-text); margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    .content h3 { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--ink); margin-top: 1.5rem; margin-bottom: 0.5rem; }
+    .content p { color: var(--ink2); margin-bottom: 1rem; }
+    .content ul { color: var(--ink2); padding-left: 1.25rem; margin-bottom: 1rem; }
+    .content ul li { margin-bottom: 0.25rem; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin: 1rem 0; }
+    .data-table th { padding: 0.5rem 0.75rem; text-align: left; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink3); border-bottom: 1px solid var(--border); background: #fafaf9; }
+    .data-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); color: var(--ink2); vertical-align: top; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .field-name { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
+    .event-name { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent-text); }
+    .code-block { background: #1c1917; border-radius: 6px; overflow: hidden; margin: 1rem 0; }
+    .code-header { padding: 0.4rem 1rem; background: #292524; display: flex; align-items: center; gap: 0.5rem; }
+    .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .code-label { font-family: var(--mono); font-size: 10px; color: #78716c; margin-left: auto; }
+    .code-body { padding: 1rem 1.25rem; font-family: var(--mono); font-size: 0.8125rem; line-height: 1.8; color: #d6d3d1; overflow-x: auto; }
+    .code-comment { color: #78716c; }
+    .code-string { color: #fbbf24; }
+    .privacy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 1rem 0; }
+    .privacy-col { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 16px; }
+    .privacy-col-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+    .privacy-col-yes { color: var(--green); }
+    .privacy-col-no { color: var(--red); }
+    .privacy-col ul { padding-left: 1.1rem; margin: 0; }
+    .privacy-col ul li { font-size: 14px; color: var(--ink2); margin-bottom: 4px; }
+    footer { padding: 2rem 0; border-top: 1px solid var(--border); text-align: center; }
+    footer p { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    footer a { color: var(--ink3); padding: 8px 0; display: inline-block; }
+    footer a:hover { color: var(--accent-text); }
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .nav-links a:not(.btn-primary) { display: none; }
+      .privacy-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body style="--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--display:'Satoshi',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mono:'SF Mono','Fira Code','Menlo',monospace;--ink:#1c1917;--ink2:#57534e;--ink3:#78716c;--bg:#fafaf9;--card:#ffffff;--border:#e7e5e4;--accent:#dc6b14;--accent2:#b45309;--accent-text:#b45309;--accent-light:#fffbeb;--green:#16a34a;--red:#dc2626;">
+  <nav>
+    <div class="container inner">
+      <a href="/" class="logo">
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="6" fill="#1c1917"/>
+          <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+          <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+          <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+        </svg>
+        flarelytics
+      </a>
+      <div class="nav-links">
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="https://github.com/kalle-works/flarelytics" class="btn btn-primary">Get Started</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <a href="/">flarelytics</a>
+      <span>/</span>
+      <a href="/docs/">docs</a>
+      <span>/</span>
+      events
+    </div>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-label">On this page</div>
+        <nav>
+          <a href="#builtin">Built-in events</a>
+          <a href="#custom">Custom events</a>
+          <a href="#schema">Schema</a>
+          <a href="#privacy">Privacy</a>
+        </nav>
+        <div class="sidebar-label" style="margin-top:2rem;">Docs</div>
+        <nav>
+          <a href="/docs/getting-started">Getting Started</a>
+          <a href="/docs/api">API Reference</a>
+          <a href="/docs/events" class="active">Events & Schema</a>
+        </nav>
+      </aside>
+
+      <div class="content">
+        <h1>Events &amp; Schema</h1>
+        <p>Every event writes one row to Cloudflare Analytics Engine. The schema uses blob1–blob12 for string fields and double1–double2 for numeric fields.</p>
+
+        <h2 id="builtin">Built-in events</h2>
+        <p>The tracking script fires these automatically. No configuration required except scroll_depth, which is opt-in.</p>
+        <table class="data-table">
+          <thead><tr><th>Event</th><th>Triggered by</th><th>Data captured</th></tr></thead>
+          <tbody>
+            {builtins.map((e) => (
+              <tr>
+                <td class="event-name">{e.name}</td>
+                <td>{e.trigger}</td>
+                <td style="font-size:13px;">{e.fields}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p>Enable scroll_depth by adding <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">data-scroll-depth="true"</code> to the script tag. It uses IntersectionObserver on four sentinel elements placed at 25/50/75/100% of the page.</p>
+
+        <h2 id="custom">Custom events</h2>
+        <p>Call <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">flarelytics.track()</code> anywhere in your JavaScript. The function is available as soon as the script loads.</p>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dot" style="background:#dc2626;"></div>
+            <div class="code-dot" style="background:#dc6b14;"></div>
+            <div class="code-dot" style="background:#16a34a;"></div>
+            <div class="code-label">JavaScript</div>
+          </div>
+          <div class="code-body">
+            <div><span class="code-comment">// Simple event</span></div>
+            <div>flarelytics.track(<span class="code-string">'signup'</span>)</div>
+            <div>&nbsp;</div>
+            <div><span class="code-comment">// Event with properties</span></div>
+            <div>flarelytics.track(<span class="code-string">'signup'</span>, {"{"}</div>
+            <div>  props: {"{"} plan: <span class="code-string">'pro'</span>, source: <span class="code-string">'pricing-page'</span> {"}"}</div>
+            <div>{"}"})</div>
+            <div>&nbsp;</div>
+            <div><span class="code-comment">// Track a purchase</span></div>
+            <div>flarelytics.track(<span class="code-string">'purchase'</span>, {"{"}</div>
+            <div>  props: {"{"} product: <span class="code-string">'lifetime'</span>, amount: <span class="code-string">'99'</span> {"}"}</div>
+            <div>{"}"})</div>
+            <div>&nbsp;</div>
+            <div><span class="code-comment">// Track form submission</span></div>
+            <div>document.querySelector(<span class="code-string">'form'</span>).addEventListener(<span class="code-string">'submit'</span>, () =&gt; {"{"}</div>
+            <div>  flarelytics.track(<span class="code-string">'form_submit'</span>, {"{"} props: {"{"} form: <span class="code-string">'contact'</span> {"}"} {"}"})</div>
+            <div>{"}"})</div>
+          </div>
+        </div>
+        <p>Properties are stored as pipe-separated values in blob5 and queryable via the <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">custom-events</code> and <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">funnel-by-event</code> queries.</p>
+        <p>The event name is stored in blob4. Query custom events using <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">?q=custom-events&period=30d&site=mysite.com</code>.</p>
+
+        <h2 id="schema">Analytics Engine schema</h2>
+        <p>All queries must include <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">AND blob10 = '$&#123;site&#125;'</code> to scope results to a single site. This is how multi-site support works — one worker, multiple sites, scoped by hostname.</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>Content</th></tr></thead>
+          <tbody>
+            {schema.map((row) => (
+              <tr>
+                <td class="field-name">{row.field}</td>
+                <td>{row.content}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p>You can write raw Analytics Engine SQL queries against this schema using the Cloudflare API if you need something the built-in queries don't cover.</p>
+
+        <h2 id="privacy">Privacy</h2>
+        <p>Flarelytics collects the minimum data needed to produce useful analytics. No personal data is stored.</p>
+        <div class="privacy-grid">
+          <div class="privacy-col">
+            <div class="privacy-col-label privacy-col-yes">Collected</div>
+            <ul>
+              <li>Page paths</li>
+              <li>Referrer hostnames</li>
+              <li>Country code (from Cloudflare headers)</li>
+              <li>Device type and browser name</li>
+              <li>UTM parameters</li>
+              <li>Daily-rotating visitor hash</li>
+            </ul>
+          </div>
+          <div class="privacy-col">
+            <div class="privacy-col-label privacy-col-no">Never collected</div>
+            <ul>
+              <li>IP addresses</li>
+              <li>Cookies or local storage</li>
+              <li>Fingerprints or persistent identifiers</li>
+              <li>Full URLs (only paths)</li>
+              <li>User agents (only parsed type)</li>
+              <li>Cross-site or cross-day tracking</li>
+            </ul>
+          </div>
+        </div>
+        <p>The visitor hash is a SHA-256 of the IP address, user agent string, and the current date. It resets every midnight UTC, so the same visitor on two different days counts as two unique visitors. The raw hash is never stored — only used to count uniques within a single day.</p>
+
+        <div style="display:flex;gap:1.5rem;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+          <a href="/docs/api" style="font-family:var(--mono);font-size:12px;color:var(--ink3);">&larr; API Reference</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>
+        Flarelytics is open source (MIT) &middot;
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a> &middot;
+        Built by <a href="https://kalle.works">kalle.works</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

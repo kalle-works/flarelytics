@@ -311,6 +311,83 @@ Each event writes one row to Cloudflare Analytics Engine:
 | Setup time | 5 min | 10 min | 30 min | 5 min |
 | Cost | Free (CF free tier) | Free | $20+/mo | Free |
 
+## Multi-Site Setup
+
+One worker can serve multiple sites. The site hostname is derived automatically from the `Origin` header on each `/track` request.
+
+### 1. Allow multiple origins
+
+In your `wrangler.toml`:
+
+```toml
+[vars]
+ALLOWED_ORIGINS = "https://site-a.com,https://site-b.com,https://blog.example.com"
+```
+
+### 2. Add the tracker to each site
+
+Each site uses the same worker URL:
+
+```html
+<!-- On site-a.com -->
+<script defer data-endpoint="https://your-worker.workers.dev" src="https://your-worker.workers.dev/tracker.js"></script>
+
+<!-- On site-b.com — same script, same worker -->
+<script defer data-endpoint="https://your-worker.workers.dev" src="https://your-worker.workers.dev/tracker.js"></script>
+```
+
+### 3. Query by site
+
+All queries accept a `?site=` parameter to filter by hostname:
+
+```bash
+# Traffic for site-a.com only
+curl -H "X-API-Key: your-key" "https://your-worker/query?q=daily-views&period=7d&site=site-a.com"
+
+# Traffic for site-b.com
+curl -H "X-API-Key: your-key" "https://your-worker/query?q=daily-views&period=7d&site=site-b.com"
+```
+
+The dashboard has a site switcher dropdown for switching between configured sites.
+
+## Troubleshooting
+
+### No data showing in dashboard
+
+1. Check the worker is running: `curl https://your-worker.workers.dev/health`
+2. Verify the tracking script is loaded: open browser DevTools → Network tab → look for `tracker.js`
+3. Check CORS: your site's origin must be in `ALLOWED_ORIGINS` in wrangler.toml
+4. Wait 30-60 seconds — Analytics Engine has a short ingestion delay
+
+### "Unauthorized" on query endpoint
+
+The `X-API-Key` header must match the `QUERY_API_KEY` secret you set:
+
+```bash
+# Set or update the key
+npx wrangler secret put QUERY_API_KEY
+
+# Test it
+curl -H "X-API-Key: your-key" "https://your-worker/query?q=daily-views&period=7d&site=yoursite.com"
+```
+
+### "Forbidden" on /track
+
+Your site's origin is not in `ALLOWED_ORIGINS`. Add it to `wrangler.toml` and redeploy:
+
+```toml
+[vars]
+ALLOWED_ORIGINS = "https://yoursite.com,http://localhost:3000"
+```
+
+### Bot traffic overwhelming real data
+
+Flarelytics filters bots automatically and records them separately. Check the Bot Traffic section in the dashboard to see what's being filtered. To add custom bot patterns, modify `DEFAULT_BOT_PATTERNS` in `packages/worker/src/index.ts`.
+
+### Analytics Engine 90-day limit
+
+Cloudflare Analytics Engine retains data for 90 days. For longer retention, set up the email reports worker to receive weekly digests, or query the API periodically and store results in KV or an external database.
+
 ## Development
 
 ```bash

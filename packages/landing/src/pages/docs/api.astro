@@ -1,0 +1,333 @@
+---
+const queryCategories = [
+  {
+    label: 'Traffic',
+    queries: [
+      { name: 'top-pages', desc: 'Top pages by view count' },
+      { name: 'top-pages-visitors', desc: 'Top pages by unique visitors' },
+      { name: 'top-pages-stories', desc: 'Top pages with engagement metrics' },
+      { name: 'daily-views', desc: 'Pageviews per day' },
+      { name: 'daily-unique-visitors', desc: 'Unique visitors per day' },
+      { name: 'new-vs-returning', desc: 'New vs returning visitor ratio' },
+    ],
+  },
+  {
+    label: 'Referrers',
+    queries: [
+      { name: 'referrers', desc: 'Traffic sources by hostname' },
+      { name: 'utm-campaigns', desc: 'UTM campaign performance' },
+      { name: 'utm-campaign-trend', desc: 'Campaign traffic over time' },
+    ],
+  },
+  {
+    label: 'Content',
+    queries: [
+      { name: 'page-views-over-time', desc: 'Views over time for a specific page', extra: '?page=/path' },
+      { name: 'page-timing', desc: 'Average time on page' },
+      { name: 'bounce-rate-by-page', desc: 'Bounce rate per page', extra: '?event_name=seconds' },
+      { name: 'scroll-depth', desc: 'Scroll milestone aggregates (25/50/75/100%)' },
+      { name: 'scroll-depth-by-page', desc: 'Scroll depth broken down by page' },
+    ],
+  },
+  {
+    label: 'Geo & Devices',
+    queries: [
+      { name: 'countries', desc: 'Visitors by country code' },
+      { name: 'countries-by-page', desc: 'Country breakdown for a specific page', extra: '?page=/path' },
+      { name: 'devices', desc: 'Device type split (mobile/tablet/desktop)' },
+      { name: 'browsers', desc: 'Browser breakdown' },
+    ],
+  },
+  {
+    label: 'Conversions',
+    queries: [
+      { name: 'outbound-links', desc: 'External link clicks with destinations' },
+      { name: 'page-performance', desc: 'Combined traffic + engagement per page' },
+      { name: 'custom-events', desc: 'Custom event counts and properties' },
+      { name: 'conversion-funnel', desc: 'Multi-step funnel completion rates' },
+      { name: 'funnel-by-event', desc: 'Funnel analysis for a specific event', extra: '?event_name=signup' },
+    ],
+  },
+];
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Reference — Flarelytics Docs</title>
+  <meta name="description" content="Flarelytics API reference: /track, /query, /health, /config, and /tracker.js endpoints." />
+  <link rel="canonical" href="https://flarelytics.dev/docs/api" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231c1917'/%3E%3Crect x='7' y='12' width='4' height='12' rx='1' fill='%23fbbf24'/%3E%3Crect x='14' y='8' width='4' height='16' rx='1' fill='%23fbbf24'/%3E%3Crect x='21' y='16' width='4' height='8' rx='1' fill='%23fbbf24'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
+  <style is:inline>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font); font-size: 16px; background: var(--bg); color: var(--ink); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent-text); text-decoration: none; }
+    a:hover { color: var(--accent); }
+    .container { max-width: 880px; margin: 0 auto; padding: 0 1.5rem; }
+    nav { padding: 1rem 0; border-bottom: 1px solid var(--border); }
+    nav .inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 0.5rem; font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink); text-decoration: none; padding: 8px 0; }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 12px 0; }
+    .nav-links a:hover { color: var(--ink); }
+    .nav-links a.active { color: var(--ink); }
+    .btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 1.25rem; border-radius: 6px; font-family: var(--mono); font-size: 12px; font-weight: 600; transition: all 120ms; text-decoration: none; }
+    .btn-primary { background: var(--ink); color: white; }
+    .btn-primary:hover { background: #292524; color: white; }
+    .layout { display: grid; grid-template-columns: 200px 1fr; gap: 3rem; padding: 2rem 0 4rem; align-items: start; }
+    .sidebar { position: sticky; top: 1.5rem; }
+    .sidebar-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink3); margin-bottom: 0.75rem; }
+    .sidebar nav { padding: 0; border: none; }
+    .sidebar nav a { display: block; font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 5px 0; border-left: 2px solid transparent; padding-left: 10px; }
+    .sidebar nav a:hover { color: var(--ink); border-left-color: var(--border); }
+    .sidebar nav a.active { color: var(--accent-text); border-left-color: var(--accent); }
+    .breadcrumb { padding: 1.25rem 0 0; font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    .breadcrumb a { color: var(--ink3); }
+    .breadcrumb a:hover { color: var(--accent-text); }
+    .breadcrumb span { margin: 0 0.4rem; }
+    .content h1 { font-family: var(--display); font-size: 32px; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    .content h2 { font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-text); margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    .content h3 { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--ink); margin-top: 1.5rem; margin-bottom: 0.5rem; }
+    .content p { color: var(--ink2); margin-bottom: 1rem; }
+    .content ul { color: var(--ink2); padding-left: 1.25rem; margin-bottom: 1rem; }
+    .content ul li { margin-bottom: 0.25rem; }
+    .endpoint-row { display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .method { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
+    .method-post { background: #fffbeb; color: #92400e; }
+    .method-get { background: #f0fdf4; color: #166534; }
+    .path { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--ink); }
+    .param-table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin: 1rem 0; }
+    .param-table th { padding: 0.5rem 0.75rem; text-align: left; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink3); border-bottom: 1px solid var(--border); background: #fafaf9; }
+    .param-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); color: var(--ink2); vertical-align: top; }
+    .param-table tr:last-child td { border-bottom: none; }
+    .param-name { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+    .param-req { font-family: var(--mono); font-size: 10px; background: var(--accent-light); color: #92400e; padding: 1px 5px; border-radius: 3px; }
+    .param-opt { font-family: var(--mono); font-size: 10px; background: #f5f5f4; color: var(--ink3); padding: 1px 5px; border-radius: 3px; }
+    .query-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0.75rem 0 1.5rem; }
+    .query-row { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+    .query-name { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
+    .query-extra { font-family: var(--mono); font-size: 11px; color: var(--accent-text); }
+    .query-desc { font-size: 13px; color: var(--ink2); margin-top: 2px; }
+    .cat-label { font-family: var(--mono); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink3); margin-top: 1.25rem; margin-bottom: 0.5rem; }
+    .code-block { background: #1c1917; border-radius: 6px; overflow: hidden; margin: 1rem 0; }
+    .code-header { padding: 0.4rem 1rem; background: #292524; display: flex; align-items: center; gap: 0.5rem; }
+    .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .code-label { font-family: var(--mono); font-size: 10px; color: #78716c; margin-left: auto; }
+    .code-body { padding: 1rem 1.25rem; font-family: var(--mono); font-size: 0.8125rem; line-height: 1.8; color: #d6d3d1; overflow-x: auto; }
+    .code-comment { color: #78716c; }
+    .code-string { color: #fbbf24; }
+    footer { padding: 2rem 0; border-top: 1px solid var(--border); text-align: center; }
+    footer p { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    footer a { color: var(--ink3); padding: 8px 0; display: inline-block; }
+    footer a:hover { color: var(--accent-text); }
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .nav-links a:not(.btn-primary) { display: none; }
+      .query-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body style="--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--display:'Satoshi',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mono:'SF Mono','Fira Code','Menlo',monospace;--ink:#1c1917;--ink2:#57534e;--ink3:#78716c;--bg:#fafaf9;--card:#ffffff;--border:#e7e5e4;--accent:#dc6b14;--accent2:#b45309;--accent-text:#b45309;--accent-light:#fffbeb;--green:#16a34a;--red:#dc2626;">
+  <nav>
+    <div class="container inner">
+      <a href="/" class="logo">
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="6" fill="#1c1917"/>
+          <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+          <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+          <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+        </svg>
+        flarelytics
+      </a>
+      <div class="nav-links">
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="https://github.com/kalle-works/flarelytics" class="btn btn-primary">Get Started</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <a href="/">flarelytics</a>
+      <span>/</span>
+      <a href="/docs/">docs</a>
+      <span>/</span>
+      api
+    </div>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-label">On this page</div>
+        <nav>
+          <a href="#track">POST /track</a>
+          <a href="#query">GET /query</a>
+          <a href="#query-params">Query parameters</a>
+          <a href="#examples">Examples</a>
+          <a href="#other">Other endpoints</a>
+        </nav>
+        <div class="sidebar-label" style="margin-top:2rem;">Docs</div>
+        <nav>
+          <a href="/docs/getting-started">Getting Started</a>
+          <a href="/docs/api" class="active">API Reference</a>
+          <a href="/docs/events">Events & Schema</a>
+        </nav>
+      </aside>
+
+      <div class="content">
+        <h1>API Reference</h1>
+        <p>The worker exposes five endpoints. Authentication is only required on <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">/query</code>.</p>
+
+        <h2 id="track">POST /track</h2>
+        <div class="endpoint-row">
+          <span class="method method-post">POST</span>
+          <span class="path">/track</span>
+        </div>
+        <p>Records an analytics event. Called automatically by the tracking script. Auth: CORS origin check against <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">ALLOWED_ORIGINS</code>.</p>
+        <table class="param-table">
+          <thead><tr><th>Field</th><th>Type</th><th></th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="param-name">event</td><td>string</td><td><span class="param-req">required</span></td><td>Event name: pageview, outbound, timing, scroll_depth, or custom</td></tr>
+            <tr><td class="param-name">path</td><td>string</td><td><span class="param-req">required</span></td><td>Page path (e.g. /blog/post)</td></tr>
+            <tr><td class="param-name">referrer</td><td>string</td><td><span class="param-opt">optional</span></td><td>Referrer hostname or "direct"</td></tr>
+            <tr><td class="param-name">props</td><td>object</td><td><span class="param-opt">optional</span></td><td>Custom event properties (key/value pairs)</td></tr>
+            <tr><td class="param-name">utm_source</td><td>string</td><td><span class="param-opt">optional</span></td><td>UTM source parameter</td></tr>
+            <tr><td class="param-name">utm_medium</td><td>string</td><td><span class="param-opt">optional</span></td><td>UTM medium parameter</td></tr>
+            <tr><td class="param-name">utm_campaign</td><td>string</td><td><span class="param-opt">optional</span></td><td>UTM campaign parameter</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="query">GET /query</h2>
+        <div class="endpoint-row">
+          <span class="method method-get">GET</span>
+          <span class="path">/query</span>
+        </div>
+        <p>Runs a predefined analytics query against Cloudflare Analytics Engine. Requires <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">X-API-Key</code> header matching <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">QUERY_API_KEY</code>.</p>
+        <p>Returns <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">{"{"} data: [...] {"}"}</code> — an array of result rows.</p>
+
+        {queryCategories.map((cat) => (
+          <div>
+            <div class="cat-label">{cat.label}</div>
+            <div class="query-grid">
+              {cat.queries.map((q) => (
+                <div class="query-row">
+                  <div class="query-name">{q.name}{q.extra && <span class="query-extra">{q.extra}</span>}</div>
+                  <div class="query-desc">{q.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <h2 id="query-params">Query parameters</h2>
+        <table class="param-table">
+          <thead><tr><th>Parameter</th><th></th><th>Values</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td class="param-name">q</td><td><span class="param-req">required</span></td><td>see above</td><td>Query name</td></tr>
+            <tr><td class="param-name">site</td><td><span class="param-req">required</span></td><td>hostname</td><td>Site hostname, e.g. mysite.com</td></tr>
+            <tr><td class="param-name">period</td><td><span class="param-req">required</span></td><td>7d 14d 30d 60d 90d 180d</td><td>Time window for the query</td></tr>
+            <tr><td class="param-name">page</td><td><span class="param-opt">optional</span></td><td>/path</td><td>Filter to a specific page path</td></tr>
+            <tr><td class="param-name">event_name</td><td><span class="param-opt">optional</span></td><td>string</td><td>Filter by custom event name</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="examples">Examples</h2>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dot" style="background:#dc2626;"></div>
+            <div class="code-dot" style="background:#dc6b14;"></div>
+            <div class="code-dot" style="background:#16a34a;"></div>
+            <div class="code-label">curl</div>
+          </div>
+          <div class="code-body">
+            <div><span class="code-comment"># Top pages, last 30 days</span></div>
+            <div>curl -H <span class="code-string">"X-API-Key: $KEY"</span> \</div>
+            <div>  <span class="code-string">"https://worker.workers.dev/query?q=top-pages&period=30d&site=mysite.com"</span></div>
+            <div>&nbsp;</div>
+            <div><span class="code-comment"># Response</span></div>
+            <div>{"{"} <span class="code-string">"data"</span>: [</div>
+            <div>  {"{"} <span class="code-string">"path"</span>: <span class="code-string">"/blog/post"</span>, <span class="code-string">"views"</span>: 842 {"}"},</div>
+            <div>  {"{"} <span class="code-string">"path"</span>: <span class="code-string">"/"</span>, <span class="code-string">"views"</span>: 601 {"}"}</div>
+            <div>] {"}"}</div>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dot" style="background:#dc2626;"></div>
+            <div class="code-dot" style="background:#dc6b14;"></div>
+            <div class="code-dot" style="background:#16a34a;"></div>
+            <div class="code-label">curl</div>
+          </div>
+          <div class="code-body">
+            <div><span class="code-comment"># Countries breakdown</span></div>
+            <div>curl -H <span class="code-string">"X-API-Key: $KEY"</span> \</div>
+            <div>  <span class="code-string">"https://worker.workers.dev/query?q=countries&period=7d&site=mysite.com"</span></div>
+            <div>&nbsp;</div>
+            <div><span class="code-comment"># Response</span></div>
+            <div>{"{"} <span class="code-string">"data"</span>: [</div>
+            <div>  {"{"} <span class="code-string">"country"</span>: <span class="code-string">"US"</span>, <span class="code-string">"visitors"</span>: 412 {"}"},</div>
+            <div>  {"{"} <span class="code-string">"country"</span>: <span class="code-string">"DE"</span>, <span class="code-string">"visitors"</span>: 98 {"}"}</div>
+            <div>] {"}"}</div>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dot" style="background:#dc2626;"></div>
+            <div class="code-dot" style="background:#dc6b14;"></div>
+            <div class="code-dot" style="background:#16a34a;"></div>
+            <div class="code-label">curl</div>
+          </div>
+          <div class="code-body">
+            <div><span class="code-comment"># Funnel for a specific custom event</span></div>
+            <div>curl -H <span class="code-string">"X-API-Key: $KEY"</span> \</div>
+            <div>  <span class="code-string">"https://worker.workers.dev/query?q=funnel-by-event&event_name=signup&period=30d&site=mysite.com"</span></div>
+          </div>
+        </div>
+
+        <h2 id="other">Other endpoints</h2>
+        <div style="display:grid;gap:8px;margin-bottom:1rem;">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px 16px;">
+            <div class="endpoint-row" style="margin-bottom:4px;">
+              <span class="method method-get">GET</span>
+              <span class="path">/tracker.js</span>
+            </div>
+            <p style="margin:0;font-size:14px;">Serves the auto-configured tracking script. No auth required. The script reads its own URL to determine the worker endpoint.</p>
+          </div>
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px 16px;">
+            <div class="endpoint-row" style="margin-bottom:4px;">
+              <span class="method method-get">GET</span>
+              <span class="path">/health</span>
+            </div>
+            <p style="margin:0;font-size:14px;">Returns <code style="font-family:var(--mono);font-size:12px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">&#123;"status":"ok"&#125;</code>. No auth required. Use for uptime monitoring.</p>
+          </div>
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px 16px;">
+            <div class="endpoint-row" style="margin-bottom:4px;">
+              <span class="method method-get">GET</span>
+              <span class="path">/config</span>
+            </div>
+            <p style="margin:0;font-size:14px;">Returns available query names and event types. No auth required.</p>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:1.5rem;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+          <a href="/docs/getting-started" style="font-family:var(--mono);font-size:12px;color:var(--ink3);">&larr; Getting Started</a>
+          <a href="/docs/events" style="font-family:var(--mono);font-size:12px;color:var(--accent-text);">Next: Events & Schema &rarr;</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>
+        Flarelytics is open source (MIT) &middot;
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a> &middot;
+        Built by <a href="https://kalle.works">kalle.works</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

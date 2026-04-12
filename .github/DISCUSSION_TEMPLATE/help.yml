@@ -1,0 +1,13 @@
+title: "[Help] "
+labels: ["question"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you need help with?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: What have you tried?

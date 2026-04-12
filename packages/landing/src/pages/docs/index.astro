@@ -1,0 +1,119 @@
+---
+const sections = [
+  {
+    href: '/docs/getting-started',
+    label: 'Getting Started',
+    desc: 'Prerequisites, deploy the worker, add the tracking script, and verify everything works.',
+  },
+  {
+    href: '/docs/api',
+    label: 'API Reference',
+    desc: 'POST /track, GET /query with all 23+ query names, parameters, and curl examples.',
+  },
+  {
+    href: '/docs/events',
+    label: 'Events & Schema',
+    desc: 'Built-in events, custom tracking with flarelytics.track(), and the Analytics Engine schema.',
+  },
+];
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docs — Flarelytics</title>
+  <meta name="description" content="Flarelytics documentation. Deploy privacy-first analytics on Cloudflare in 5 minutes." />
+  <link rel="canonical" href="https://flarelytics.dev/docs/" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231c1917'/%3E%3Crect x='7' y='12' width='4' height='12' rx='1' fill='%23fbbf24'/%3E%3Crect x='14' y='8' width='4' height='16' rx='1' fill='%23fbbf24'/%3E%3Crect x='21' y='16' width='4' height='8' rx='1' fill='%23fbbf24'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
+  <style is:inline>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font); font-size: 16px; background: var(--bg); color: var(--ink); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent-text); text-decoration: none; }
+    a:hover { color: var(--accent); }
+    .container { max-width: 880px; margin: 0 auto; padding: 0 1.5rem; }
+    nav { padding: 1rem 0; border-bottom: 1px solid var(--border); }
+    nav .inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 0.5rem; font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink); text-decoration: none; padding: 8px 0; }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 12px 0; }
+    .nav-links a:hover { color: var(--ink); }
+    .nav-links a.active { color: var(--ink); }
+    .btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 1.25rem; border-radius: 6px; font-family: var(--mono); font-size: 12px; font-weight: 600; transition: all 120ms; text-decoration: none; }
+    .btn-primary { background: var(--ink); color: white; }
+    .btn-primary:hover { background: #292524; color: white; }
+    .breadcrumb { padding: 1.25rem 0; font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    .breadcrumb a { color: var(--ink3); }
+    .breadcrumb a:hover { color: var(--accent-text); }
+    .breadcrumb span { margin: 0 0.4rem; }
+    .page-header { padding: 2.5rem 0 2rem; }
+    .page-header h1 { font-family: var(--display); font-size: 36px; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .page-header p { color: var(--ink2); font-size: 16px; max-width: 560px; }
+    .section-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; padding-bottom: 4rem; }
+    .section-card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 20px; text-decoration: none; color: var(--ink); transition: box-shadow 120ms, border-color 120ms; display: block; }
+    .section-card:hover { border-color: #d6d3d1; box-shadow: 0 2px 8px rgba(0,0,0,0.06); color: var(--ink); }
+    .section-label { font-family: var(--mono); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-text); margin-bottom: 8px; }
+    .section-desc { font-size: 14px; color: var(--ink2); line-height: 1.5; }
+    footer { padding: 2rem 0; border-top: 1px solid var(--border); text-align: center; }
+    footer p { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    footer a { color: var(--ink3); padding: 8px 0; display: inline-block; }
+    footer a:hover { color: var(--accent-text); }
+    @media (max-width: 640px) {
+      .section-grid { grid-template-columns: 1fr; }
+      .nav-links a:not(.btn-primary) { display: none; }
+    }
+  </style>
+</head>
+<body style="--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--display:'Satoshi',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mono:'SF Mono','Fira Code','Menlo',monospace;--ink:#1c1917;--ink2:#57534e;--ink3:#78716c;--bg:#fafaf9;--card:#ffffff;--border:#e7e5e4;--accent:#dc6b14;--accent2:#b45309;--accent-text:#b45309;--accent-light:#fffbeb;--green:#16a34a;--red:#dc2626;">
+  <nav>
+    <div class="container inner">
+      <a href="/" class="logo">
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="6" fill="#1c1917"/>
+          <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+          <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+          <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+        </svg>
+        flarelytics
+      </a>
+      <div class="nav-links">
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="https://github.com/kalle-works/flarelytics" class="btn btn-primary">Get Started</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <a href="/">flarelytics</a>
+      <span>/</span>
+      docs
+    </div>
+    <div class="page-header">
+      <h1>Documentation</h1>
+      <p>Everything you need to deploy privacy-first analytics on Cloudflare.</p>
+    </div>
+    <div class="section-grid">
+      {sections.map((s) => (
+        <a href={s.href} class="section-card">
+          <div class="section-label">{s.label}</div>
+          <div class="section-desc">{s.desc}</div>
+        </a>
+      ))}
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>
+        Flarelytics is open source (MIT) &middot;
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a> &middot;
+        Built by <a href="https://kalle.works">kalle.works</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>
