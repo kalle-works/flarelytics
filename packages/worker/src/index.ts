@@ -53,13 +53,13 @@ const DEFAULT_BOT_PATTERNS = [
   'whatsapp', 'telegrambot', 'bytespider', 'gptbot', 'claudebot',
 ];
 
-function deviceType(ua: string): string {
+export function deviceType(ua: string): string {
   if (/Mobi|Android/i.test(ua)) return 'mobile';
   if (/Tablet|iPad/i.test(ua)) return 'tablet';
   return 'desktop';
 }
 
-function browserName(ua: string): string {
+export function browserName(ua: string): string {
   if (/Edg\//.test(ua)) return 'Edge';
   if (/OPR\/|Opera/.test(ua)) return 'Opera';
   if (/DuckDuckGo/.test(ua)) return 'DuckDuckGo';
@@ -70,7 +70,7 @@ function browserName(ua: string): string {
   return 'Other';
 }
 
-function isBot(ua: string): boolean {
+export function isBot(ua: string): boolean {
   if (!ua) return true;
   const lower = ua.toLowerCase();
   return DEFAULT_BOT_PATTERNS.some((p) => lower.includes(p));

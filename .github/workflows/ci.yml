@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type check worker
+        run: npx tsc --noEmit
+        working-directory: packages/worker
+      - name: Type check tracker
+        run: npx tsc --noEmit
+        working-directory: packages/tracker
+      - name: Test worker
+        run: npx vitest run
+        working-directory: packages/worker
+      - name: Test tracker
+        run: npx vitest run
+        working-directory: packages/tracker
+      - name: Build all
+        run: npm run build

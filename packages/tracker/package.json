@@ -8,11 +8,14 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsup src/tracker.ts --format cjs,esm --dts --minify",
-    "dev": "tsup src/tracker.ts --format cjs,esm --dts --watch"
+    "dev": "tsup src/tracker.ts --format cjs,esm --dts --watch",
+    "test": "vitest run"
   },
   "devDependencies": {
+    "jsdom": "^26.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
   },
   "keywords": ["analytics", "cloudflare", "privacy", "tracking"],
   "license": "MIT"
