@@ -58,7 +58,20 @@ init('https://your-worker.workers.dev', { scrollDepth: true })
 track('signup', { props: { plan: 'pro' } })
 ```
 
-### 3. View your dashboard
+### 3. Verify it works
+
+```bash
+# Check the worker is running
+curl https://your-worker.workers.dev/health
+# → { "status": "healthy", "checks": { "analytics_binding": true } }
+
+# Visit your site, then check data is flowing (wait ~30 seconds)
+curl -H "X-API-Key: your-api-key" \
+  "https://your-worker.workers.dev/query?q=daily-views&period=7d&site=yoursite.com"
+# → { "data": [{ "date": "2026-04-12", "views": 1 }] }
+```
+
+### 4. View your dashboard
 
 Visit `https://flarelytics-dashboard.pages.dev` and enter your API key, worker URL, and site hostname.
 

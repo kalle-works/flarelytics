@@ -136,7 +136,7 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
 
   const allowed = getAllowedOrigins(env);
   if (origin && !allowed.includes(origin)) {
-    return new Response('Forbidden', { status: 403, headers: cors });
+    return Response.json({ error: 'Forbidden', hint: 'Origin not in ALLOWED_ORIGINS. Check your worker wrangler.toml.' }, { status: 403, headers: cors });
   }
 
   const ua = request.headers.get('User-Agent') || '';
@@ -172,16 +172,16 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return new Response('Bad Request', { status: 400, headers: cors });
+    return Response.json({ error: 'Bad Request', hint: 'POST body must be valid JSON with "event" and "path" fields.' }, { status: 400, headers: cors });
   }
 
   const body = normalizePayload(raw);
 
   if (!body.path || typeof body.path !== 'string') {
-    return new Response('Bad Request: missing path', { status: 400, headers: cors });
+    return Response.json({ error: 'Bad Request', hint: 'Missing "path" field. Example: { "event": "pageview", "path": "/pricing" }' }, { status: 400, headers: cors });
   }
   if (!body.event || typeof body.event !== 'string') {
-    return new Response('Bad Request: missing event', { status: 400, headers: cors });
+    return Response.json({ error: 'Bad Request', hint: 'Missing "event" field. Example: { "event": "pageview", "path": "/" }' }, { status: 400, headers: cors });
   }
 
   const path = body.path.replace(/\/+$/, '').slice(0, 500) || '/';
@@ -669,7 +669,7 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
 
   const apiKey = request.headers.get('X-API-Key');
   if (!apiKey || apiKey !== env.QUERY_API_KEY) {
-    return new Response('Unauthorized', { status: 401, headers: cors });
+    return Response.json({ error: 'Unauthorized', hint: 'Include X-API-Key header with your QUERY_API_KEY.' }, { status: 401, headers: cors });
   }
 
   const url = new URL(request.url);
