@@ -19,5 +19,15 @@
   "packageManager": "npm@10.9.3",
   "engines": {
     "node": ">=20.0.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kalle-works/flarelytics.git"
+  },
+  "homepage": "https://flarelytics.dev",
+  "bugs": {
+    "url": "https://github.com/kalle-works/flarelytics/issues"
+  },
+  "license": "MIT",
+  "author": "Kalle Lamminpää"
 }

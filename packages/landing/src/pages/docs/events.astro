@@ -241,6 +241,14 @@ const builtins = [
         </div>
         <p>The visitor hash is a SHA-256 of the IP address, user agent string, and the current date. It resets every midnight UTC, so the same visitor on two different days counts as two unique visitors. The raw hash is never stored — only used to count uniques within a single day.</p>
 
+        <div id="doc-feedback" style="margin-top:3rem;padding:1.5rem;border:1px solid var(--border);border-radius:6px;text-align:center;">
+          <p style="font-family:var(--mono);font-size:12px;color:var(--ink2);margin-bottom:0.75rem;">Was this page helpful?</p>
+          <div style="display:flex;gap:0.75rem;justify-content:center;">
+            <button onclick="sendFeedback('yes')" style="font-family:var(--mono);font-size:12px;padding:6px 20px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--ink2);cursor:pointer;">Yes</button>
+            <button onclick="sendFeedback('no')" style="font-family:var(--mono);font-size:12px;padding:6px 20px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--ink2);cursor:pointer;">No</button>
+          </div>
+        </div>
+
         <div style="display:flex;gap:1.5rem;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
           <a href="/docs/api" style="font-family:var(--mono);font-size:12px;color:var(--ink3);">&larr; API Reference</a>
         </div>
@@ -257,6 +265,15 @@ const builtins = [
       </p>
     </div>
   </footer>
+  <script is:inline>
+    function sendFeedback(value) {
+      var el = document.getElementById('doc-feedback');
+      if (window.flarelytics) {
+        window.flarelytics.track('doc_feedback', { props: { page: location.pathname, helpful: value } });
+      }
+      el.innerHTML = '<p style="font-family:var(--mono);font-size:12px;color:var(--ink3);">Thanks for the feedback.</p>';
+    }
+  </script>
   <script defer src="https://analytics.flarelytics.dev/tracker.js"></script>
 </body>
 </html>

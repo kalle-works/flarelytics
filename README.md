@@ -1,5 +1,7 @@
 # Flarelytics
 
+[![CI](https://github.com/kalle-works/flarelytics/actions/workflows/ci.yml/badge.svg)](https://github.com/kalle-works/flarelytics/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Docs](https://img.shields.io/badge/docs-flarelytics.dev-dc6b14)](https://flarelytics.dev/docs/)
+
 Privacy-first web analytics that runs entirely on Cloudflare. No cookies, no external dependencies, 5-minute setup.
 
 **Website:** [flarelytics.dev](https://flarelytics.dev)

@@ -1,15 +1,29 @@
 {
   "name": "@flarelytics/tracker",
-  "version": "0.1.0",
-  "description": "Lightweight tracking script for Flarelytics (<1KB gzipped)",
+  "version": "0.2.0",
+  "description": "Privacy-first analytics tracker for Flarelytics. Under 1KB gzipped.",
   "main": "dist/tracker.js",
   "module": "dist/tracker.mjs",
   "types": "dist/tracker.d.ts",
   "files": ["dist"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kalle-works/flarelytics.git",
+    "directory": "packages/tracker"
+  },
+  "homepage": "https://flarelytics.dev",
+  "bugs": {
+    "url": "https://github.com/kalle-works/flarelytics/issues"
+  },
+  "author": "Kalle Lamminpää",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup src/tracker.ts --format cjs,esm --dts --minify",
     "dev": "tsup src/tracker.ts --format cjs,esm --dts --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "tsup src/tracker.ts --format cjs,esm --dts --minify"
   },
   "devDependencies": {
     "jsdom": "^26.0.0",

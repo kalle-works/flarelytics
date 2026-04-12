@@ -1,6 +1,6 @@
 {
   "name": "@flarelytics/worker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Flarelytics analytics worker for Cloudflare Workers",
   "main": "src/index.ts",
