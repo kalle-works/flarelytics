@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-04-12
 
 ### Added
 - **Bot analytics:** Worker records bot hits to Analytics Engine. Dashboard shows bot trend chart, category breakdown (search engines, AI crawlers, SEO tools, social, monitoring), top targeted pages, and origin countries.

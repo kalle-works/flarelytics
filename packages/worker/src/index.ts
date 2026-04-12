@@ -45,6 +45,8 @@ interface LegacyPayload {
   utm_campaign?: string;
 }
 
+const VERSION = '0.2.0';
+
 const DEFAULT_BOT_PATTERNS = [
   'bot', 'crawl', 'spider', 'slurp', 'baidu', 'yandex',
   'lighthouse', 'pagespeed', 'gtmetrix', 'pingdom', 'uptimerobot',
@@ -659,7 +661,7 @@ async function handleNewVsReturning(env: Env, site: string, period: string, data
     );
   } catch (err) {
     console.log(`[new-vs-returning] error: ${err}`);
-    return Response.json({ error: 'Query execution failed' }, { status: 502, headers: cors });
+    return Response.json({ error: 'Query execution failed', hint: 'The new-vs-returning query requires two Analytics Engine API calls. Check that CF_API_TOKEN and CF_ACCOUNT_ID are configured correctly.' }, { status: 502, headers: cors });
   }
 }
 
@@ -699,23 +701,23 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   const period = isLive ? "'unused'" : PERIOD_MAP[periodParam];
   if (!isLive && !period) {
     return Response.json(
-      { error: 'Invalid period', available: Object.keys(PERIOD_MAP) },
+      { error: 'Invalid period', hint: `Use one of the valid period values. Example: ?period=30d`, available: Object.keys(PERIOD_MAP) },
       { status: 400, headers: cors },
     );
   }
 
   if (!siteParam) {
-    return Response.json({ error: 'Missing required param: site (e.g. ?site=yoursite.com)' }, { status: 400, headers: cors });
+    return Response.json({ error: 'Missing required param: site', hint: 'Add ?site=yoursite.com to scope the query to a single site.' }, { status: 400, headers: cors });
   }
 
   // Validate site param: only allow hostname-safe characters to prevent SQL injection
   if (!/^[a-zA-Z0-9.\-]+$/.test(siteParam)) {
-    return Response.json({ error: 'Invalid site param' }, { status: 400, headers: cors });
+    return Response.json({ error: 'Invalid site param', hint: 'The site param must be a plain hostname, e.g. yoursite.com — no protocol, port, or path.' }, { status: 400, headers: cors });
   }
 
   const dataset = env.DATASET_NAME;
   if (!dataset) {
-    return Response.json({ error: 'DATASET_NAME not configured' }, { status: 500, headers: cors });
+    return Response.json({ error: 'DATASET_NAME not configured', hint: 'Set DATASET_NAME in wrangler.toml under [vars]. It must match your Analytics Engine dataset binding.' }, { status: 500, headers: cors });
   }
 
   // new-vs-returning requires two CF API calls — handled separately
@@ -726,14 +728,14 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   // funnel-by-event requires a valid event_name param
   if (queryName === 'funnel-by-event') {
     if (!eventNameParam || !/^[a-zA-Z0-9_\-]+$/.test(eventNameParam)) {
-      return Response.json({ error: 'Missing or invalid param: event_name (alphanumeric, hyphens and underscores only)' }, { status: 400, headers: cors });
+      return Response.json({ error: 'Missing or invalid param: event_name', hint: 'Add ?event_name=your_event to filter by a specific custom event. Only alphanumeric characters, hyphens and underscores are allowed.' }, { status: 400, headers: cors });
     }
   }
 
   // Some queries require a ?page= param
   if (template.requiresPage) {
     if (!pageParam || !/^\/[a-zA-Z0-9.\-_/]*$/.test(pageParam)) {
-      return Response.json({ error: 'Missing or invalid param: page (must start with / and contain only URL-safe characters)' }, { status: 400, headers: cors });
+      return Response.json({ error: 'Missing or invalid param: page', hint: 'Add ?page=/your/path to scope this query to a single page. The value must start with / and contain only URL-safe characters.' }, { status: 400, headers: cors });
     }
   }
 
@@ -753,7 +755,7 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     if (!response.ok) {
       const errorText = await response.text();
       console.log(`[query] CF SQL API error ${response.status}: ${errorText}`);
-      return Response.json({ error: 'Query execution failed' }, { status: 502, headers: cors });
+      return Response.json({ error: 'Query execution failed', hint: `The Cloudflare Analytics Engine SQL API returned an error for query "${queryName}". Check that CF_API_TOKEN has Analytics Engine read permission and CF_ACCOUNT_ID is correct.` }, { status: 502, headers: cors });
     }
 
     const data = await response.text();
@@ -763,7 +765,7 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     });
   } catch (err) {
     console.log(`[query] fetch error: ${err}`);
-    return Response.json({ error: 'Query execution failed' }, { status: 502, headers: cors });
+    return Response.json({ error: 'Query execution failed', hint: `Could not reach the Cloudflare Analytics Engine SQL API for query "${queryName}". The request may have timed out (10 s limit) or the API may be temporarily unavailable.` }, { status: 502, headers: cors });
   }
 }
 
@@ -782,7 +784,7 @@ function handleTrackerJs(request: Request): Response {
 function handleConfig(env: Env): Response {
   return Response.json({
     name: 'flarelytics',
-    version: '0.1.0',
+    version: VERSION,
     queries: Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
     periods: Object.keys(PERIOD_MAP),
     tracking: {
@@ -805,7 +807,7 @@ function handleHealth(env: Env): Response {
   };
   const healthy = Object.values(checks).every(Boolean);
   return Response.json(
-    { status: healthy ? 'healthy' : 'degraded', checks, version: '0.1.0' },
+    { status: healthy ? 'healthy' : 'degraded', checks, version: VERSION },
     { status: healthy ? 200 : 503 },
   );
 }
@@ -827,6 +829,6 @@ export default {
     if (pathname === '/config' && request.method === 'GET') return handleConfig(env);
     if (pathname === '/health' && request.method === 'GET') return handleHealth(env);
 
-    return new Response('Not Found', { status: 404 });
+    return Response.json({ error: 'Not Found', hint: 'Available endpoints: POST /track, GET /query, GET /tracker.js, GET /health, GET /config' }, { status: 404 });
   },
 };
