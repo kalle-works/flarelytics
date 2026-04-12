@@ -1,0 +1,666 @@
+---
+const queryGroups = [
+  {
+    label: 'Traffic',
+    queries: [
+      { name: 'top-pages' },
+      { name: 'top-pages-visitors' },
+      { name: 'top-pages-stories' },
+      { name: 'daily-views' },
+      { name: 'daily-unique-visitors' },
+      { name: 'new-vs-returning' },
+    ],
+  },
+  {
+    label: 'Referrers',
+    queries: [
+      { name: 'referrers' },
+      { name: 'utm-campaigns' },
+      { name: 'utm-campaign-trend' },
+    ],
+  },
+  {
+    label: 'Content',
+    queries: [
+      { name: 'page-views-over-time', needsPage: true },
+      { name: 'page-timing' },
+      { name: 'bounce-rate-by-page', needsEventName: true },
+      { name: 'scroll-depth' },
+      { name: 'scroll-depth-by-page' },
+    ],
+  },
+  {
+    label: 'Geo & Devices',
+    queries: [
+      { name: 'countries' },
+      { name: 'countries-by-page', needsPage: true },
+      { name: 'devices' },
+      { name: 'browsers' },
+    ],
+  },
+  {
+    label: 'Conversions',
+    queries: [
+      { name: 'outbound-links' },
+      { name: 'page-performance' },
+      { name: 'custom-events' },
+      { name: 'conversion-funnel' },
+      { name: 'funnel-by-event', needsEventName: true },
+    ],
+  },
+  {
+    label: 'Bot',
+    queries: [
+      { name: 'bot-hits' },
+      { name: 'bot-hits-total' },
+      { name: 'bot-pages' },
+      { name: 'bot-daily' },
+      { name: 'bot-countries' },
+    ],
+  },
+  {
+    label: 'Per-page',
+    queries: [
+      { name: 'referrers-by-page', needsPage: true },
+      { name: 'timing-by-page', needsPage: true },
+      { name: 'scroll-depth-for-page', needsPage: true },
+      { name: 'utm-by-page', needsPage: true },
+    ],
+  },
+];
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Playground — Flarelytics Docs</title>
+  <meta name="description" content="Interactive API playground for Flarelytics. Test queries against your worker directly in the browser." />
+  <link rel="canonical" href="https://flarelytics.dev/docs/playground/" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231c1917'/%3E%3Crect x='7' y='12' width='4' height='12' rx='1' fill='%23fbbf24'/%3E%3Crect x='14' y='8' width='4' height='16' rx='1' fill='%23fbbf24'/%3E%3Crect x='21' y='16' width='4' height='8' rx='1' fill='%23fbbf24'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
+  <style is:inline>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font); font-size: 16px; background: var(--bg); color: var(--ink); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent-text); text-decoration: none; }
+    a:hover { color: var(--accent); }
+    .container { max-width: 880px; margin: 0 auto; padding: 0 1.5rem; }
+    nav { padding: 1rem 0; border-bottom: 1px solid var(--border); }
+    nav .inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 0.5rem; font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink); text-decoration: none; padding: 8px 0; }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 12px 0; }
+    .nav-links a:hover { color: var(--ink); }
+    .nav-links a.active { color: var(--ink); }
+    .btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 1.25rem; border-radius: 6px; font-family: var(--mono); font-size: 12px; font-weight: 600; transition: all 120ms; text-decoration: none; border: none; cursor: pointer; }
+    .btn-primary { background: var(--ink); color: white; }
+    .btn-primary:hover { background: #292524; color: white; }
+    .layout { display: grid; grid-template-columns: 200px 1fr; gap: 3rem; padding: 2rem 0 4rem; align-items: start; }
+    .sidebar { position: sticky; top: 1.5rem; }
+    .sidebar-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink3); margin-bottom: 0.75rem; }
+    .sidebar nav { padding: 0; border: none; }
+    .sidebar nav a { display: block; font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 5px 0; border-left: 2px solid transparent; padding-left: 10px; }
+    .sidebar nav a:hover { color: var(--ink); border-left-color: var(--border); }
+    .sidebar nav a.active { color: var(--accent-text); border-left-color: var(--accent); }
+    .breadcrumb { padding: 1.25rem 0 0; font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    .breadcrumb a { color: var(--ink3); }
+    .breadcrumb a:hover { color: var(--accent-text); }
+    .breadcrumb span { margin: 0 0.4rem; }
+    .content h1 { font-family: var(--display); font-size: 32px; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    .content h2 { font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-text); margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    .content p { color: var(--ink2); margin-bottom: 1rem; }
+    footer { padding: 2rem 0; border-top: 1px solid var(--border); text-align: center; }
+    footer p { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    footer a { color: var(--ink3); padding: 8px 0; display: inline-block; }
+    footer a:hover { color: var(--accent-text); }
+
+    /* Config bar */
+    .config-bar {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 8px;
+      align-items: end;
+      margin-bottom: 1.5rem;
+    }
+    .field-group { display: flex; flex-direction: column; gap: 4px; }
+    .field-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink3); }
+    .field-input {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--ink);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      height: 34px;
+      width: 100%;
+      transition: border-color 120ms;
+      outline: none;
+    }
+    .field-input:focus { border-color: var(--accent); }
+    .field-input::placeholder { color: var(--ink3); }
+    .save-indicator {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--green);
+      height: 34px;
+      display: flex;
+      align-items: center;
+      padding: 0 4px;
+      opacity: 0;
+      transition: opacity 300ms;
+    }
+    .save-indicator.visible { opacity: 1; }
+
+    /* Query builder */
+    .query-builder {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px 14px;
+      margin-bottom: 1.5rem;
+    }
+    .builder-row {
+      display: grid;
+      grid-template-columns: 1fr 120px;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .builder-row-full {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .builder-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .field-select {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--ink);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      height: 34px;
+      width: 100%;
+      transition: border-color 120ms;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2378716c' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+    }
+    .field-select:focus { border-color: var(--accent); }
+    .optional-fields { display: none; }
+    .optional-fields.visible { display: grid; }
+
+    /* Code block */
+    .code-block { background: #1c1917; border-radius: 6px; overflow: hidden; margin: 0 0 1rem; }
+    .code-header { padding: 0.4rem 1rem; background: #292524; display: flex; align-items: center; gap: 0.5rem; }
+    .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .code-label { font-family: var(--mono); font-size: 10px; color: #78716c; }
+    .code-copy { font-family: var(--mono); font-size: 10px; color: #78716c; cursor: pointer; margin-left: auto; background: none; border: none; padding: 2px 6px; border-radius: 3px; transition: color 120ms, background 120ms; }
+    .code-copy:hover { color: #d6d3d1; background: #3c3a38; }
+    .code-body { padding: 1rem 1.25rem; font-family: var(--mono); font-size: 0.8125rem; line-height: 1.8; color: #d6d3d1; overflow-x: auto; white-space: pre; }
+    .code-comment { color: #78716c; }
+    .code-string { color: #fbbf24; }
+    .code-key { color: #a8a29e; }
+    .code-num { color: #86efac; }
+
+    /* Results */
+    .results-area { display: none; }
+    .results-area.visible { display: block; }
+    .response-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink3);
+    }
+    .response-status-ok { color: var(--green); font-weight: 600; }
+    .response-status-err { color: var(--red); font-weight: 600; }
+
+    /* State */
+    .state-loading {
+      display: none;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--ink3);
+      padding: 1.5rem 0;
+    }
+    .state-loading.visible { display: block; }
+    .state-error {
+      display: none;
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--red);
+      margin-bottom: 1rem;
+    }
+    .state-error.visible { display: block; }
+
+    /* Quick examples */
+    .examples-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 0.75rem;
+    }
+    .example-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: border-color 120ms, box-shadow 120ms;
+      text-align: left;
+    }
+    .example-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .example-name { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+    .example-desc { font-size: 12px; color: var(--ink3); }
+
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .nav-links a:not(.btn-primary) { display: none; }
+      .config-bar { grid-template-columns: 1fr; }
+      .builder-row { grid-template-columns: 1fr; }
+      .builder-row-full { grid-template-columns: 1fr; }
+      .examples-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body style="--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--display:'Satoshi',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mono:'SF Mono','Fira Code','Menlo',monospace;--ink:#1c1917;--ink2:#57534e;--ink3:#78716c;--bg:#fafaf9;--card:#ffffff;--border:#e7e5e4;--accent:#dc6b14;--accent2:#b45309;--accent-text:#b45309;--accent-light:#fffbeb;--green:#16a34a;--red:#dc2626;">
+  <nav>
+    <div class="container inner">
+      <a href="/" class="logo">
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="6" fill="#1c1917"/>
+          <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+          <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+          <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+        </svg>
+        flarelytics
+      </a>
+      <div class="nav-links">
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="https://github.com/kalle-works/flarelytics" class="btn btn-primary">Get Started</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <a href="/">flarelytics</a>
+      <span>/</span>
+      <a href="/docs/">docs</a>
+      <span>/</span>
+      playground
+    </div>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-label">On this page</div>
+        <nav>
+          <a href="#config">Configuration</a>
+          <a href="#builder">Query Builder</a>
+          <a href="#examples">Examples</a>
+        </nav>
+        <div class="sidebar-label" style="margin-top:2rem;">Docs</div>
+        <nav>
+          <a href="/docs/getting-started">Getting Started</a>
+          <a href="/docs/api">API Reference</a>
+          <a href="/docs/events">Events & Schema</a>
+          <a href="/docs/email-reports">Email Reports</a>
+          <a href="/docs/playground/" class="active">Playground</a>
+        </nav>
+      </aside>
+
+      <div class="content">
+        <h1>API Playground</h1>
+        <p>Test queries against your worker directly in the browser. Enter your worker URL and API key, pick a query, and run it.</p>
+
+        <h2 id="config">Configuration</h2>
+        <div class="config-bar">
+          <div class="field-group">
+            <label class="field-label" for="cfg-url">Worker URL</label>
+            <input id="cfg-url" class="field-input" type="url" placeholder="https://your-worker.workers.dev" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="cfg-key">API Key</label>
+            <input id="cfg-key" class="field-input" type="password" placeholder="your-api-key" autocomplete="off" />
+          </div>
+          <div style="display:flex;align-items:end;gap:8px;">
+            <button class="btn btn-primary" id="btn-save" style="height:34px;min-height:34px;padding:0 14px;">Save</button>
+            <span class="save-indicator" id="save-indicator">Saved</span>
+          </div>
+        </div>
+
+        <h2 id="builder">Query Builder</h2>
+        <div class="query-builder">
+          <div class="builder-row">
+            <div class="field-group">
+              <label class="field-label" for="q-query">Query</label>
+              <select id="q-query" class="field-select">
+                {queryGroups.map((group) => (
+                  <optgroup label={group.label}>
+                    {group.queries.map((q) => (
+                      <option
+                        value={q.name}
+                        data-needs-page={q.needsPage ? 'true' : 'false'}
+                        data-needs-event={q.needsEventName ? 'true' : 'false'}
+                      >{q.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="q-period">Period</label>
+              <select id="q-period" class="field-select">
+                <option value="7d">7d</option>
+                <option value="14d">14d</option>
+                <option value="30d" selected>30d</option>
+                <option value="60d">60d</option>
+                <option value="90d">90d</option>
+                <option value="180d">180d</option>
+              </select>
+            </div>
+          </div>
+          <div class="builder-row-full">
+            <div class="field-group">
+              <label class="field-label" for="q-site">Site hostname</label>
+              <input id="q-site" class="field-input" type="text" placeholder="yoursite.com" spellcheck="false" />
+            </div>
+          </div>
+          <div id="opt-page-wrap" class="optional-fields builder-row-full">
+            <div class="field-group">
+              <label class="field-label" for="q-page">Page path <span style="color:var(--ink3);font-weight:400;">(optional)</span></label>
+              <input id="q-page" class="field-input" type="text" placeholder="/blog/my-post" spellcheck="false" />
+            </div>
+          </div>
+          <div id="opt-event-wrap" class="optional-fields builder-row-full">
+            <div class="field-group">
+              <label class="field-label" for="q-event">Event name <span style="color:var(--ink3);font-weight:400;">(optional)</span></label>
+              <input id="q-event" class="field-input" type="text" placeholder="signup" spellcheck="false" />
+            </div>
+          </div>
+          <div class="builder-footer">
+            <div id="generated-url" style="font-family:var(--mono);font-size:11px;color:var(--ink3);word-break:break-all;flex:1;margin-right:1rem;"></div>
+            <button class="btn btn-primary" id="btn-run">Run Query</button>
+          </div>
+        </div>
+
+        <div id="state-loading" class="state-loading">Running query...</div>
+        <div id="state-error" class="state-error"></div>
+
+        <div id="results-area" class="results-area">
+          <div class="response-meta">
+            <span id="response-status"></span>
+            <span id="response-time"></span>
+            <span id="response-rows"></span>
+          </div>
+          <div class="code-block" id="curl-block">
+            <div class="code-header">
+              <div class="code-dot" style="background:#dc2626;"></div>
+              <div class="code-dot" style="background:#dc6b14;"></div>
+              <div class="code-dot" style="background:#16a34a;"></div>
+              <div class="code-label">curl</div>
+              <button class="code-copy" id="copy-curl">copy</button>
+            </div>
+            <div class="code-body" id="curl-output"></div>
+          </div>
+          <div class="code-block">
+            <div class="code-header">
+              <div class="code-dot" style="background:#dc2626;"></div>
+              <div class="code-dot" style="background:#dc6b14;"></div>
+              <div class="code-dot" style="background:#16a34a;"></div>
+              <div class="code-label">json</div>
+              <button class="code-copy" id="copy-json">copy</button>
+            </div>
+            <div class="code-body" id="json-output"></div>
+          </div>
+        </div>
+
+        <h2 id="examples">Quick Examples</h2>
+        <p>Click an example to pre-fill the query builder.</p>
+        <div class="examples-grid">
+          <button class="example-card" data-example="top-pages-7d">
+            <div class="example-name">Top pages</div>
+            <div class="example-desc">Last 7 days</div>
+          </button>
+          <button class="example-card" data-example="daily-visitors-30d">
+            <div class="example-name">Daily visitors</div>
+            <div class="example-desc">Last 30 days</div>
+          </button>
+          <button class="example-card" data-example="bot-hits">
+            <div class="example-name">Bot traffic</div>
+            <div class="example-desc">Bot hits, last 30 days</div>
+          </button>
+        </div>
+
+        <div style="display:flex;gap:1.5rem;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+          <a href="/docs/events" style="font-family:var(--mono);font-size:12px;color:var(--ink3);">&larr; Events & Schema</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>
+        Flarelytics is open source (MIT) &middot;
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a> &middot;
+        Built by <a href="https://kalle.works">kalle.works</a>
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    const LS_KEY = 'flarelytics-playground';
+
+    // Elements
+    const cfgUrl = document.getElementById('cfg-url');
+    const cfgKey = document.getElementById('cfg-key');
+    const btnSave = document.getElementById('btn-save');
+    const saveIndicator = document.getElementById('save-indicator');
+    const qQuery = document.getElementById('q-query');
+    const qPeriod = document.getElementById('q-period');
+    const qSite = document.getElementById('q-site');
+    const qPage = document.getElementById('q-page');
+    const qEvent = document.getElementById('q-event');
+    const optPageWrap = document.getElementById('opt-page-wrap');
+    const optEventWrap = document.getElementById('opt-event-wrap');
+    const generatedUrl = document.getElementById('generated-url');
+    const btnRun = document.getElementById('btn-run');
+    const stateLoading = document.getElementById('state-loading');
+    const stateError = document.getElementById('state-error');
+    const resultsArea = document.getElementById('results-area');
+    const curlOutput = document.getElementById('curl-output');
+    const jsonOutput = document.getElementById('json-output');
+    const responseStatus = document.getElementById('response-status');
+    const responseTime = document.getElementById('response-time');
+    const responseRows = document.getElementById('response-rows');
+    const copyCurl = document.getElementById('copy-curl');
+    const copyJson = document.getElementById('copy-json');
+
+    // Load saved config
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+      if (saved.url) cfgUrl.value = saved.url;
+      if (saved.key) cfgKey.value = saved.key;
+    } catch (_) {}
+
+    // Save config
+    btnSave.addEventListener('click', () => {
+      localStorage.setItem(LS_KEY, JSON.stringify({ url: cfgUrl.value.trim(), key: cfgKey.value.trim() }));
+      saveIndicator.classList.add('visible');
+      setTimeout(() => saveIndicator.classList.remove('visible'), 1800);
+    });
+
+    // Optional field visibility
+    function updateOptionalFields() {
+      const opt = qQuery.options[qQuery.selectedIndex];
+      const needsPage = opt.dataset.needsPage === 'true';
+      const needsEvent = opt.dataset.needsEvent === 'true';
+      optPageWrap.classList.toggle('visible', needsPage);
+      optEventWrap.classList.toggle('visible', needsEvent);
+      updateGeneratedUrl();
+    }
+
+    // Build query URL
+    function buildUrl() {
+      const base = (cfgUrl.value || 'https://your-worker.workers.dev').replace(/\/$/, '');
+      const q = qQuery.value;
+      const period = qPeriod.value;
+      const site = qSite.value.trim() || 'yoursite.com';
+      let url = `${base}/query?q=${q}&period=${period}&site=${encodeURIComponent(site)}`;
+      const page = qPage.value.trim();
+      const event = qEvent.value.trim();
+      if (page && optPageWrap.classList.contains('visible')) url += `&page=${encodeURIComponent(page)}`;
+      if (event && optEventWrap.classList.contains('visible')) url += `&event_name=${encodeURIComponent(event)}`;
+      return url;
+    }
+
+    function buildCurl(url, key) {
+      const k = key || '$KEY';
+      return `curl -H "X-API-Key: ${k}" \\\n  "${url}"`;
+    }
+
+    function updateGeneratedUrl() {
+      const url = buildUrl();
+      generatedUrl.textContent = url;
+    }
+
+    qQuery.addEventListener('change', updateOptionalFields);
+    qPeriod.addEventListener('change', updateGeneratedUrl);
+    qSite.addEventListener('input', updateGeneratedUrl);
+    qPage.addEventListener('input', updateGeneratedUrl);
+    qEvent.addEventListener('input', updateGeneratedUrl);
+    cfgUrl.addEventListener('input', updateGeneratedUrl);
+
+    updateOptionalFields();
+
+    // Syntax highlight JSON
+    function highlightJson(obj) {
+      const raw = JSON.stringify(obj, null, 2);
+      return raw
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(?=\s*:))/g, '<span class="code-key">$1</span>')
+        .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*")/g, '<span class="code-string">$1</span>')
+        .replace(/\b(-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)\b/g, '<span class="code-num">$1</span>');
+    }
+
+    // Run query
+    btnRun.addEventListener('click', async () => {
+      const url = buildUrl();
+      const key = cfgKey.value.trim();
+
+      stateError.classList.remove('visible');
+      resultsArea.classList.remove('visible');
+      stateLoading.classList.add('visible');
+      btnRun.disabled = true;
+      btnRun.textContent = 'Running...';
+
+      const curlCmd = buildCurl(url, key || undefined);
+      curlOutput.textContent = curlCmd;
+
+      const start = Date.now();
+      try {
+        const res = await fetch(url, {
+          headers: key ? { 'X-API-Key': key } : {},
+        });
+        const elapsed = Date.now() - start;
+        const body = await res.json();
+
+        stateLoading.classList.remove('visible');
+        resultsArea.classList.add('visible');
+
+        responseStatus.className = res.ok ? 'response-status-ok' : 'response-status-err';
+        responseStatus.textContent = `${res.status} ${res.statusText}`;
+        responseTime.textContent = `${elapsed}ms`;
+
+        if (res.ok && body.data && Array.isArray(body.data)) {
+          responseRows.textContent = `${body.data.length} row${body.data.length !== 1 ? 's' : ''}`;
+        } else {
+          responseRows.textContent = '';
+        }
+
+        jsonOutput.innerHTML = highlightJson(body);
+
+        if (!res.ok) {
+          stateError.classList.add('visible');
+          stateError.textContent = body.error
+            ? `Error: ${body.error}${body.hint ? ' — ' + body.hint : ''}`
+            : `HTTP ${res.status}: request failed`;
+        }
+      } catch (err) {
+        const elapsed = Date.now() - start;
+        stateLoading.classList.remove('visible');
+        stateError.classList.add('visible');
+        stateError.textContent = err.message.includes('fetch')
+          ? `Network error — check your worker URL and that CORS allows this origin. (${err.message})`
+          : err.message;
+      } finally {
+        btnRun.disabled = false;
+        btnRun.textContent = 'Run Query';
+      }
+    });
+
+    // Copy buttons
+    function copyText(text, btn) {
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'copied';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      });
+    }
+    copyCurl.addEventListener('click', () => copyText(curlOutput.textContent, copyCurl));
+    copyJson.addEventListener('click', () => copyText(jsonOutput.textContent, copyJson));
+
+    // Quick examples
+    const examples = {
+      'top-pages-7d': { query: 'top-pages', period: '7d' },
+      'daily-visitors-30d': { query: 'daily-unique-visitors', period: '30d' },
+      'bot-hits': { query: 'bot-hits', period: '30d' },
+    };
+
+    document.querySelectorAll('[data-example]').forEach((card) => {
+      card.addEventListener('click', () => {
+        const ex = examples[card.dataset.example];
+        if (!ex) return;
+        qQuery.value = ex.query;
+        qPeriod.value = ex.period;
+        updateOptionalFields();
+        qQuery.closest('.query-builder').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    });
+  </script>
+  <script defer src="https://analytics.flarelytics.dev/tracker.js"></script>
+</body>
+</html>

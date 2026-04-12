@@ -1,0 +1,356 @@
+---
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Reports — Flarelytics Docs</title>
+  <meta name="description" content="Set up weekly analytics digest emails with Flarelytics email reports." />
+  <link rel="canonical" href="https://flarelytics.dev/docs/email-reports" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231c1917'/%3E%3Crect x='7' y='12' width='4' height='12' rx='1' fill='%23fbbf24'/%3E%3Crect x='14' y='8' width='4' height='16' rx='1' fill='%23fbbf24'/%3E%3Crect x='21' y='16' width='4' height='8' rx='1' fill='%23fbbf24'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&display=swap" rel="stylesheet" />
+  <style is:inline>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font); font-size: 16px; background: var(--bg); color: var(--ink); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent-text); text-decoration: none; }
+    a:hover { color: var(--accent); }
+    .container { max-width: 880px; margin: 0 auto; padding: 0 1.5rem; }
+    nav { padding: 1rem 0; border-bottom: 1px solid var(--border); }
+    nav .inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 0.5rem; font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink); text-decoration: none; padding: 8px 0; }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 12px 0; }
+    .nav-links a:hover { color: var(--ink); }
+    .nav-links a.active { color: var(--ink); }
+    .btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 1.25rem; border-radius: 6px; font-family: var(--mono); font-size: 12px; font-weight: 600; transition: all 120ms; text-decoration: none; }
+    .btn-primary { background: var(--ink); color: white; }
+    .btn-primary:hover { background: #292524; color: white; }
+    .layout { display: grid; grid-template-columns: 200px 1fr; gap: 3rem; padding: 2rem 0 4rem; align-items: start; }
+    .sidebar { position: sticky; top: 1.5rem; }
+    .sidebar-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink3); margin-bottom: 0.75rem; }
+    .sidebar nav { padding: 0; border: none; }
+    .sidebar nav a { display: block; font-family: var(--mono); font-size: 12px; color: var(--ink2); padding: 5px 0; border-left: 2px solid transparent; padding-left: 10px; }
+    .sidebar nav a:hover { color: var(--ink); border-left-color: var(--border); }
+    .sidebar nav a.active { color: var(--accent-text); border-left-color: var(--accent); }
+    .breadcrumb { padding: 1.25rem 0 0; font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    .breadcrumb a { color: var(--ink3); }
+    .breadcrumb a:hover { color: var(--accent-text); }
+    .breadcrumb span { margin: 0 0.4rem; }
+    .content h1 { font-family: var(--display); font-size: 32px; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    .content h2 { font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-text); margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    .content h3 { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--ink); margin-top: 1.5rem; margin-bottom: 0.5rem; }
+    .content p { color: var(--ink2); margin-bottom: 1rem; }
+    .content ul { color: var(--ink2); padding-left: 1.25rem; margin-bottom: 1rem; }
+    .content ul li { margin-bottom: 0.25rem; }
+    .content a { color: var(--accent-text); }
+    .content a:hover { color: var(--accent); }
+    .step { display: flex; gap: 1rem; margin-bottom: 0.5rem; }
+    .step-num { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--accent-text); background: var(--accent-light); border-radius: 20px; padding: 2px 8px; white-space: nowrap; align-self: flex-start; margin-top: 3px; }
+    .code-block { background: #1c1917; border-radius: 6px; overflow: hidden; margin: 1rem 0; }
+    .code-header { padding: 0.4rem 1rem; background: #292524; display: flex; align-items: center; gap: 0.5rem; }
+    .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .code-label { font-family: var(--mono); font-size: 10px; color: #78716c; margin-left: auto; }
+    .code-body { padding: 1rem 1.25rem; font-family: var(--mono); font-size: 0.8125rem; line-height: 1.8; color: #d6d3d1; overflow-x: auto; }
+    .code-comment { color: #78716c; }
+    .code-string { color: #fbbf24; }
+    .note { background: var(--accent-light); border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0; padding: 0.75rem 1rem; margin: 1rem 0; font-size: 14px; color: var(--ink2); }
+    .note strong { color: var(--ink); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    footer { padding: 2rem 0; border-top: 1px solid var(--border); text-align: center; }
+    footer p { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+    footer a { color: var(--ink3); padding: 8px 0; display: inline-block; }
+    footer a:hover { color: var(--accent-text); }
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .nav-links a:not(.btn-primary) { display: none; }
+    }
+  </style>
+</head>
+<body style="--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--display:'Satoshi',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mono:'SF Mono','Fira Code','Menlo',monospace;--ink:#1c1917;--ink2:#57534e;--ink3:#78716c;--bg:#fafaf9;--card:#ffffff;--border:#e7e5e4;--accent:#dc6b14;--accent2:#b45309;--accent-text:#b45309;--accent-light:#fffbeb;--green:#16a34a;--red:#dc2626;">
+  <nav>
+    <div class="container inner">
+      <a href="/" class="logo">
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="6" fill="#1c1917"/>
+          <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+          <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+          <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+        </svg>
+        flarelytics
+      </a>
+      <div class="nav-links">
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a>
+        <a href="/docs/" class="active">Docs</a>
+        <a href="https://github.com/kalle-works/flarelytics" class="btn btn-primary">Get Started</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="breadcrumb">
+      <a href="/">flarelytics</a>
+      <span>/</span>
+      <a href="/docs/">docs</a>
+      <span>/</span>
+      email-reports
+    </div>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-label">On this page</div>
+        <nav>
+          <a href="#overview">Overview</a>
+          <a href="#setup">Setup</a>
+          <a href="#recipients">Managing recipients</a>
+          <a href="#testing">Testing</a>
+          <a href="#report-contents">Report contents</a>
+        </nav>
+        <div class="sidebar-label" style="margin-top:2rem;">Docs</div>
+        <nav>
+          <a href="/docs/getting-started">Getting Started</a>
+          <a href="/docs/api">API Reference</a>
+          <a href="/docs/events">Events &amp; Schema</a>
+          <a href="/docs/email-reports" class="active">Email Reports</a>
+          <a href="/docs/playground/">Playground</a>
+        </nav>
+      </aside>
+
+      <div class="content">
+        <h1>Email Reports</h1>
+        <p>Weekly analytics digests delivered to your inbox. The email-reports worker runs on a cron schedule and queries your analytics worker to build and send a summary email.</p>
+
+        <h2 id="overview">Overview</h2>
+        <p>Each weekly report includes:</p>
+        <ul>
+          <li>KPI cards — pageviews, unique visitors, and custom event count with week-over-week change</li>
+          <li>Anomaly alerts — flagged automatically when traffic changes by more than 30%</li>
+          <li>Top 5 pages by pageviews</li>
+          <li>Top 3 referrer sources</li>
+          <li>Top 3 countries</li>
+          <li>Bot traffic summary — total blocked requests and top bot user-agents</li>
+        </ul>
+        <p>The email-reports package is a separate Cloudflare Worker. It does not share state with the main analytics worker — it only calls the analytics worker's <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">/query</code> API to fetch data.</p>
+
+        <h2 id="setup">Setup</h2>
+
+        <div class="step">
+          <span class="step-num">Step 1</span>
+          <div>
+            <p style="margin-bottom:0.25rem;">Copy the example config:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <div class="code-dot" style="background:#dc2626;"></div>
+                <div class="code-dot" style="background:#dc6b14;"></div>
+                <div class="code-dot" style="background:#16a34a;"></div>
+              </div>
+              <div class="code-body">
+                <div>cp packages/email-reports/wrangler.toml.example packages/email-reports/wrangler.toml</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">Step 2</span>
+          <div>
+            <p style="margin-bottom:0.25rem;">Edit <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">packages/email-reports/wrangler.toml</code> with your values:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <div class="code-dot" style="background:#dc2626;"></div>
+                <div class="code-dot" style="background:#dc6b14;"></div>
+                <div class="code-dot" style="background:#16a34a;"></div>
+                <div class="code-label">wrangler.toml</div>
+              </div>
+              <div class="code-body">
+                <div>name = <span class="code-string">"my-site-email-reports"</span></div>
+                <div>&nbsp;</div>
+                <div>[vars]</div>
+                <div>ANALYTICS_WORKER_URL = <span class="code-string">"https://my-site-analytics.workers.dev"</span></div>
+                <div>EMAIL_API_URL = <span class="code-string">"https://api.euromail.eu"</span></div>
+                <div>EMAIL_FROM = <span class="code-string">"reports@yourdomain.com"</span></div>
+                <div>SITE_NAME = <span class="code-string">"My Site"</span></div>
+                <div>SITE_URL = <span class="code-string">"https://mysite.com"</span></div>
+                <div>&nbsp;</div>
+                <div>[triggers]</div>
+                <div>crons = [<span class="code-string">"0 9 * * 1"</span>] <span class="code-comment"># Monday at 9am UTC</span></div>
+                <div>&nbsp;</div>
+                <div>[[kv_namespaces]]</div>
+                <div>binding = <span class="code-string">"REPORT_RECIPIENTS"</span></div>
+                <div>id = <span class="code-string">"your-kv-namespace-id"</span></div>
+              </div>
+            </div>
+            <p>Environment variables:</p>
+            <ul>
+              <li><code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">ANALYTICS_WORKER_URL</code> — base URL of your main analytics worker</li>
+              <li><code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">ANALYTICS_API_KEY</code> — the <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">QUERY_API_KEY</code> secret from your main worker</li>
+              <li><code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">EMAIL_API_URL</code> — email service base URL (Euromail, Resend, SendGrid)</li>
+              <li><code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">EMAIL_API_KEY</code> — email service API key</li>
+              <li><code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">EMAIL_FROM</code> — sender address</li>
+              <li><code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">SITE_NAME</code> — displayed in the report header</li>
+              <li><code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">SITE_URL</code> — used for page links in the report</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">Step 3</span>
+          <div>
+            <p style="margin-bottom:0.25rem;">Create the KV namespace for recipients and copy the ID into wrangler.toml:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <div class="code-dot" style="background:#dc2626;"></div>
+                <div class="code-dot" style="background:#dc6b14;"></div>
+                <div class="code-dot" style="background:#16a34a;"></div>
+              </div>
+              <div class="code-body">
+                <div>npx wrangler kv namespace create REPORT_RECIPIENTS</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">Step 4</span>
+          <div>
+            <p style="margin-bottom:0.25rem;">Set the secrets that should not go in wrangler.toml:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <div class="code-dot" style="background:#dc2626;"></div>
+                <div class="code-dot" style="background:#dc6b14;"></div>
+                <div class="code-dot" style="background:#16a34a;"></div>
+              </div>
+              <div class="code-body">
+                <div><span class="code-comment"># API key from your main analytics worker</span></div>
+                <div>npx wrangler secret put ANALYTICS_API_KEY</div>
+                <div>&nbsp;</div>
+                <div><span class="code-comment"># Email service API key</span></div>
+                <div>npx wrangler secret put EMAIL_API_KEY</div>
+                <div>&nbsp;</div>
+                <div><span class="code-comment"># Random string — protects /recipients and /test endpoints</span></div>
+                <div>npx wrangler secret put ADMIN_API_KEY</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">Step 5</span>
+          <div>
+            <p style="margin-bottom:0.25rem;">Deploy:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <div class="code-dot" style="background:#dc2626;"></div>
+                <div class="code-dot" style="background:#dc6b14;"></div>
+                <div class="code-dot" style="background:#16a34a;"></div>
+              </div>
+              <div class="code-body">
+                <div>cd packages/email-reports</div>
+                <div>npx wrangler deploy</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="note">
+          <strong>Cron schedule</strong><br />
+          <code style="font-family:var(--mono);font-size:12px;">0 9 * * 1</code> fires every Monday at 9am UTC. Adjust the cron expression in wrangler.toml to change the schedule. Cloudflare cron triggers require a paid Workers plan.
+        </div>
+
+        <h2 id="recipients">Managing recipients</h2>
+        <p>All recipient endpoints require <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">X-API-Key: &lt;ADMIN_API_KEY&gt;</code>.</p>
+
+        <h3>Add a recipient</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dot" style="background:#dc2626;"></div>
+            <div class="code-dot" style="background:#dc6b14;"></div>
+            <div class="code-dot" style="background:#16a34a;"></div>
+            <div class="code-label">curl</div>
+          </div>
+          <div class="code-body">
+            <div>curl -X POST https://my-site-email-reports.workers.dev/recipients \</div>
+            <div>  -H <span class="code-string">"X-API-Key: your-admin-api-key"</span> \</div>
+            <div>  -H <span class="code-string">"Content-Type: application/json"</span> \</div>
+            <div>  -d <span class="code-string">'{"{"}\"email\":\"you@example.com\"{"}"}'</span></div>
+          </div>
+        </div>
+
+        <h3>Remove a recipient</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dot" style="background:#dc2626;"></div>
+            <div class="code-dot" style="background:#dc6b14;"></div>
+            <div class="code-dot" style="background:#16a34a;"></div>
+            <div class="code-label">curl</div>
+          </div>
+          <div class="code-body">
+            <div>curl -X DELETE https://my-site-email-reports.workers.dev/recipients \</div>
+            <div>  -H <span class="code-string">"X-API-Key: your-admin-api-key"</span> \</div>
+            <div>  -H <span class="code-string">"Content-Type: application/json"</span> \</div>
+            <div>  -d <span class="code-string">'{"{"}\"email\":\"you@example.com\"{"}"}'</span></div>
+          </div>
+        </div>
+
+        <h3>List all recipients</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dot" style="background:#dc2626;"></div>
+            <div class="code-dot" style="background:#dc6b14;"></div>
+            <div class="code-dot" style="background:#16a34a;"></div>
+            <div class="code-label">curl</div>
+          </div>
+          <div class="code-body">
+            <div>curl https://my-site-email-reports.workers.dev/recipients \</div>
+            <div>  -H <span class="code-string">"X-API-Key: your-admin-api-key"</span></div>
+          </div>
+        </div>
+
+        <h2 id="testing">Testing</h2>
+        <p>Send a test report to any address without waiting for the cron to fire:</p>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dot" style="background:#dc2626;"></div>
+            <div class="code-dot" style="background:#dc6b14;"></div>
+            <div class="code-dot" style="background:#16a34a;"></div>
+            <div class="code-label">curl</div>
+          </div>
+          <div class="code-body">
+            <div>curl -X POST https://my-site-email-reports.workers.dev/test \</div>
+            <div>  -H <span class="code-string">"X-API-Key: your-admin-api-key"</span> \</div>
+            <div>  -H <span class="code-string">"Content-Type: application/json"</span> \</div>
+            <div>  -d <span class="code-string">'{"{"}\"email\":\"you@example.com\"{"}"}'</span></div>
+          </div>
+        </div>
+        <p>The response includes the generated subject line and whether the send succeeded.</p>
+
+        <h2 id="report-contents">Report contents</h2>
+        <p>Each digest covers the previous 7 days and compares it to the 7 days before that.</p>
+        <ul>
+          <li><strong>KPI cards</strong> — pageviews, unique visitors, and custom event count, each with a colour-coded week-over-week percentage change</li>
+          <li><strong>Anomaly alerts</strong> — shown when pageview count changes by more than 30% compared to the prior week</li>
+          <li><strong>Top 5 pages</strong> — paths ranked by pageview count</li>
+          <li><strong>Top 3 referrers</strong> — referrer hostnames ranked by visit count</li>
+          <li><strong>Top 3 countries</strong> — country codes ranked by pageview count</li>
+          <li><strong>Bot traffic</strong> — total blocked requests and up to 5 top bot user-agents (only shown when bot hits are present)</li>
+        </ul>
+
+        <div style="display:flex;gap:1rem;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+          <a href="/docs/events" style="font-family:var(--mono);font-size:12px;color:var(--ink3);">&larr; Events &amp; Schema</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>
+        Flarelytics is open source (MIT) &middot;
+        <a href="https://github.com/kalle-works/flarelytics">GitHub</a> &middot;
+        Built by <a href="https://kalle.works">kalle.works</a>
+      </p>
+    </div>
+  </footer>
+  <script defer src="https://analytics.flarelytics.dev/tracker.js"></script>
+</body>
+</html>

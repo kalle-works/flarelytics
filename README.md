@@ -29,6 +29,8 @@ npx wrangler secret put CF_API_TOKEN     # CF API token (Analytics Engine read)
 npx wrangler secret put CF_ACCOUNT_ID    # your CF account ID
 ```
 
+> **Quick setup:** Run `bash setup.sh` in the worker directory for an interactive guided setup that configures everything automatically.
+
 ### 2. Add the tracking script
 
 ```html
