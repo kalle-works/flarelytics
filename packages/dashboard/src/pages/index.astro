@@ -279,6 +279,25 @@ import Layout from '../layouts/Layout.astro';
       </div>
       <div class="card" id="funnel"></div>
     </div>
+
+    <!-- Bot Traffic -->
+    <div class="section" style="margin-top:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 class="section-title">Bot Traffic</h2>
+        <button class="csv-btn" data-table="table-bots">CSV</button>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:0.75rem;margin-bottom:0.75rem;">
+        <span id="bot-total" style="font-family:var(--mono);font-size:1.5rem;font-weight:700;">-</span>
+        <span style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);">blocked requests</span>
+        <span id="bot-pct" style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);"></span>
+      </div>
+      <div class="card table-wrap">
+        <table class="tbl" id="table-bots">
+          <thead><tr><th style="text-align:left;">User-Agent</th><th style="text-align:right;">Hits</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </Layout>
 
@@ -938,7 +957,7 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','top-pages-stories','total-sessions'];
+    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','top-pages-stories','total-sessions','bot-hits','bot-hits-total'];
 
     var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
@@ -1007,6 +1026,9 @@ import Layout from '../layouts/Layout.astro';
       // Top Articles (only shown if data exists)
       fillTopStories(m['top-pages-stories']);
 
+      // Bot Traffic
+      renderBotTraffic(m['bot-hits'], m['bot-hits-total'], totalViews);
+
       // Funnel
       var currentFunnelEvent = document.getElementById('funnel-event-select').value;
       renderFunnel(funnel);
@@ -1034,6 +1056,20 @@ import Layout from '../layouts/Layout.astro';
       renderWow('[data-wow="views"]', viewsPct);
       renderWow('[data-wow="visitors"]', visitorsPct);
     });
+  }
+
+  function renderBotTraffic(botHits, botTotal, totalViews) {
+    var bots = rows(botHits);
+    var totalBotHits = botTotal && rows(botTotal).length ? (parseFloat(rows(botTotal)[0].total_bot_hits) || 0) : 0;
+    document.getElementById('bot-total').textContent = num(totalBotHits);
+    var pctEl = document.getElementById('bot-pct');
+    if (totalViews > 0 && totalBotHits > 0) {
+      pctEl.textContent = '(' + (totalBotHits / (totalViews + totalBotHits) * 100).toFixed(1) + '% of all traffic)';
+    } else {
+      pctEl.textContent = '';
+    }
+    tablePages['table-bots'] = 0;
+    fillTable('table-bots', botHits, [{ key: 'user_agent' }, { key: 'hits', align: 'right', fmt: 'num' }], true);
   }
 
   function renderChart(data) {
