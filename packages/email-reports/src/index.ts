@@ -74,6 +74,8 @@ async function generateReport(env: Env): Promise<{ subject: string; html: string
     customEvents,
     prevDailyViews,
     prevDailyVisitors,
+    botHits,
+    botHitsTotal,
   ] = await Promise.all([
     queryAnalytics(env, 'daily-views', '7d'),
     queryAnalytics(env, 'daily-unique-visitors', '7d'),
@@ -83,6 +85,8 @@ async function generateReport(env: Env): Promise<{ subject: string; html: string
     queryAnalytics(env, 'custom-events', '7d'),
     queryAnalytics(env, 'daily-views', '30d'),
     queryAnalytics(env, 'daily-unique-visitors', '30d'),
+    queryAnalytics(env, 'bot-hits', '7d'),
+    queryAnalytics(env, 'bot-hits-total', '7d'),
   ]);
 
   const totalViews = sum(dailyViews, 'views');
@@ -102,6 +106,8 @@ async function generateReport(env: Env): Promise<{ subject: string; html: string
   const top5Pages = topPages.slice(0, 5);
   const top3Referrers = referrers.slice(0, 3);
   const top3Countries = countries.slice(0, 3);
+  const totalBotHits = Number(botHitsTotal[0]?.total_bot_hits || 0);
+  const top5Bots = botHits.slice(0, 5);
 
   // Detect anomalies (>30% change)
   const anomalies: string[] = [];
@@ -195,6 +201,25 @@ async function generateReport(env: Env): Promise<{ subject: string; html: string
         <span style="color:#4a4a4a;">${c.country}</span>
         <span style="color:#8a8a8a;font-variant-numeric:tabular-nums;">${num(c.views)}</span>
       </div>`).join('')}
+    </div>
+  </div>` : ''}
+
+  <!-- Bot Traffic -->
+  ${totalBotHits > 0 ? `
+  <div style="margin-bottom:24px;">
+    <h2 style="font-size:14px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Bot Traffic</h2>
+    <div style="background:white;border:1px solid #e5e5e3;border-radius:4px;padding:12px;">
+      <div style="font-size:13px;color:#4a4a4a;margin-bottom:8px;">
+        <strong>${num(totalBotHits)}</strong> bot requests blocked
+        ${totalViews > 0 ? ` (${((totalBotHits / (totalViews + totalBotHits)) * 100).toFixed(1)}% of all traffic)` : ''}
+      </div>
+      ${top5Bots.length > 0 ? `
+      <div style="font-size:11px;color:#8a8a8a;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Top bots</div>
+      ${top5Bots.map((b) => `
+      <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;">
+        <span style="color:#6a6a6a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;">${String(b.user_agent).slice(0, 60)}</span>
+        <span style="color:#8a8a8a;font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">${num(b.hits)}</span>
+      </div>`).join('')}` : ''}
     </div>
   </div>` : ''}
 

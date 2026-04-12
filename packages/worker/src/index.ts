@@ -141,6 +141,30 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
 
   const ua = request.headers.get('User-Agent') || '';
   if (isBot(ua)) {
+    // Record bot hit for reporting, then drop
+    const botOrigin = request.headers.get('Origin');
+    const botSite = botOrigin ? (() => { try { return new URL(botOrigin).hostname.replace(/^www\./, ''); } catch { return botOrigin; } })() : '';
+    let botPath = '/';
+    try {
+      const botBody = await request.clone().json() as { path?: string; p?: string };
+      botPath = (botBody.path || botBody.p || '/').replace(/\/+$/, '').slice(0, 500) || '/';
+    } catch { /* ignore parse errors */ }
+
+    env.ANALYTICS.writeDataPoint({
+      blobs: [
+        botPath,           // blob1: path
+        '',                // blob2: referrer (not relevant)
+        (request.cf?.country as string) || 'XX', // blob3: country
+        'bot_hit',         // blob4: event name
+        ua.slice(0, 200),  // blob5: user-agent string as prop
+        '', '', '', '',    // blob6-9: unused
+        botSite,           // blob10: site hostname
+        '', '',            // blob11-12: unused
+      ],
+      doubles: [1, 0],
+      indexes: [botPath],
+    });
+
     return new Response(null, { status: 204, headers: cors });
   }
 
@@ -495,6 +519,25 @@ const QUERY_TEMPLATES: Record<string, {
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL '30' MINUTE AND blob4 = 'pageview' AND blob2 != 'direct' AND blob10 = '${site}'
       GROUP BY referrer ORDER BY visits DESC LIMIT 8
+    `,
+  },
+
+  // Bot reporting
+  'bot-hits': {
+    description: 'Total bot hits and top bot user-agents',
+    sql: (ds, p, site) => `
+      SELECT blob5 AS user_agent, SUM(_sample_interval * double1) AS hits
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'bot_hit' AND blob10 = '${site}'
+      GROUP BY user_agent ORDER BY hits DESC LIMIT 15
+    `,
+  },
+  'bot-hits-total': {
+    description: 'Total bot hit count for the period',
+    sql: (ds, p, site) => `
+      SELECT SUM(_sample_interval * double1) AS total_bot_hits
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'bot_hit' AND blob10 = '${site}'
     `,
   },
 };
