@@ -28,5 +28,9 @@ jobs:
       - name: Test tracker
         run: npx vitest run
         working-directory: packages/tracker
-      - name: Build all
+      - name: Build tracker
         run: npm run build
+        working-directory: packages/tracker
+      - name: Build landing
+        run: npx astro build
+        working-directory: packages/landing
