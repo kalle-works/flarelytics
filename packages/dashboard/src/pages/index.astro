@@ -340,6 +340,65 @@ import Layout from '../layouts/Layout.astro';
         </div>
       </div>
     </div>
+
+    <!-- Article Drill-down Panel -->
+    <div id="drilldown-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;overflow-y:auto;" onclick="if(event.target===this)closeDrilldown()">
+      <div style="max-width:720px;margin:3rem auto;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem;position:relative;">
+        <button onclick="closeDrilldown()" style="position:absolute;top:1rem;right:1rem;background:none;border:none;font-size:1.25rem;cursor:pointer;color:var(--ink-muted);">&#x2715;</button>
+        <h2 id="drilldown-title" style="font-family:var(--mono);font-size:0.875rem;font-weight:600;margin-bottom:1.5rem;padding-right:2rem;word-break:break-all;"></h2>
+
+        <!-- Drilldown KPIs -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;margin-bottom:1.5rem;">
+          <div class="card kpi" style="padding:0.75rem;">
+            <span class="kpi-label">Views</span>
+            <span class="kpi-value" id="dd-views">-</span>
+          </div>
+          <div class="card kpi" style="padding:0.75rem;">
+            <span class="kpi-label">Visitors</span>
+            <span class="kpi-value" id="dd-visitors">-</span>
+          </div>
+          <div class="card kpi" style="padding:0.75rem;">
+            <span class="kpi-label">Avg. Time</span>
+            <span class="kpi-value" id="dd-time">-</span>
+          </div>
+          <div class="card kpi" style="padding:0.75rem;">
+            <span class="kpi-label">Read 100%</span>
+            <span class="kpi-value" id="dd-read100">-</span>
+          </div>
+        </div>
+
+        <!-- Drilldown chart -->
+        <div class="card" style="margin-bottom:1rem;"><div id="dd-chart" style="height:160px;width:100%;"></div></div>
+
+        <!-- Scroll depth funnel -->
+        <div class="card" style="margin-bottom:1rem;padding:1rem;">
+          <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.75rem;">Scroll Depth</div>
+          <div id="dd-scroll-depth"></div>
+        </div>
+
+        <!-- Referrers + Countries -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">Referrers</div>
+            <div class="card table-wrap">
+              <table class="tbl" id="table-dd-referrers">
+                <thead><tr><th style="text-align:left;">Source</th><th style="text-align:right;">Visits</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">Countries</div>
+            <div class="card table-wrap">
+              <table class="tbl" id="table-dd-countries">
+                <thead><tr><th style="text-align:left;">Country</th><th style="text-align:right;">Views</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </Layout>
 
@@ -922,7 +981,7 @@ import Layout from '../layouts/Layout.astro';
       var path = esc(row.path) || '-';
       var views = num(row.views);
       var visitors = num(row.visitors);
-      html += '<tr><td style="text-align:left;">' + path + '</td><td style="text-align:right;">' + views + '</td><td style="text-align:right;">' + visitors + '</td>';
+      html += '<tr style="cursor:pointer;" onclick="openDrilldown(\'' + esc(row.path).replace(/'/g, "\\'") + '\')"><td style="text-align:left;">' + path + '</td><td style="text-align:right;">' + views + '</td><td style="text-align:right;">' + visitors + '</td>';
       if (hasShares) {
         var shares = shareMap[row.path] || 0;
         html += '<td style="text-align:right;">' + (shares > 0 ? num(shares) : '-') + '</td>';
@@ -951,7 +1010,7 @@ import Layout from '../layouts/Layout.astro';
     var html = '';
     storyRows.slice(0, 10).forEach(function(row) {
       var pct = Math.round(((parseFloat(row.views) || 0) / maxViews) * 100);
-      html += '<tr>';
+      html += '<tr style="cursor:pointer;" onclick="openDrilldown(\'' + esc(row.path).replace(/'/g, "\\'") + '\')">';
       html += '<td style="text-align:left;">' + esc(row.path) + '</td>';
       html += '<td style="text-align:right;">' + num(row.views) + '</td>';
       html += '<td style="text-align:right;">' + num(row.visitors) + '</td>';
@@ -1205,6 +1264,137 @@ import Layout from '../layouts/Layout.astro';
       html += '<div style="height:100%;width:' + barWidth + '%;background:#78716c;border-radius:2px;"></div>';
       html += '</div>';
       html += '<span style="font-family:var(--mono);font-size:11px;color:var(--ink-muted);min-width:60px;text-align:right;">' + num(cat.hits) + ' (' + pct + '%)</span>';
+      html += '</div>';
+    });
+    el.innerHTML = html;
+  }
+
+  // ---- Article drill-down ----
+  function queryPage(q, pagePath) {
+    return fetch(WORKER + '/query?q=' + q + '&period=' + period + '&site=' + encodeURIComponent(site) + '&page=' + encodeURIComponent(pagePath), { headers: { 'X-API-Key': apiKey } })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; });
+  }
+
+  window.openDrilldown = function(pagePath) {
+    var overlay = document.getElementById('drilldown-overlay');
+    overlay.style.display = '';
+    document.getElementById('drilldown-title').textContent = pagePath;
+
+    // Reset
+    document.getElementById('dd-views').textContent = '-';
+    document.getElementById('dd-visitors').textContent = '-';
+    document.getElementById('dd-time').textContent = '-';
+    document.getElementById('dd-read100').textContent = '-';
+    document.getElementById('dd-chart').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
+    document.getElementById('dd-scroll-depth').innerHTML = '';
+    document.querySelector('#table-dd-referrers tbody').innerHTML = '';
+    document.querySelector('#table-dd-countries tbody').innerHTML = '';
+
+    Promise.all([
+      queryPage('page-views-over-time', pagePath),
+      queryPage('timing-by-page', pagePath),
+      queryPage('scroll-depth-for-page', pagePath),
+      queryPage('referrers-by-page', pagePath),
+      queryPage('countries-by-page', pagePath),
+    ]).then(function(results) {
+      var viewsData = rows(results[0]);
+      var timingData = rows(results[1]);
+      var scrollData = rows(results[2]);
+      var refData = results[3];
+      var countryData = results[4];
+
+      // KPIs
+      var totalViews = sum(viewsData, 'views');
+      var totalVisitors = sum(viewsData, 'visitors');
+      document.getElementById('dd-views').textContent = num(totalViews);
+      document.getElementById('dd-visitors').textContent = num(totalVisitors);
+
+      if (timingData.length && timingData[0].avg_seconds) {
+        var secs = Math.round(parseFloat(timingData[0].avg_seconds));
+        var mins = Math.floor(secs / 60);
+        document.getElementById('dd-time').textContent = mins > 0 ? mins + 'm ' + (secs % 60) + 's' : secs + 's';
+      }
+
+      // Read 100%
+      var read100 = 0;
+      scrollData.forEach(function(r) { if (String(r.depth) === '100') read100 = parseFloat(r.count) || 0; });
+      document.getElementById('dd-read100').textContent = read100 > 0 ? num(read100) : '-';
+
+      // Chart
+      renderDrilldownChart(viewsData);
+
+      // Scroll depth funnel
+      renderDrilldownScroll(scrollData);
+
+      // Tables
+      fillTable('table-dd-referrers', refData, [{ key: 'referrer', favicon: true }, { key: 'visits', align: 'right', fmt: 'num' }]);
+      fillTable('table-dd-countries', countryData, [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }]);
+    });
+  };
+
+  window.closeDrilldown = function() {
+    document.getElementById('drilldown-overlay').style.display = 'none';
+  };
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeDrilldown();
+  });
+
+  function renderDrilldownChart(data) {
+    var el = document.getElementById('dd-chart');
+    if (!data.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No data</div>'; return; }
+
+    var max = Math.max.apply(null, data.map(function(d) { return parseFloat(d.views) || 0; }));
+    if (max === 0) max = 1;
+    var bw = Math.max(4, Math.floor((el.clientWidth - 60) / data.length) - 2);
+    var ch = 120;
+    var sw = data.length * (bw + 2) + 60;
+
+    var bars = '', xLabels = '', yLabels = '';
+    var step = Math.max(1, Math.floor(data.length / 7));
+
+    for (var i = 0; i <= 3; i++) {
+      var val = Math.round(max * (1 - i / 3));
+      var yp = 10 + (ch / 3) * i;
+      yLabels += '<text x="45" y="' + (yp + 4) + '" text-anchor="end" fill="var(--ink-muted)" font-size="9" font-family="var(--mono)">' + num(val) + '</text>';
+      yLabels += '<line x1="50" x2="' + sw + '" y1="' + yp + '" y2="' + yp + '" stroke="var(--border-light)" stroke-dasharray="4,4"/>';
+    }
+
+    data.forEach(function(row, i) {
+      var v = parseFloat(row.views) || 0;
+      var h = Math.max(1, (v / max) * ch);
+      var x = 50 + i * (bw + 2);
+      var y = ch - h + 10;
+      bars += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + h + '" fill="var(--accent)" rx="2" opacity="0.85"><title>' + esc(row.date || '') + ': ' + num(v) + ' views</title></rect>';
+      if (i % step === 0 || i === data.length - 1) {
+        xLabels += '<text x="' + (x + bw / 2) + '" y="' + (ch + 26) + '" text-anchor="middle" fill="var(--ink-muted)" font-size="9" font-family="var(--mono)">' + esc((row.date || '').slice(5)) + '</text>';
+      }
+    });
+
+    el.innerHTML = '<svg width="100%" viewBox="0 0 ' + Math.max(sw, el.clientWidth) + ' ' + (ch + 35) + '" preserveAspectRatio="xMinYMin meet">' + yLabels + bars + xLabels + '</svg>';
+  }
+
+  function renderDrilldownScroll(scrollData) {
+    var el = document.getElementById('dd-scroll-depth');
+    if (!scrollData.length) { el.innerHTML = '<div style="font-family:var(--mono);font-size:12px;color:var(--ink-muted);">No scroll data</div>'; return; }
+
+    var depthMap = {};
+    scrollData.forEach(function(r) { depthMap[String(r.depth)] = parseFloat(r.count) || 0; });
+    var depths = ['25', '50', '75', '100'];
+    var maxCount = Math.max.apply(null, depths.map(function(d) { return depthMap[d] || 0; }));
+    if (maxCount === 0) maxCount = 1;
+
+    var html = '';
+    depths.forEach(function(d) {
+      var count = depthMap[d] || 0;
+      var barW = (count / maxCount * 100).toFixed(1);
+      html += '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:6px;">';
+      html += '<span style="font-family:var(--mono);font-size:12px;color:var(--ink-secondary);min-width:40px;text-align:right;">' + d + '%</span>';
+      html += '<div style="flex:1;height:16px;background:var(--border-light);border-radius:2px;overflow:hidden;">';
+      html += '<div style="height:100%;width:' + barW + '%;background:var(--accent);border-radius:2px;transition:width 300ms;"></div>';
+      html += '</div>';
+      html += '<span style="font-family:var(--mono);font-size:11px;color:var(--ink-muted);min-width:40px;text-align:right;">' + num(count) + '</span>';
       html += '</div>';
     });
     el.innerHTML = html;

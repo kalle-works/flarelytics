@@ -442,6 +442,35 @@ const QUERY_TEMPLATES: Record<string, {
       GROUP BY country ORDER BY views DESC LIMIT 20
     `,
   },
+  'referrers-by-page': {
+    description: 'Referrer breakdown for a specific page (?page=/your/path)',
+    requiresPage: true,
+    sql: (ds, p, site, _eventName, page) => `
+      SELECT blob2 AS referrer, SUM(_sample_interval * double1) AS visits
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}' AND blob1 = '${page}' AND blob2 != 'direct'
+      GROUP BY referrer ORDER BY visits DESC LIMIT 10
+    `,
+  },
+  'timing-by-page': {
+    description: 'Average time on page for a specific page (?page=/your/path)',
+    requiresPage: true,
+    sql: (ds, p, site, _eventName, page) => `
+      SELECT ROUND(AVG(_sample_interval * double2), 0) AS avg_seconds, COUNT() AS sessions
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'timing' AND blob10 = '${site}' AND blob1 = '${page}'
+    `,
+  },
+  'scroll-depth-for-page': {
+    description: 'Scroll depth distribution for a specific page (?page=/your/path)',
+    requiresPage: true,
+    sql: (ds, p, site, _eventName, page) => `
+      SELECT blob5 AS depth, SUM(_sample_interval * double1) AS count
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'scroll_depth' AND blob10 = '${site}' AND blob1 = '${page}'
+      GROUP BY depth ORDER BY depth ASC
+    `,
+  },
   'funnel-by-event': {
     description: 'Daily funnel: pageviews to a specific custom event (?event_name=my_event)',
     sql: (ds, p, site, eventName) => `
