@@ -227,10 +227,17 @@
     function renderDevices(devs) {
       const el = document.getElementById('devices-bars');
       if (!devs || !devs.length) { el.innerHTML = '<p style="font-family:monospace;font-size:12px;color:#78716c">No data</p>'; return; }
-      const total = devs.reduce((s, d) => s + (d.views || 0), 0) || 1;
-      const order = ['desktop', 'mobile', 'tablet'];
-      const sorted = order.map(n => devs.find(d => d.device === n) || { device: n, views: 0 })
-                          .concat(devs.filter(d => !order.includes(d.device)));
+      // Merge empty device labels into "unknown"
+      const merged = [];
+      devs.forEach(d => {
+        const name = (d.device || '').trim() || 'unknown';
+        const existing = merged.find(m => m.device === name);
+        if (existing) existing.views += (d.views || 0);
+        else merged.push({ device: name, views: d.views || 0 });
+      });
+      const total = merged.reduce((s, d) => s + d.views, 0) || 1;
+      const order = ['desktop', 'mobile', 'tablet', 'unknown'];
+      const sorted = order.map(n => merged.find(d => d.device === n)).filter(Boolean);
       el.innerHTML = sorted.map(d => {
         const pct = Math.round((d.views / total) * 100);
         return `<div class="device-row"><span class="device-label">${d.device}</span><div class="device-track"><div class="device-bar" style="width:${pct}%"></div></div><span class="device-pct">${pct}%</span></div>`;
