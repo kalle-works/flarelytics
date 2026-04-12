@@ -14,5 +14,9 @@ DATASET_NAME = "flarelytics"
 
 # Secrets (set via `wrangler secret put`):
 #   QUERY_API_KEY  — random string for dashboard authentication
-#   CF_API_TOKEN   — Cloudflare API token with Analytics Engine read access
+#   CF_API_TOKEN   — Cloudflare API token with these permissions:
+#                    Account > Account Analytics > Read
+#                    Zone resources: All zones (or specific zones)
+#                    Create at: https://dash.cloudflare.com/profile/api-tokens
 #   CF_ACCOUNT_ID  — your Cloudflare account ID
+#                    Find at: https://dash.cloudflare.com → any zone → Overview sidebar
