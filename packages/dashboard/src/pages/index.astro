@@ -376,8 +376,8 @@ import Layout from '../layouts/Layout.astro';
           <div id="dd-scroll-depth"></div>
         </div>
 
-        <!-- Referrers + Countries -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <!-- Referrers + Countries + UTM -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
           <div>
             <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">Referrers</div>
             <div class="card table-wrap">
@@ -395,6 +395,15 @@ import Layout from '../layouts/Layout.astro';
                 <tbody></tbody>
               </table>
             </div>
+          </div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">UTM Campaigns</div>
+          <div class="card table-wrap">
+            <table class="tbl" id="table-dd-utm">
+              <thead><tr><th style="text-align:left;">Source</th><th style="text-align:left;">Medium</th><th style="text-align:left;">Campaign</th><th style="text-align:right;">Visits</th></tr></thead>
+              <tbody></tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -1290,6 +1299,7 @@ import Layout from '../layouts/Layout.astro';
     document.getElementById('dd-scroll-depth').innerHTML = '';
     document.querySelector('#table-dd-referrers tbody').innerHTML = '';
     document.querySelector('#table-dd-countries tbody').innerHTML = '';
+    document.querySelector('#table-dd-utm tbody').innerHTML = '';
 
     Promise.all([
       queryPage('page-views-over-time', pagePath),
@@ -1297,12 +1307,14 @@ import Layout from '../layouts/Layout.astro';
       queryPage('scroll-depth-for-page', pagePath),
       queryPage('referrers-by-page', pagePath),
       queryPage('countries-by-page', pagePath),
+      queryPage('utm-by-page', pagePath),
     ]).then(function(results) {
       var viewsData = rows(results[0]);
       var timingData = rows(results[1]);
       var scrollData = rows(results[2]);
       var refData = results[3];
       var countryData = results[4];
+      var utmData = results[5];
 
       // KPIs
       var totalViews = sum(viewsData, 'views');
@@ -1330,6 +1342,7 @@ import Layout from '../layouts/Layout.astro';
       // Tables
       fillTable('table-dd-referrers', refData, [{ key: 'referrer', favicon: true }, { key: 'visits', align: 'right', fmt: 'num' }]);
       fillTable('table-dd-countries', countryData, [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }]);
+      fillTable('table-dd-utm', utmData, [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
     });
   };
 

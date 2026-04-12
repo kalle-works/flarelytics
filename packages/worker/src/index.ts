@@ -461,6 +461,16 @@ const QUERY_TEMPLATES: Record<string, {
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'timing' AND blob10 = '${site}' AND blob1 = '${page}'
     `,
   },
+  'utm-by-page': {
+    description: 'UTM campaign breakdown for a specific page (?page=/your/path)',
+    requiresPage: true,
+    sql: (ds, p, site, _eventName, page) => `
+      SELECT blob6 AS utm_source, blob7 AS utm_medium, blob8 AS utm_campaign, SUM(_sample_interval * double1) AS visits
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}' AND blob1 = '${page}' AND blob6 != ''
+      GROUP BY utm_source, utm_medium, utm_campaign ORDER BY visits DESC LIMIT 10
+    `,
+  },
   'scroll-depth-for-page': {
     description: 'Scroll depth distribution for a specific page (?page=/your/path)',
     requiresPage: true,
