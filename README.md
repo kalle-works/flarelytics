@@ -87,6 +87,7 @@ packages/
   tracker/        Client-side script (<1KB): pageviews, outbound links, custom events, scroll depth
   dashboard/      Astro static site: analytics dashboard with charts and tables
   email-reports/  Cloudflare Worker cron: weekly email digests
+  landing/        Astro static site: flarelytics.dev marketing + docs
 ```
 
 ## Event Types
@@ -97,6 +98,7 @@ packages/
 | `outbound` | Yes | External link clicks |
 | `timing` | Yes | Time on page in seconds (fires on `visibilitychange`) |
 | `scroll_depth` | Opt-in | Scroll milestones at 25/50/75/100% |
+| `bot_hit` | Yes | Bot traffic recorded separately (UA in blob5) |
 | `(custom)` | Manual | Any event via `flarelytics.track()` |
 
 ## API
@@ -148,14 +150,17 @@ X-API-Key: your-api-key
 | `daily-views` | | Pageviews per day |
 | `daily-unique-visitors` | | Unique visitors per day (+ total views) |
 | `new-vs-returning` | | New vs returning visitors in the selected period |
+| `total-sessions` | | Total sessions in period (based on timing events) |
 
 **Referrers & Acquisition**
 
 | Query | Params | Description |
 |---|---|---|
 | `referrers` | | Top referrer hostnames |
+| `referrers-by-page` | `?page=/path` | Referrer breakdown for a specific page |
 | `utm-campaigns` | | UTM campaign totals (source, medium, campaign) |
 | `utm-campaign-trend` | | Daily UTM visits — when each post drove traffic |
+| `utm-by-page` | `?page=/path` | UTM campaign breakdown for a specific page |
 
 **Content & Engagement**
 
@@ -163,9 +168,11 @@ X-API-Key: your-api-key
 |---|---|---|
 | `page-views-over-time` | `?page=/path` | Daily views + visitors for one page |
 | `page-timing` | | Average time on page in seconds per path |
+| `timing-by-page` | `?page=/path` | Average time on page for a specific page |
 | `bounce-rate-by-page` | `?event_name=N` | Bounce % per page (threshold seconds, default 10) |
 | `scroll-depth` | | Scroll depth distribution: how far visitors scroll across all pages |
 | `scroll-depth-by-page` | | Scroll depth breakdown per page |
+| `scroll-depth-for-page` | `?page=/path` | Scroll depth distribution for a specific page |
 
 **Geography & Devices**
 
@@ -185,6 +192,25 @@ X-API-Key: your-api-key
 | `custom-events` | | Custom event counts by name and properties |
 | `conversion-funnel` | | Daily pageviews to custom events |
 | `funnel-by-event` | `?event_name=signup` | Daily funnel for a specific custom event |
+
+**Live (30-minute window)**
+
+| Query | Params | Description |
+|---|---|---|
+| `live-visitors` | | Visitors and pageviews in the last 30 minutes |
+| `live-pages` | | Most visited pages in the last 30 minutes |
+| `live-referrers` | | Top referrers in the last 30 minutes |
+| `hourly-today` | | Pageviews by hour for the last 24 hours |
+
+**Bot Reporting**
+
+| Query | Params | Description |
+|---|---|---|
+| `bot-hits` | | Top bot user-agents |
+| `bot-hits-total` | | Total bot hit count for the period |
+| `bot-pages` | | Pages most targeted by bots |
+| `bot-daily` | | Bot hits per day (trend) |
+| `bot-countries` | | Countries where bot traffic originates |
 
 #### Example: scroll depth per page
 
@@ -249,6 +275,31 @@ X-API-Key: your-api-key
 }
 ```
 
+### Public stats (no API key required)
+
+```bash
+GET /public-stats?site=yoursite.com
+```
+
+Returns a summary of the last 30 days: pageviews, visitors, top pages, referrers, countries, devices, daily views, and bot hit total. Useful for public analytics pages.
+
+```json
+{
+  "period": "30d",
+  "site": "yoursite.com",
+  "stats": {
+    "pageviews": 1234,
+    "visitors": 567,
+    "topPages": [{ "path": "/", "views": 300 }],
+    "referrers": [{ "referrer": "google.com", "visits": 120 }],
+    "countries": [{ "country": "FI", "views": 400 }],
+    "devices": [{ "device": "desktop", "views": 800 }],
+    "dailyViews": [{ "date": "2026-04-12", "views": 45 }],
+    "botHitsTotal": 89
+  }
+}
+```
+
 ### Health check
 
 ```bash
@@ -256,7 +307,7 @@ GET /health
 ```
 
 ```json
-{ "status": "healthy", "checks": { "analytics_binding": true, ... }, "version": "0.1.0" }
+{ "status": "healthy", "checks": { "analytics_binding": true, ... }, "version": "0.2.0" }
 ```
 
 ## Privacy

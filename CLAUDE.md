@@ -21,7 +21,8 @@ packages/
 ├── worker/         # CF Worker: tracking endpoint + query API
 ├── dashboard/      # Astro static site: analytics dashboard
 ├── tracker/        # Lightweight client-side tracking script
-└── email-reports/  # CF Worker cron: weekly/monthly email digests
+├── email-reports/  # CF Worker cron: weekly/monthly email digests
+└── landing/        # Astro static site: flarelytics.dev marketing + docs
 ```
 
 ## Worker Endpoints
@@ -30,6 +31,7 @@ packages/
 |--------|------|------|---------|
 | POST | `/track` | CORS origin check | Record events |
 | GET | `/query` | X-API-Key header | Run predefined analytics queries |
+| GET | `/public-stats` | CORS origin check | Public analytics summary (no API key) |
 | GET | `/tracker.js` | None | Serve auto-configured tracking script |
 | GET | `/health` | None | Health check |
 | GET | `/config` | None | Available queries and event types |
@@ -41,6 +43,7 @@ Events written to Analytics Engine:
 - `outbound` — External link clicks (destination in blob5)
 - `timing` — Time on page in seconds (fires on `visibilitychange`); seconds stored in `double2`
 - `scroll_depth` — Scroll milestones 25/50/75/100% via IntersectionObserver (opt-in); depth in blob5
+- `bot_hit` — Bot traffic recorded separately for analytics; UA in blob5
 - `(custom)` — Any event via `flarelytics.track('event', { props })` — name in blob4, props in blob5
 
 ## Privacy
@@ -117,17 +120,21 @@ All queries must include `AND blob10 = '${site}'` to scope to a single site.
 
 ## Available Queries
 
-23 queries available via `GET /query?q=<name>&period=<period>&site=<hostname>`:
+37 queries available via `GET /query?q=<name>&period=<period>&site=<hostname>`:
 
-**Traffic:** `top-pages`, `top-pages-visitors`, `top-pages-stories`, `daily-views`, `daily-unique-visitors`, `new-vs-returning`
+**Traffic:** `top-pages`, `top-pages-visitors`, `top-pages-stories`, `daily-views`, `daily-unique-visitors`, `new-vs-returning`, `total-sessions`
 
-**Referrers:** `referrers`, `utm-campaigns`, `utm-campaign-trend`
+**Referrers:** `referrers`, `referrers-by-page` (?page=), `utm-campaigns`, `utm-campaign-trend`, `utm-by-page` (?page=)
 
-**Content:** `page-views-over-time` (?page=), `page-timing`, `bounce-rate-by-page` (?event_name=seconds), `scroll-depth`, `scroll-depth-by-page`
+**Content:** `page-views-over-time` (?page=), `page-timing`, `timing-by-page` (?page=), `bounce-rate-by-page` (?event_name=seconds), `scroll-depth`, `scroll-depth-by-page`, `scroll-depth-for-page` (?page=)
 
 **Geo/Devices:** `countries`, `countries-by-page` (?page=), `devices`, `browsers`
 
 **Conversions:** `outbound-links`, `page-performance`, `custom-events`, `conversion-funnel`, `funnel-by-event` (?event_name=)
+
+**Live (30-min window):** `live-visitors`, `live-pages`, `live-referrers`, `hourly-today`
+
+**Bot reporting:** `bot-hits`, `bot-hits-total`, `bot-pages`, `bot-daily`, `bot-countries`
 
 Periods: `7d`, `14d`, `30d`, `60d`, `90d`, `180d`
 

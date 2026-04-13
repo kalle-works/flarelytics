@@ -40,6 +40,12 @@ None.
 
 The tracker script is served from your worker, so it updates automatically when you redeploy the worker.
 
+### New endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /public-stats` | Public analytics summary (no API key). Returns 30-day pageviews, visitors, top pages, referrers, countries, devices, and bot hits. Used by the flarelytics.dev/stats page. |
+
 ### New queries
 
 These queries are available after upgrading the worker:
@@ -55,6 +61,11 @@ These queries are available after upgrading the worker:
 | `timing-by-page` | Avg time on a specific page (?page=) |
 | `scroll-depth-for-page` | Scroll depth for a specific page (?page=) |
 | `utm-by-page` | UTM campaigns for a specific page (?page=) |
+| `total-sessions` | Total sessions in period (based on timing events) |
+| `live-visitors` | Visitors and pageviews in the last 30 minutes |
+| `live-pages` | Most visited pages in the last 30 minutes |
+| `live-referrers` | Top referrers in the last 30 minutes |
+| `hourly-today` | Pageviews by hour for the last 24 hours |
 
 ### New error response format
 
