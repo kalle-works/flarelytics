@@ -19,7 +19,7 @@ Marginal cost per hosted customer is near-zero on Cloudflare. Price 50-70% below
 **Goal:** Ship v1.0 and get the first 100 users.
 
 ### Product
-- [ ] **CLI setup tool** — `npx create-flarelytics` interactive wizard. Prompts for CF account, dataset, origins. Generates wrangler.toml, validates API token, deploys worker in one command. Target: 0 → tracking in under 3 minutes.
+- [x] **CLI setup tool** — `npx create-flarelytics` interactive wizard. Prompts for CF account, dataset, origins. Generates wrangler.toml, validates API token, deploys worker in one command. Target: 0 → tracking in under 3 minutes.
 - [ ] **Fix email-reports config** — Remove hardcoded MailToolFinder values (SITE_NAME, SITE_URL, EMAIL_FROM). Make fully configurable via wrangler.toml vars.
 - [ ] **Dashboard improvements** — Custom date range picker (beyond 7d/30d/90d). Page detail view (click a page → see its referrers, UTM, events). Country flags next to country codes.
 - [ ] **Public demo dashboard** — Snapshot data at flarelytics.dev/demo. Developers want to see the product before deploying.
@@ -181,7 +181,7 @@ Marginal cost per hosted customer is near-zero on Cloudflare. Price 50-70% below
 
 ## Immediate Next Steps
 
-1. Create feature branch for CLI setup tool (`npx create-flarelytics`)
+1. ~~Create feature branch for CLI setup tool (`npx create-flarelytics`)~~ Done (packages/create-flarelytics)
 2. ~~Write first 10 worker tests~~ Done (worker + tracker tests)
 3. ~~Set up GitHub Actions (test on push)~~ Done (ci.yml, deploy workflows)
 4. Submit to awesome-selfhosted
