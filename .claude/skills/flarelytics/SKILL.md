@@ -4,7 +4,7 @@ description: |
   Add Flarelytics privacy-first analytics (Cloudflare Workers, no cookies) to any project.
   Detects tech stack, installs the tracker, configures origins, and verifies events are flowing.
   Use when: "add analytics", "add flarelytics", "track pageviews", "install tracker",
-  "add scroll depth tracking", "set up web analytics".
+  "add scroll depth tracking", "set up web analytics", "query analytics", "get analytics data".
 user-invocable: true
 ---
 
@@ -12,8 +12,9 @@ user-invocable: true
 
 You are integrating Flarelytics — privacy-first, cookie-free web analytics on Cloudflare Workers.
 
-Tracks: pageviews, outbound clicks, time on page, scroll depth (opt-in), custom events.
+Tracks: pageviews, outbound clicks, time on page, scroll depth (opt-in), bot hits, custom events.
 No cookies. No PII. GDPR/CCPA compliant by design.
+37 built-in queries + public stats endpoint (no API key needed).
 
 Full query reference: `.claude/skills/flarelytics/references/queries.md` — load it if the user asks about available data or queries.
 
@@ -93,7 +94,11 @@ track('signup', { props: { plan: 'pro' } }) // custom event
 
 **Stack-specific placement:**
 
-- **Astro** — `src/layouts/BaseLayout.astro` inside `<head>`
+- **Astro** — `src/layouts/BaseLayout.astro` inside `<head>`. Add a preconnect hint for faster loading:
+  ```html
+  <link rel="preconnect" href="WORKER_URL" crossorigin />
+  <script defer data-endpoint="WORKER_URL" data-scroll-depth src="WORKER_URL/tracker.js"></script>
+  ```
 - **Next.js** — `app/layout.tsx` using `next/script` with `strategy="afterInteractive"`
   ```tsx
   import Script from 'next/script'
@@ -101,6 +106,12 @@ track('signup', { props: { plan: 'pro' } }) // custom event
   ```
 - **Nuxt** — `plugins/flarelytics.client.ts`
 - **SvelteKit** — `src/app.html` or `src/routes/+layout.svelte`
+
+**CSP headers:** If the site uses Content-Security-Policy, add the worker URL:
+```
+script-src 'self' WORKER_URL;
+connect-src 'self' WORKER_URL;
+```
 
 ---
 
@@ -156,6 +167,46 @@ Script tag global:
 ```js
 window.flarelytics.track('signup', { props: { plan: 'pro' } })
 ```
+
+**Real-world examples (from kiiru.fi):**
+
+```js
+// Article read completion — fires when user scrolls to end AND spends 30+ seconds
+window.flarelytics?.track('read_complete', { props: { time_seconds: String(seconds) } })
+
+// Social share tracking
+window.flarelytics?.track('share', { props: { method: 'bluesky', url: window.location.href } })
+
+// Newsletter signup
+window.flarelytics?.track('newsletter_signup', { props: { location: window.location.pathname } })
+```
+
+Use `window.flarelytics?.track()` with optional chaining — safe if the tracker hasn't loaded yet.
+
+---
+
+## Step 7: Query analytics data (optional)
+
+For scripts or dashboards that need to fetch analytics programmatically:
+
+```bash
+# Public stats (no API key) — 30-day summary
+curl "WORKER_URL/public-stats?site=HOSTNAME"
+
+# Authenticated query — any of the 37 built-in queries
+curl "WORKER_URL/query?q=top-pages&period=30d&site=HOSTNAME" \
+  -H "X-API-Key: QUERY_API_KEY"
+
+# Per-page drill-down
+curl "WORKER_URL/query?q=referrers-by-page&period=30d&site=HOSTNAME&page=/my-article" \
+  -H "X-API-Key: QUERY_API_KEY"
+
+# Live data (last 30 minutes)
+curl "WORKER_URL/query?q=live-visitors&period=7d&site=HOSTNAME" \
+  -H "X-API-Key: QUERY_API_KEY"
+```
+
+See `.claude/skills/flarelytics/references/queries.md` for the full list of 37 queries.
 
 ---
 
