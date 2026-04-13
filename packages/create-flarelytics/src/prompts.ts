@@ -86,7 +86,7 @@ export async function main(argv: string[]): Promise<void> {
       message: 'Where should we create your project?',
       placeholder: './my-analytics',
       defaultValue: './my-analytics',
-      validate: (v) => {
+      validate: (v = '') => {
         if (!v.trim()) return 'Directory name is required';
       },
     });
@@ -100,7 +100,7 @@ export async function main(argv: string[]): Promise<void> {
   const accountId = await p.text({
     message: 'Cloudflare Account ID',
     placeholder: 'Find at: dash.cloudflare.com → any zone → Overview sidebar',
-    validate: (v) => {
+    validate: (v = '') => {
       if (!v.trim()) return 'Account ID is required';
       if (!/^[a-f0-9]{32}$/.test(v.trim())) return 'Account ID should be a 32-character hex string';
     },
@@ -110,7 +110,7 @@ export async function main(argv: string[]): Promise<void> {
   // CF API Token
   const apiToken = await p.password({
     message: 'Cloudflare API Token',
-    validate: (v) => {
+    validate: (v = '') => {
       if (!v.trim()) return 'API token is required';
     },
   });
@@ -139,7 +139,7 @@ export async function main(argv: string[]): Promise<void> {
   const allowedOrigins = await p.text({
     message: 'Allowed origins (comma-separated)',
     placeholder: 'https://mysite.com,http://localhost:3000',
-    validate: (v) => {
+    validate: (v = '') => {
       if (!v.trim()) return 'At least one origin is required';
       const origins = v.split(',').map((o) => o.trim());
       for (const origin of origins) {
@@ -156,7 +156,7 @@ export async function main(argv: string[]): Promise<void> {
     message: 'Dataset name',
     placeholder: 'flarelytics',
     defaultValue: 'flarelytics',
-    validate: (v) => {
+    validate: (v = '') => {
       if (!v.trim()) return 'Dataset name is required';
       if (!/^[a-z0-9-]+$/.test(v.trim())) return 'Only lowercase letters, numbers, and hyphens allowed';
     },
