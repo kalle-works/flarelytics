@@ -1,0 +1,53 @@
+{
+  "name": "create-flarelytics",
+  "version": "0.1.0",
+  "description": "Set up Flarelytics privacy-first analytics in under 3 minutes",
+  "type": "module",
+  "bin": {
+    "create-flarelytics": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.1.0",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kalle-works/flarelytics.git",
+    "directory": "packages/create-flarelytics"
+  },
+  "homepage": "https://flarelytics.dev",
+  "bugs": {
+    "url": "https://github.com/kalle-works/flarelytics/issues"
+  },
+  "keywords": [
+    "analytics",
+    "cloudflare",
+    "privacy",
+    "create",
+    "cli",
+    "workers"
+  ],
+  "license": "MIT",
+  "author": "Kalle Lamminpää"
+}

@@ -31,6 +31,15 @@ jobs:
       - name: Build tracker
         run: npm run build
         working-directory: packages/tracker
+      - name: Type check create-flarelytics
+        run: npx tsc --noEmit
+        working-directory: packages/create-flarelytics
+      - name: Test create-flarelytics
+        run: npx vitest run
+        working-directory: packages/create-flarelytics
+      - name: Build create-flarelytics
+        run: npm run build
+        working-directory: packages/create-flarelytics
       - name: Build landing
         run: npx astro build
         working-directory: packages/landing
