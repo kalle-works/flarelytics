@@ -23,18 +23,18 @@ Marginal cost per hosted customer is near-zero on Cloudflare. Price 50-70% below
 - [ ] **Fix email-reports config** — Remove hardcoded MailToolFinder values (SITE_NAME, SITE_URL, EMAIL_FROM). Make fully configurable via wrangler.toml vars.
 - [ ] **Dashboard improvements** — Custom date range picker (beyond 7d/30d/90d). Page detail view (click a page → see its referrers, UTM, events). Country flags next to country codes.
 - [ ] **Public demo dashboard** — Snapshot data at flarelytics.dev/demo. Developers want to see the product before deploying.
-- [ ] **Dogfood** — Deploy Flarelytics tracking on flarelytics.dev itself.
+- [x] **Dogfood** — Flarelytics tracking deployed on flarelytics.dev with public stats page at /stats.
 
 ### Technical
-- [ ] **Test suite** — Vitest for worker (query templates, bot filtering, CORS, hash rotation), tracker (pageview detection, outbound links, sendBeacon), email-reports (HTML generation, anomaly detection). Target: 80%+ coverage.
-- [ ] **CI/CD** — GitHub Actions: test on push, build all packages, deploy worker on release tag, publish npm packages on version tag.
-- [ ] **npm packages** — Publish `@flarelytics/tracker` (ESM+CJS+types). The worker and dashboard stay as source (clone-and-deploy model).
+- [x] **Test suite** — Vitest for worker and tracker. Worker tests cover query templates, bot filtering, CORS. Tracker tests cover pageview detection, outbound links, sendBeacon.
+- [x] **CI/CD** — GitHub Actions: ci.yml (test on push), deploy-dashboard.yml, deploy-landing.yml, publish-tracker.yml.
+- [x] **npm packages** — `@flarelytics/tracker` published (ESM+CJS+types). The worker and dashboard stay as source (clone-and-deploy model).
 - [ ] **Rate limiting** — Per-origin throttle on /track endpoint. Prevent abuse without external deps.
 - [ ] **API versioning** — Prefix query endpoints with /v1/. Don't break existing integrations later.
 
 ### Growth
-- [ ] **README rewrite** — 5-minute quickstart with GIF/video showing the full flow.
-- [ ] **API reference docs** — All 10 query types, params, response shapes, example responses.
+- [x] **README rewrite** — 5-minute quickstart with API examples, multi-site setup, troubleshooting.
+- [x] **API reference docs** — Full API docs at flarelytics.dev/docs/api with all query types, params, and examples.
 - [ ] **Migration guides** — "Replace Google Analytics in 5 minutes", "Switch from Plausible".
 - [ ] **awesome-selfhosted** — Submit PR to awesome-selfhosted/awesome-selfhosted list.
 - [ ] **awesome-cloudflare** — Submit PR to cloudflare/awesome list.
@@ -179,13 +179,13 @@ Marginal cost per hosted customer is near-zero on Cloudflare. Price 50-70% below
 
 ---
 
-## Immediate Next Steps (This Week)
+## Immediate Next Steps
 
-1. Create feature branch for CLI setup tool
-2. Write first 10 worker tests
-3. Set up GitHub Actions (test on push)
+1. Create feature branch for CLI setup tool (`npx create-flarelytics`)
+2. ~~Write first 10 worker tests~~ Done (worker + tracker tests)
+3. ~~Set up GitHub Actions (test on push)~~ Done (ci.yml, deploy workflows)
 4. Submit to awesome-selfhosted
-5. Deploy Flarelytics tracking on flarelytics.dev
+5. ~~Deploy Flarelytics tracking on flarelytics.dev~~ Done (self-tracking + /stats page)
 
 ---
 
