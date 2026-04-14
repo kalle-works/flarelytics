@@ -35,7 +35,7 @@ function cancel(): never {
 }
 
 export async function main(argv: string[]): Promise<void> {
-  const version = '0.1.0';
+  const version = '1.0.0';
 
   // --help flag
   if (argv.includes('--help') || argv.includes('-h')) {
