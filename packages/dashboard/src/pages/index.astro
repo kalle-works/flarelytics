@@ -413,10 +413,12 @@ import Layout from '../layouts/Layout.astro';
 
 <script>
   import Chart from 'chart.js/auto';
-  // Expose Chart globally so the inline dashboard script can use it.
-  // Module scripts are deferred, but chart rendering only happens after async
-  // data fetches complete, so Chart is always available before it's needed.
+  // Expose Chart globally for the inline dashboard script. Module scripts
+  // are deferred (run after HTML parsing), while the inline script fires
+  // fetch calls during parsing. The 'chartjs-ready' event ensures render
+  // functions wait for Chart.js even when API responses beat the module.
   (window as any).Chart = Chart;
+  window.dispatchEvent(new Event('chartjs-ready'));
 </script>
 
 <style>
@@ -1221,6 +1223,7 @@ import Layout from '../layouts/Layout.astro';
   }
 
   function renderBotChart(data) {
+    if (!window.Chart) { whenChart(function() { renderBotChart(data); }); return; }
     var el = document.getElementById('chart-bot-daily');
     var r = rows(data);
     destroyChart('chart-bot-daily');
@@ -1313,6 +1316,7 @@ import Layout from '../layouts/Layout.astro';
     document.getElementById('dd-visitors').textContent = '-';
     document.getElementById('dd-time').textContent = '-';
     document.getElementById('dd-read100').textContent = '-';
+    destroyChart('dd-chart');
     document.getElementById('dd-chart').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
     document.getElementById('dd-scroll-depth').innerHTML = '';
     document.querySelector('#table-dd-referrers tbody').innerHTML = '';
@@ -1373,6 +1377,7 @@ import Layout from '../layouts/Layout.astro';
   });
 
   function renderDrilldownChart(data) {
+    if (!window.Chart) { whenChart(function() { renderDrilldownChart(data); }); return; }
     var el = document.getElementById('dd-chart');
     destroyChart('dd-chart');
     if (!data.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No data</div>'; return; }
@@ -1451,6 +1456,17 @@ import Layout from '../layouts/Layout.astro';
     }
   }
 
+  // Guard against race: module scripts (Chart.js) are deferred and run after
+  // the inline script fires fetch calls. On slow CDN connections the API
+  // response can arrive before window.Chart is set.
+  var _chartPending = [];
+  window.addEventListener('chartjs-ready', function() {
+    _chartPending.splice(0).forEach(function(fn) { fn(); });
+  }, { once: true });
+  function whenChart(fn) {
+    if (window.Chart) { fn(); } else { _chartPending.push(fn); }
+  }
+
   var CHART_DEFAULTS = {
     font: "'SF Mono','Fira Code','Menlo',monospace",
     muted: '#78716c',
@@ -1462,6 +1478,7 @@ import Layout from '../layouts/Layout.astro';
   };
 
   function renderChart(data) {
+    if (!window.Chart) { whenChart(function() { renderChart(data); }); return; }
     var el = document.getElementById('chart-traffic');
     var r = rows(data);
     destroyChart('chart-traffic');
@@ -1518,6 +1535,7 @@ import Layout from '../layouts/Layout.astro';
   }
 
   function renderLiveChart(hourlyData) {
+    if (!window.Chart) { whenChart(function() { renderLiveChart(hourlyData); }); return; }
     var el = document.getElementById('live-chart');
     if (!el) return;
     var r = rows(hourlyData);
@@ -1658,6 +1676,7 @@ import Layout from '../layouts/Layout.astro';
   function stopLive() {
     liveActive = false;
     if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
+    destroyChart('live-chart');
     var panel = document.getElementById('live-panel');
     var btn = document.getElementById('live-btn');
     var dot = document.getElementById('live-dot');
