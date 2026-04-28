@@ -12,7 +12,7 @@ import Layout from '../layouts/Layout.astro';
       <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
     </svg>
     <h1 style="font-family:var(--mono);font-size:1.25rem;font-weight:600;margin-bottom:0.5rem;">flarelytics</h1>
-    <p style="font-size:0.875rem;color:var(--ink-muted);margin-bottom:1.5rem;">Enter your API key to view analytics.</p>
+    <p style="font-size:0.875rem;color:var(--ink-muted);margin-bottom:1.5rem;">Enter your API key and worker URL.</p>
     <form id="auth-form" style="display:flex;flex-direction:column;gap:0.75rem;">
       <input
         id="api-key"
@@ -28,28 +28,15 @@ import Layout from '../layouts/Layout.astro';
         required
         style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-family:var(--mono);font-size:0.8125rem;color:var(--ink);outline:none;"
       />
-      <input
-        id="site-hostname"
-        type="text"
-        placeholder="Site hostname (e.g. yoursite.com)"
-        required
-        style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-family:var(--mono);font-size:0.8125rem;color:var(--ink);outline:none;"
-      />
-      <input
-        id="site-label"
-        type="text"
-        placeholder="Label (optional, e.g. My Blog)"
-        style="min-height:44px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);padding:0 1rem;font-family:var(--mono);font-size:0.8125rem;color:var(--ink);outline:none;"
-      />
       <button
         type="submit"
         style="min-height:44px;border-radius:var(--radius-lg);background:#1c1917;color:white;font-family:var(--mono);font-size:0.8125rem;font-weight:600;border:none;cursor:pointer;transition:background 120ms;"
         onmouseover="this.style.background='#292524'"
         onmouseout="this.style.background='#1c1917'"
       >
-        View Dashboard
+        Connect
       </button>
-      <p id="auth-error" style="display:none;font-size:0.875rem;color:var(--red);">Could not connect. Check your API key and worker URL.</p>
+      <p id="auth-error" style="display:none;font-size:0.875rem;color:var(--red);"></p>
     </form>
   </div>
 
@@ -776,33 +763,24 @@ import Layout from '../layouts/Layout.astro';
     e.preventDefault();
     var key = document.getElementById('api-key').value.trim();
     var url = document.getElementById('worker-url').value.trim().replace(/\/$/, '');
-    var siteInput = document.getElementById('site-hostname').value.trim().replace(/^www\./, '');
-    var labelInput = document.getElementById('site-label').value.trim();
-    if (!key || !url || !siteInput) return;
+    if (!key || !url) return;
+    authError.style.display = 'none';
 
-    fetch(url + '/query?q=daily-views&period=7d&site=' + encodeURIComponent(siteInput), { headers: { 'X-API-Key': key } })
+    fetch(url + '/admin/sites', { headers: { 'X-API-Key': key } })
       .then(function(r) {
-        if (r.status === 401) throw new Error('Unauthorized');
+        if (r.status === 401) throw new Error('auth');
+        if (!r.ok) throw new Error('connect');
         return r.json();
       })
-      .then(function() {
-        authError.style.display = 'none';
-
-        // Check if url+site already in list
-        var existing = -1;
-        for (var i = 0; i < session.sites.length; i++) {
-          if (session.sites[i].url === url && session.sites[i].site === siteInput) {
-            existing = i;
-            break;
-          }
-        }
-        if (existing >= 0) {
-          session.current = existing;
-        } else {
-          session.sites.push({ url: url, key: key, site: siteInput, label: labelInput || siteInput });
-          session.current = session.sites.length - 1;
-        }
-
+      .then(function(data) {
+        var origins = data.sites || [];
+        if (!origins.length) throw new Error('nosites');
+        origins.forEach(function(origin) {
+          var hostname = origin.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
+          var exists = session.sites.findIndex(function(s) { return s.url === url && s.site === hostname; });
+          if (exists < 0) session.sites.push({ url: url, key: key, site: hostname, label: hostname });
+        });
+        session.current = 0;
         try { localStorage.setItem('flarelytics_session_hint', JSON.stringify({ url: url })); } catch(e) {}
         saveSession();
         applySession();
@@ -810,7 +788,12 @@ import Layout from '../layouts/Layout.astro';
         dashboard.style.display = 'block';
         loadAll();
       })
-      .catch(function() { authError.style.display = 'block'; });
+      .catch(function(err) {
+        authError.textContent = err.message === 'auth' ? 'Invalid API key.' :
+          err.message === 'nosites' ? 'No sites configured on this worker.' :
+          'Could not connect. Check the worker URL.';
+        authError.style.display = 'block';
+      });
   });
 
   // Period buttons
