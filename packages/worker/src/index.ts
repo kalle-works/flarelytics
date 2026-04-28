@@ -786,7 +786,10 @@ function handleConfig(env: Env): Response {
   return Response.json({
     name: 'flarelytics',
     version: VERSION,
-    queries: Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
+    queries: [
+      ...Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
+      { name: 'new-vs-returning', description: 'New vs returning visitors in the selected period' },
+    ],
     periods: Object.keys(PERIOD_MAP),
     tracking: {
       endpoint: '/track',

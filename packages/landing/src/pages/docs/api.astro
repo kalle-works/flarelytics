@@ -9,14 +9,17 @@ const queryCategories = [
       { name: 'daily-views', desc: 'Pageviews per day' },
       { name: 'daily-unique-visitors', desc: 'Unique visitors per day' },
       { name: 'new-vs-returning', desc: 'New vs returning visitor ratio' },
+      { name: 'total-sessions', desc: 'Total session count in period' },
     ],
   },
   {
     label: 'Referrers',
     queries: [
       { name: 'referrers', desc: 'Traffic sources by hostname' },
+      { name: 'referrers-by-page', desc: 'Referrers for a specific page', extra: '?page=/path' },
       { name: 'utm-campaigns', desc: 'UTM campaign performance' },
       { name: 'utm-campaign-trend', desc: 'Campaign traffic over time' },
+      { name: 'utm-by-page', desc: 'UTM breakdown for a specific page', extra: '?page=/path' },
     ],
   },
   {
@@ -24,9 +27,11 @@ const queryCategories = [
     queries: [
       { name: 'page-views-over-time', desc: 'Views over time for a specific page', extra: '?page=/path' },
       { name: 'page-timing', desc: 'Average time on page' },
+      { name: 'timing-by-page', desc: 'Time on page per URL', extra: '?page=/path' },
       { name: 'bounce-rate-by-page', desc: 'Bounce rate per page', extra: '?event_name=seconds' },
       { name: 'scroll-depth', desc: 'Scroll milestone aggregates (25/50/75/100%)' },
       { name: 'scroll-depth-by-page', desc: 'Scroll depth broken down by page' },
+      { name: 'scroll-depth-for-page', desc: 'Scroll depth for a specific page', extra: '?page=/path' },
     ],
   },
   {
@@ -46,6 +51,25 @@ const queryCategories = [
       { name: 'custom-events', desc: 'Custom event counts and properties' },
       { name: 'conversion-funnel', desc: 'Multi-step funnel completion rates' },
       { name: 'funnel-by-event', desc: 'Funnel analysis for a specific event', extra: '?event_name=signup' },
+    ],
+  },
+  {
+    label: 'Live (30-min window)',
+    queries: [
+      { name: 'live-visitors', desc: 'Active visitors in the last 30 minutes' },
+      { name: 'live-pages', desc: 'Active pages in the last 30 minutes' },
+      { name: 'live-referrers', desc: 'Active referrers in the last 30 minutes' },
+      { name: 'hourly-today', desc: "Today's traffic broken down by hour" },
+    ],
+  },
+  {
+    label: 'Bot Traffic',
+    queries: [
+      { name: 'bot-hits', desc: 'Bot requests by user-agent' },
+      { name: 'bot-hits-total', desc: 'Total bot hit count in period' },
+      { name: 'bot-pages', desc: 'Pages most targeted by bots' },
+      { name: 'bot-daily', desc: 'Bot traffic per day' },
+      { name: 'bot-countries', desc: 'Bot traffic by country' },
     ],
   },
 ];
