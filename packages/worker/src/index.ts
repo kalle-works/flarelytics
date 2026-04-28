@@ -11,6 +11,7 @@
 
 interface Env {
   ANALYTICS: AnalyticsEngineDataset;
+  SITE_CONFIG: KVNamespace;
   ALLOWED_ORIGINS: string;
   QUERY_API_KEY: string;
   CF_ACCOUNT_ID: string;
@@ -80,19 +81,27 @@ export function isBot(ua: string): boolean {
 }
 
 function getAllowedOrigins(env: Env): string[] {
-  return env.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
+  return env.ALLOWED_ORIGINS ? env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean) : [];
 }
 
-function corsHeaders(origin: string | null, env: Env, allowAny = false): Record<string, string> {
+// Reads from KV first; falls back to ALLOWED_ORIGINS env var for backwards compat.
+async function fetchAllowedOrigins(env: Env): Promise<string[]> {
+  if (env.SITE_CONFIG) {
+    const raw = await env.SITE_CONFIG.get('allowed_origins');
+    if (raw) return JSON.parse(raw) as string[];
+  }
+  return getAllowedOrigins(env);
+}
+
+function corsHeaders(origin: string | null, allowedOrigins: string[], allowAny = false): Record<string, string> {
   const headers: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, DELETE',
     'Access-Control-Allow-Headers': 'Content-Type, X-API-Key',
     'Access-Control-Max-Age': '86400',
   };
   if (allowAny && origin) {
-    // API-key authenticated endpoints allow any origin
     headers['Access-Control-Allow-Origin'] = origin;
-  } else if (origin && getAllowedOrigins(env).includes(origin)) {
+  } else if (origin && allowedOrigins.includes(origin)) {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Access-Control-Allow-Credentials'] = 'true';
   }
@@ -135,11 +144,11 @@ function normalizePayload(raw: TrackPayload | LegacyPayload): TrackPayload {
 
 async function handleTrack(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get('Origin');
-  const cors = corsHeaders(origin, env);
+  const allowed = await fetchAllowedOrigins(env);
+  const cors = corsHeaders(origin, allowed);
 
-  const allowed = getAllowedOrigins(env);
   if (origin && !allowed.includes(origin)) {
-    return Response.json({ error: 'Forbidden', hint: 'Origin not in ALLOWED_ORIGINS. Check your worker wrangler.toml.' }, { status: 403, headers: cors });
+    return Response.json({ error: 'Forbidden', hint: 'Origin not in allowed list. Add it via POST /admin/sites or ALLOWED_ORIGINS in wrangler.toml.' }, { status: 403, headers: cors });
   }
 
   const ua = request.headers.get('User-Agent') || '';
@@ -668,7 +677,7 @@ async function handleNewVsReturning(env: Env, site: string, period: string, data
 
 async function handleQuery(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get('Origin');
-  const cors = corsHeaders(origin, env, true);
+  const cors = corsHeaders(origin, [], true);
 
   const apiKey = request.headers.get('X-API-Key');
   if (!apiKey || apiKey !== env.QUERY_API_KEY) {
@@ -782,6 +791,59 @@ function handleTrackerJs(request: Request): Response {
   });
 }
 
+async function handleAdminSites(request: Request, env: Env): Promise<Response> {
+  const cors = corsHeaders(request.headers.get('Origin'), [], true);
+
+  const apiKey = request.headers.get('X-API-Key');
+  if (!apiKey || apiKey !== env.QUERY_API_KEY) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401, headers: cors });
+  }
+
+  if (!env.SITE_CONFIG) {
+    return Response.json({ error: 'KV not configured', hint: 'Add a [[kv_namespaces]] binding named SITE_CONFIG to wrangler.toml and deploy.' }, { status: 503, headers: cors });
+  }
+
+  const KV_KEY = 'allowed_origins';
+
+  async function readSites(): Promise<string[]> {
+    const raw = await env.SITE_CONFIG.get(KV_KEY);
+    if (raw) return JSON.parse(raw);
+    // First access: migrate from env var
+    return getAllowedOrigins(env);
+  }
+
+  if (request.method === 'GET') {
+    const sites = await readSites();
+    return Response.json({ sites }, { headers: cors });
+  }
+
+  if (request.method === 'POST') {
+    const body = await request.json() as { origin?: string };
+    const origin = body?.origin?.trim();
+    if (!origin) return Response.json({ error: 'origin required' }, { status: 400, headers: cors });
+    try { new URL(origin); } catch {
+      return Response.json({ error: 'origin must be a valid URL, e.g. https://example.com' }, { status: 400, headers: cors });
+    }
+    const sites = await readSites();
+    if (!sites.includes(origin)) {
+      sites.push(origin);
+      await env.SITE_CONFIG.put(KV_KEY, JSON.stringify(sites));
+    }
+    return Response.json({ sites }, { headers: cors });
+  }
+
+  if (request.method === 'DELETE') {
+    const body = await request.json() as { origin?: string };
+    const origin = body?.origin?.trim();
+    if (!origin) return Response.json({ error: 'origin required' }, { status: 400, headers: cors });
+    const sites = (await readSites()).filter((s) => s !== origin);
+    await env.SITE_CONFIG.put(KV_KEY, JSON.stringify(sites));
+    return Response.json({ sites }, { headers: cors });
+  }
+
+  return Response.json({ error: 'Method not allowed' }, { status: 405, headers: cors });
+}
+
 function handleConfig(env: Env): Response {
   return Response.json({
     name: 'flarelytics',
@@ -834,8 +896,7 @@ interface PublicStatsResult {
 
 async function handlePublicStats(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get('Origin');
-  // Public stats endpoint is callable from any origin (same as X-API-Key authenticated queries)
-  const cors = corsHeaders(origin, env, true);
+  const cors = corsHeaders(origin, [], true);
 
   const url = new URL(request.url);
   const siteParam = url.searchParams.get('site');
@@ -978,9 +1039,9 @@ export default {
     const { pathname } = url;
 
     if (request.method === 'OPTIONS') {
-      // Allow any origin for preflight if the request includes X-API-Key
       const allowAny = request.headers.get('Access-Control-Request-Headers')?.includes('x-api-key') ?? false;
-      return new Response(null, { status: 204, headers: corsHeaders(request.headers.get('Origin'), env, allowAny) });
+      const preflightOrigins = allowAny ? [] : await fetchAllowedOrigins(env);
+      return new Response(null, { status: 204, headers: corsHeaders(request.headers.get('Origin'), preflightOrigins, allowAny) });
     }
 
     if (pathname === '/track' && request.method === 'POST') return handleTrack(request, env);
@@ -989,7 +1050,8 @@ export default {
     if (pathname === '/health' && request.method === 'GET') return handleHealth(env);
     if (pathname === '/public-stats' && request.method === 'GET') return handlePublicStats(request, env);
     if (pathname === '/query' && request.method === 'GET') return handleQuery(request, env);
+    if (pathname === '/admin/sites') return handleAdminSites(request, env);
 
-    return Response.json({ error: 'Not Found', hint: 'Available endpoints: POST /track, GET /query, GET /public-stats, GET /tracker.js, GET /health, GET /config' }, { status: 404 });
+    return Response.json({ error: 'Not Found', hint: 'Available endpoints: POST /track, GET /query, GET /public-stats, GET /tracker.js, GET /health, GET /config, GET|POST|DELETE /admin/sites' }, { status: 404 });
   },
 };

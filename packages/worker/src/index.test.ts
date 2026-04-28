@@ -1,5 +1,95 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { isBot, deviceType, browserName } from './index';
+import worker, { isBot, deviceType, browserName } from './index';
+
+function makeEnv(overrides: Record<string, unknown> = {}) {
+  const store = new Map<string, string>();
+  return {
+    ANALYTICS: { writeDataPoint: vi.fn() },
+    SITE_CONFIG: {
+      get: vi.fn(async (k: string) => store.get(k) ?? null),
+      put: vi.fn(async (k: string, v: string) => { store.set(k, v); }),
+    } as unknown as KVNamespace,
+    ALLOWED_ORIGINS: 'https://example.com',
+    QUERY_API_KEY: 'test-key',
+    CF_ACCOUNT_ID: '',
+    CF_API_TOKEN: '',
+    DATASET_NAME: 'test',
+    ...overrides,
+  };
+}
+
+describe('GET /admin/sites', () => {
+  it('returns 401 without api key', async () => {
+    const req = new Request('https://worker.test/admin/sites');
+    const res = await worker.fetch(req, makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns env var origins when KV is empty', async () => {
+    const req = new Request('https://worker.test/admin/sites', { headers: { 'X-API-Key': 'test-key' } });
+    const res = await worker.fetch(req, makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { sites: string[] };
+    expect(body.sites).toContain('https://example.com');
+  });
+});
+
+describe('POST /admin/sites', () => {
+  it('adds a new origin', async () => {
+    const env = makeEnv();
+    const req = new Request('https://worker.test/admin/sites', {
+      method: 'POST',
+      headers: { 'X-API-Key': 'test-key', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin: 'https://newsite.com' }),
+    });
+    const res = await worker.fetch(req, env, {} as ExecutionContext);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { sites: string[] };
+    expect(body.sites).toContain('https://newsite.com');
+    expect(env.SITE_CONFIG.put).toHaveBeenCalled();
+  });
+
+  it('rejects invalid origin', async () => {
+    const req = new Request('https://worker.test/admin/sites', {
+      method: 'POST',
+      headers: { 'X-API-Key': 'test-key', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin: 'not-a-url' }),
+    });
+    const res = await worker.fetch(req, makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(400);
+  });
+
+  it('does not duplicate existing origin', async () => {
+    const env = makeEnv();
+    const addReq = () => new Request('https://worker.test/admin/sites', {
+      method: 'POST',
+      headers: { 'X-API-Key': 'test-key', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin: 'https://example.com' }),
+    });
+    await worker.fetch(addReq(), env, {} as ExecutionContext);
+    const res = await worker.fetch(addReq(), env, {} as ExecutionContext);
+    const body = await res.json() as { sites: string[] };
+    expect(body.sites.filter((s: string) => s === 'https://example.com').length).toBe(1);
+  });
+});
+
+describe('DELETE /admin/sites', () => {
+  it('removes an origin', async () => {
+    const env = makeEnv();
+    // Seed KV
+    await env.SITE_CONFIG.put('allowed_origins', JSON.stringify(['https://example.com', 'https://remove-me.com']));
+    const req = new Request('https://worker.test/admin/sites', {
+      method: 'DELETE',
+      headers: { 'X-API-Key': 'test-key', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin: 'https://remove-me.com' }),
+    });
+    const res = await worker.fetch(req, env, {} as ExecutionContext);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { sites: string[] };
+    expect(body.sites).not.toContain('https://remove-me.com');
+    expect(body.sites).toContain('https://example.com');
+  });
+});
 
 describe('isBot', () => {
   it('detects Googlebot', () => {
