@@ -65,7 +65,24 @@ import Layout from '../layouts/Layout.astro';
           <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
         </svg>
         <h1 style="font-family:var(--mono);font-size:1rem;font-weight:500;">flarelytics</h1>
-        <select id="site-switcher" style="display:none;font-family:var(--mono);font-size:0.8125rem;border:1px solid var(--border);background:var(--surface-raised);border-radius:var(--radius-lg);padding:0.25rem 0.5rem;color:var(--ink);cursor:pointer;"></select>
+        <!-- Site switcher -->
+        <div id="site-switcher" style="position:relative;">
+          <button id="site-switcher-btn" style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:0.8125rem;border:1px solid var(--border);background:var(--surface-raised);border-radius:var(--radius-lg);padding:0.25rem 0.625rem;color:var(--ink);cursor:pointer;min-height:30px;">
+            <span id="site-switcher-label" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+            <span style="font-size:10px;color:var(--ink-muted);">&#9660;</span>
+          </button>
+          <div id="site-switcher-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:220px;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 4px 12px rgba(0,0,0,.08);z-index:100;overflow:hidden;">
+            <div id="site-switcher-items"></div>
+            <div style="border-top:1px solid var(--border);padding:6px;">
+              <form id="add-site-inline-form" style="display:flex;flex-direction:column;gap:6px;padding:4px 2px;">
+                <input id="add-site-hostname" type="text" placeholder="hostname (e.g. newsite.com)" style="min-height:32px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface);padding:0 8px;font-family:var(--mono);font-size:0.75rem;color:var(--ink);outline:none;" />
+                <input id="add-site-label" type="text" placeholder="label (optional)" style="min-height:32px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--surface);padding:0 8px;font-family:var(--mono);font-size:0.75rem;color:var(--ink);outline:none;" />
+                <button type="submit" style="min-height:32px;border-radius:var(--radius-md);background:#1c1917;color:white;font-family:var(--mono);font-size:0.75rem;font-weight:600;border:none;cursor:pointer;">Add site</button>
+                <p id="add-site-error" style="display:none;margin:0;font-size:0.75rem;color:var(--red);font-family:var(--mono);"></p>
+              </form>
+            </div>
+          </div>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:0.5rem;">
         <div id="period-group" style="display:flex;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
@@ -569,6 +586,12 @@ import Layout from '../layouts/Layout.astro';
   }
   .csv-btn:hover { background: var(--surface); color: var(--ink-secondary); }
 
+  .site-item { display:flex; align-items:center; justify-content:space-between; padding:7px 10px; cursor:pointer; font-family:var(--mono); font-size:0.8125rem; color:var(--ink); }
+  .site-item:hover { background:var(--surface); }
+  .site-item.active { color:var(--accent); }
+  .site-item-remove { background:none; border:none; cursor:pointer; color:var(--ink-muted); font-size:14px; line-height:1; padding:0 2px; }
+  .site-item-remove:hover { color:var(--red); }
+
   .skeleton {
     background: linear-gradient(90deg, var(--surface) 25%, var(--border-light) 50%, var(--surface) 75%);
     background-size: 200% 100%;
@@ -609,12 +632,14 @@ import Layout from '../layouts/Layout.astro';
   var dashboard = document.getElementById('dashboard');
   var authForm = document.getElementById('auth-form');
   var authError = document.getElementById('auth-error');
-  var siteSwitcher = document.getElementById('site-switcher');
+  var siteSwitcherBtn = document.getElementById('site-switcher-btn');
+  var siteSwitcherMenu = document.getElementById('site-switcher-menu');
+  var siteSwitcherLabel = document.getElementById('site-switcher-label');
+  var siteSwitcherItems = document.getElementById('site-switcher-items');
 
   function applySession() {
     if (!session.sites.length) return;
-    var idx = session.current;
-    var s = session.sites[idx];
+    var s = session.sites[session.current];
     WORKER = s.url;
     apiKey = s.key;
     site = s.site;
@@ -622,32 +647,97 @@ import Layout from '../layouts/Layout.astro';
   }
 
   function saveSession() {
-    sessionStorage.setItem('flarelytics_session', JSON.stringify(session));
+    localStorage.setItem('flarelytics_session', JSON.stringify(session));
   }
 
-  function renderSiteSwitcher() {
-    if (session.sites.length <= 1) {
-      siteSwitcher.style.display = 'none';
+  function switchToSite(idx) {
+    session.current = idx;
+    saveSession();
+    applySession();
+    siteSwitcherMenu.style.display = 'none';
+    loadAll();
+  }
+
+  function removeSite(idx) {
+    session.sites.splice(idx, 1);
+    if (!session.sites.length) {
+      saveSession();
+      dashboard.style.display = 'none';
+      authGate.style.display = '';
       return;
     }
-    siteSwitcher.style.display = '';
-    var html = '';
-    session.sites.forEach(function(s, i) {
-      var label = s.label || s.site;
-      html += '<option value="' + i + '"' + (i === session.current ? ' selected' : '') + '>' + esc(label) + '</option>';
-    });
-    siteSwitcher.innerHTML = html;
-  }
-
-  siteSwitcher.addEventListener('change', function() {
-    session.current = parseInt(this.value, 10);
+    session.current = Math.min(session.current, session.sites.length - 1);
     saveSession();
     applySession();
     loadAll();
+  }
+
+  function renderSiteSwitcher() {
+    var cur = session.sites[session.current];
+    siteSwitcherLabel.textContent = cur ? (cur.label || cur.site) : '';
+    var html = '';
+    session.sites.forEach(function(s, i) {
+      var lbl = esc(s.label || s.site);
+      html += '<div class="site-item' + (i === session.current ? ' active' : '') + '" data-idx="' + i + '">';
+      html += '<span>' + lbl + '</span>';
+      html += '<button class="site-item-remove" data-remove="' + i + '" title="Remove">&#x2715;</button>';
+      html += '</div>';
+    });
+    siteSwitcherItems.innerHTML = html;
+    siteSwitcherItems.querySelectorAll('.site-item').forEach(function(el) {
+      el.addEventListener('click', function(e) {
+        if (e.target.dataset.remove !== undefined) return;
+        switchToSite(parseInt(el.dataset.idx, 10));
+      });
+    });
+    siteSwitcherItems.querySelectorAll('.site-item-remove').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        removeSite(parseInt(btn.dataset.remove, 10));
+        renderSiteSwitcher();
+      });
+    });
+  }
+
+  siteSwitcherBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var open = siteSwitcherMenu.style.display !== 'none';
+    siteSwitcherMenu.style.display = open ? 'none' : '';
   });
 
-  // Restore session with backwards-compatibility
-  var saved = sessionStorage.getItem('flarelytics_session');
+  document.addEventListener('click', function(e) {
+    if (!document.getElementById('site-switcher').contains(e.target)) {
+      siteSwitcherMenu.style.display = 'none';
+    }
+  });
+
+  document.getElementById('add-site-inline-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var hostname = document.getElementById('add-site-hostname').value.trim().replace(/^www\./, '');
+    var label = document.getElementById('add-site-label').value.trim();
+    var errEl = document.getElementById('add-site-error');
+    if (!hostname) return;
+    errEl.style.display = 'none';
+    var cur = session.sites[session.current];
+    fetch(cur.url + '/query?q=daily-views&period=7d&site=' + encodeURIComponent(hostname), { headers: { 'X-API-Key': cur.key } })
+      .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+      .then(function() {
+        var exists = session.sites.findIndex(function(s) { return s.url === cur.url && s.site === hostname; });
+        if (exists >= 0) { switchToSite(exists); return; }
+        session.sites.push({ url: cur.url, key: cur.key, site: hostname, label: label || hostname });
+        session.current = session.sites.length - 1;
+        saveSession();
+        applySession();
+        document.getElementById('add-site-hostname').value = '';
+        document.getElementById('add-site-label').value = '';
+        siteSwitcherMenu.style.display = 'none';
+        loadAll();
+      })
+      .catch(function() { errEl.textContent = 'Could not verify site.'; errEl.style.display = ''; });
+  });
+
+  // Restore session — check localStorage first, fall back to sessionStorage (migration)
+  var saved = localStorage.getItem('flarelytics_session') || sessionStorage.getItem('flarelytics_session');
   if (saved) {
     try {
       var raw = JSON.parse(saved);
@@ -657,17 +747,28 @@ import Layout from '../layouts/Layout.astro';
           sites: [{ url: raw.url, key: raw.key, site: raw.site || '', label: raw.site || '' }],
           current: 0
         };
-        saveSession();
       } else if (raw && Array.isArray(raw.sites)) {
         session = raw;
       }
       if (session.sites.length) {
+        saveSession(); // migrate to localStorage
         applySession();
         authGate.style.display = 'none';
         dashboard.style.display = 'block';
         loadAll();
       }
     } catch(e) {}
+  }
+
+  // Pre-fill login form from last saved session (first-time helper)
+  if (!session.sites.length) {
+    var lastRaw = localStorage.getItem('flarelytics_session_hint');
+    if (lastRaw) {
+      try {
+        var hint = JSON.parse(lastRaw);
+        if (hint.url) document.getElementById('worker-url').value = hint.url;
+      } catch(e) {}
+    }
   }
 
   // Auth
@@ -702,6 +803,7 @@ import Layout from '../layouts/Layout.astro';
           session.current = session.sites.length - 1;
         }
 
+        try { localStorage.setItem('flarelytics_session_hint', JSON.stringify({ url: url })); } catch(e) {}
         saveSession();
         applySession();
         authGate.style.display = 'none';
