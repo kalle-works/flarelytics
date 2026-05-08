@@ -1,9 +1,9 @@
 # Flarelytics A+ Migration Plan: v0 → v1 schema
 
-Status: VERIFIED (§9 Tasks A + B complete 2026-05-08) — schemas locked, baseline p99 captured; ready for Phase 0 provisioning
+Status: VERIFIED (§9 Tasks A–F all complete 2026-05-08) — schemas locked, baseline p99 captured, all infra projections within free-tier headroom; cleared for Phase 0 provisioning
 Target architecture: see `~/.gstack/projects/kalle-works-flarelytics/kalle-main-design-20260508-094109.md`
 Author: Kalle
-Last updated: 2026-05-08 (post-§9 Task B baseline measurement)
+Last updated: 2026-05-08 (post-§9 closures)
 
 This document is the load-bearing decision for A+. It describes how the existing 12-blob Analytics Engine events coexist with the new versioned per-family event schemas, exactly which queries change, and what rollback looks like. **No A+ code is written until §9 verifications are complete and Phase 0.5 pilot is approved.**
 
@@ -626,13 +626,13 @@ Captured p99 latency of the current (v0-only) `/track` endpoint under realistic 
 
 Re-run after Phase 1 deploy with the same script and target the new dual-emit worker; document the dual-emit p99 alongside this baseline before promoting to Phase 2.
 
-### Task C — Cloudflare Queues throughput sanity check (Codex #18)
+### Task C — Cloudflare Queues throughput sanity check (Codex #18) — **COMPLETE 2026-05-08**
 
 Cloudflare Queues limits (2026-04-21 docs): 5,000 messages/sec per queue. `/track` peak load × 1 enrichment job per event must stay below this, or `queue.send()` will throw.
 
-Current peak across portfolio: ~50 RPS aggregate (pre-A+ migration). Headroom: 100x. **Verified safe** but document the failure mode: if `queue.send()` throws, worker logs and continues (3A — best-effort). DLQ catches retries. Drop is acceptable; AE row is canonical.
+Current peak across portfolio: ~50 RPS aggregate (pre-A+ migration). Headroom: **100×**. Failure mode locked: if `queue.send()` throws, worker logs and continues (3A — best-effort); DLQ catches retries; drop is acceptable because the AE row is canonical (queue is enrichment-only, not source-of-truth).
 
-### Task D — D1 row growth projection
+### Task D — D1 row growth projection — **COMPLETE 2026-05-08**
 
 Estimate (sites × contents × locales × known social posts) over 12 months:
 
@@ -643,22 +643,22 @@ Estimate (sites × contents × locales × known social posts) over 12 months:
 - Aliases (URL renames, redirects): ~30,000
 - Social posts (one row per known Bsky/FB/HN/Reddit post the site has been shared on): ~10,000
 - Share enrichment records: ~50,000
-- Total D1 row estimate: ~120,000 in 12 months
+- **Total D1 row estimate: ~120,000 in 12 months**
 
-D1 free tier: 5 million rows storage. **Headroom: 40x**. No paid plan needed for the 12-month horizon.
+D1 free tier: 5 million rows storage. **Headroom: 40×.** No paid plan needed for the 12-month horizon. Re-evaluate if portfolio grows past 20 sites or any single site exceeds ~5000 contents.
 
-### Task E — R2 storage projection
+### Task E — R2 storage projection — **COMPLETE 2026-05-08**
 
-DLQ daily logs + query-comparison samples: ~100 MB/month estimate. R2 free: 10 GB. **Headroom: 100x**.
+DLQ daily logs + query-comparison samples: ~100 MB/month estimate. R2 free: 10 GB. **Headroom: 100×.** Re-evaluate when long-term raw event archive becomes in-scope (currently §8 deferred until retention pressure shows up).
 
-### Task F — Self-host migration product surface
+### Task F — Self-host migration product surface — **COMPLETE 2026-05-08**
 
 Codex #19: 6 AE datasets + D1 + Queues + R2 + migration is a substantial setup for `npx create-flarelytics migrate`. Rather than hide this complexity, the migration command:
 - Generates the new wrangler.toml.
 - Tells the user exactly which CF dashboard steps to take (D1 create, Queues create, R2 bucket create) with copy-pasteable commands.
 - Is honest about the new infrastructure surface.
 
-This is a deliberate documentation choice, not a regression. Self-hosters who only want privacy-first analytics can keep `?schema=v0` indefinitely.
+This is a deliberate documentation choice, not a regression. Self-hosters who only want privacy-first analytics can keep `?schema=v0` indefinitely. The decision is locked; no measurement required.
 
 ---
 

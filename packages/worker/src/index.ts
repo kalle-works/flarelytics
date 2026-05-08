@@ -10,6 +10,7 @@
  */
 
 interface Env {
+  // v0 (legacy)
   ANALYTICS: AnalyticsEngineDataset;
   SITE_CONFIG: KVNamespace;
   ALLOWED_ORIGINS: string;
@@ -18,6 +19,19 @@ interface Env {
   CF_API_TOKEN: string;
   DATASET_NAME: string;
   PUBLIC_STATS_SITES?: string;
+
+  // v1 (Phase 0 — bindings declared, not used until Phase 0.5 dual-emit).
+  // See MIGRATION_PLAN.md §3 for per-family schemas and §0 1A for why
+  // /track must NOT call DIMENSIONS on the hot path.
+  PAGEVIEW_EVENTS: AnalyticsEngineDataset;
+  ENGAGEMENT_EVENTS: AnalyticsEngineDataset;
+  SHARE_EVENTS: AnalyticsEngineDataset;
+  BOT_EVENTS: AnalyticsEngineDataset;
+  PERFORMANCE_EVENTS: AnalyticsEngineDataset;
+  CUSTOM_EVENTS: AnalyticsEngineDataset;
+  DIMENSIONS: D1Database;
+  ENRICH_QUEUE: Queue;
+  ARCHIVE: R2Bucket;
 }
 
 interface TrackPayload {
