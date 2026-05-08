@@ -748,6 +748,237 @@ To be completed by Kalle after 14 days of Kiiru pilot use.
 
 ---
 
+## 15. Approved Mockups
+
+| Screen | Mockup Path | Direction | Notes |
+|---|---|---|---|
+| Distribution Loop | `~/.gstack/projects/kalle-works-flarelytics/designs/distribution-loop-20260508/variant-A.png` | Storytelling table — one row per article showing full loop (shares-out → inbound visits → engaged reads → secondary shares → quality score) | Variant A chosen because the "shows the full loop" tagline makes purpose unmistakable; scroll-depth bar in Engaged Reads column visualizes engagement; accent #dc6b14 only on numbers |
+| Content Performance | `~/.gstack/projects/kalle-works-flarelytics/designs/content-performance-20260508/variant-A.png` | Database-style content table with content_id rollup, locale pills, decay sparkline, Quality Score accent column | Variant A chosen because locale pills (fi/en) make translations-handling visible at a glance; decay sparkline carries lift annotation; empty state present |
+| Article Scorecard | `~/.gstack/projects/kalle-works-flarelytics/designs/article-scorecard-20260508/variant-C.png` | Single-page article deep-dive — header card with Quality Score, KPI strip, two-column grid (Distribution / Engagement) with bar chart, scroll funnel, sparkline | Variant C chosen because article title visible, Read Depth uses DESIGN.md horizontal funnel bars (not pyramid), Outbound Shares bar chart with accent fill, Inbound Social Referrers list, all required components present |
+
+These are the visual references for implementation. Implementer reads them via the Read tool to know exactly what to build. Mockups persist across conversations and workspaces.
+
+---
+
+## 16. Dashboard design specifications
+
+These specifications cover the three killer views (Distribution Loop, Content Performance, Article Scorecard) at full depth. Lighter-touch coverage for Portfolio Overview, Social Referrers, AI & Crawlers sidebar at the end. All decisions calibrated against `DESIGN.md` (Industrial/Developer-First, Light + Burnt Orange #dc6b14, mono UI labels, dark CTAs, compact density).
+
+### 16.1 Distribution Loop view
+
+**Information hierarchy (Pass 1):**
+1. Filter row (site switcher + time range + platform) — orient the user
+2. KPI strip — answers "is the loop working overall?"
+3. Loop table — answers "which articles drive the loop?"
+4. Recent Loops link — escape hatch into chronological feed
+
+**Layout grid (desktop ~1200px max content width 880px from DESIGN.md):**
+- KPI strip: 4 cards × ~190px wide × 88px tall, 16px gap
+- Loop table: 100% width, one row per article (~60px tall each), 8 visible
+- Mobile (< 768px): KPI strip stacks 2×2; Loop table collapses to vertical card-per-article with arrows replaced by labeled rows
+
+**Interaction states:**
+| State | Specification |
+|---|---|
+| **Loading** | KPI cards: skeleton blocks (label visible, value as gray bar 40% width). Loop rows: 3 skeleton rows. NO spinner. Skeleton shimmer animation 1200ms (within DESIGN.md motion guidelines) |
+| **Empty (zero events in period)** | "No distribution loops yet for this period. As articles are shared and readers return, loops appear here." Centered, mono 14px muted, no illustration. Sub-link "Try expanding to 30 days →" in accent text #b45309 |
+| **Empty (site has no events ever)** | "Tracker not detected on this site. Last 7 days: 0 events." Mono 14px muted + secondary link "Setup guide →" #b45309 |
+| **Error (query failed)** | Inline banner above content area: 1px border-error #dc2626, 8px padding, 6px radius, white surface. Mono 12px: "Couldn't load Distribution Loop. The Cloudflare Analytics Engine SQL API timed out." Below: "Retry" small text-link #b45309. NO modal, NO toast |
+| **Partial (some queries failed, others succeeded)** | KPI cards that succeeded show data; failed ones show "—" with small ⚠ tooltip "Couldn't load this metric." Loop table renders rows that succeeded |
+| **Success** | Full data render. Hover row: bg #fafaf9, cursor pointer. Click: open Article Scorecard for that content_id |
+
+**User journey emotional arc (Pass 3):**
+- 0–5s (visceral): user sees "this dashboard knows what it's about" — KPI strip immediately answers "is the loop working?" with one number (Avg Distribution Quality Score)
+- 5min (behavioral): user finds an article with high inbound visits but low secondary share rate → drills down → adjusts editorial direction
+- 5y (reflective): user has built a habit of opening the Loop view weekly to validate distribution decisions
+
+**AI slop avoidance (Pass 4) — applied:**
+- ❌ No 3-column icon-in-circle feature grid (KPI strip uses 4-column data cards, no icons)
+- ❌ No purple/violet (only burnt orange + greyscale)
+- ❌ No centered everything (left-aligned section headers, table is left-aligned)
+- ❌ No emoji
+- ❌ No bubbly border-radius (6px cards, 4px inline)
+- ❌ No orange CTAs (only "Recent Loops →" as small text-link in #b45309)
+- ❌ No carousel
+- ❌ No decorative blobs
+
+**DESIGN.md alignment (Pass 5):**
+- Typography: SF Mono / Fira Code for all UI labels and numbers; system UI for "Each row shows the full loop..." tagline
+- KPI cards use existing pattern (mono uppercase 10px label, 28px mono value)
+- Engaged Reads scroll-depth bar uses existing scroll-depth-funnel component (accent fill, stone-600 unfilled, 6px tall)
+- Quality Score conditional color: accent #dc6b14 if ≥ 7, near-black #1c1917 if 5–6.9, muted #78716c if < 5
+
+**Responsive (Pass 6):**
+| Viewport | Behavior |
+|---|---|
+| Desktop (≥ 1024px) | Full table, 8 rows visible |
+| Tablet (768–1023px) | KPI strip stays 4-wide; table compresses (Engaged Reads column drops scroll bar, shows % only) |
+| Mobile (< 768px) | KPI strip → 2×2 grid; Loop table → vertical card-per-article, arrows become labeled vertical sections (`Shares Out / Inbound Visits / Engaged Reads / Secondary Shares / Score`) |
+
+**Accessibility (Pass 6):**
+- Keyboard: Tab cycles filter row → KPI cards (focusable for tooltips) → table rows. Enter on row opens scorecard. Esc closes scorecard.
+- ARIA: filter row `role="region" aria-label="Filters"`. KPI cards `role="status"` so screen readers announce updates on time-range change. Table `role="table"` with proper `<th scope="col">` headers.
+- Contrast: all text ≥ 4.5:1 (already verified in DESIGN.md). Quality Score color signals via background tag, NOT color alone (e.g., "≥7" tag).
+- Touch targets: row tap area ≥ 44px tall (already 60px).
+- Focus rings: 2px solid #dc6b14, 2px offset (NOT default browser blue).
+
+### 16.2 Content Performance view
+
+**Information hierarchy:**
+1. Section header + tagline — what this view is
+2. Content table — primary content
+3. Empty state hooks at the bottom
+
+**Layout grid:**
+- Section header full-width, 24px below filter row
+- Table 100% width, sortable columns, 6–8 visible rows + pagination
+- Mobile: table → vertical cards, locale pills move under article title
+
+**Interaction states:**
+| State | Specification |
+|---|---|
+| **Loading** | 5 skeleton rows. Header columns visible. NO spinner |
+| **Empty (no content tracked)** | "No content tracked yet. Articles appear here as soon as they receive traffic." Centered mono 14px muted. Below: "Connect a tracker →" #b45309 (matches mockup) |
+| **Empty (filtered to zero results)** | "No content matches the current filter. Try a wider date range." Mono 13px muted |
+| **Error** | Inline banner pattern (same as Loop view) |
+| **Sortable column states** | Default sort by Views desc. Click column header: arrow indicator 8px mono. Hold shift: secondary sort. Sort state persists via URL param `?sort=quality_score:desc` |
+| **Hover row** | bg #fafaf9, cursor pointer. Click: opens Article Scorecard |
+| **Locale pill** | Inline next to title. Pill bg #fffbeb, text #92400e, 4px radius, 8px horizontal padding, 9px mono font, uppercase locale code |
+| **Multi-URL count** | If `> 1` canonical_url maps to this content_id: small mono "3 URLs" label below title in #78716c. Hover → tooltip lists URLs |
+
+**Decay sparkline spec:**
+- 60px wide × 20px tall inline SVG
+- Accent #dc6b14 stroke 1.5px, accent at 30% opacity area fill below
+- No axis, no labels — pure visual cue
+- Annotation below: `8.2x lift first-24h` in 11px mono muted
+
+**Responsive:**
+- Desktop: full table
+- Tablet: drop "Decay 1d→7d" column; show only the lift annotation
+- Mobile: table → vertical cards. Each card: title + locale pills, then KPI rows stacked (`Views | Visitors | Quality`)
+
+**Accessibility:**
+- Sortable headers: `aria-sort="ascending|descending|none"`
+- Locale pills: `<abbr title="Finnish">fi</abbr>` for screen readers
+- Sparkline: `role="img" aria-label="Visit decay: 8.2× lift in first 24 hours, declining over 7 days"`
+
+### 16.3 Article Scorecard view
+
+**Information hierarchy:**
+1. Breadcrumb back to Content Performance
+2. Article header card with Quality Score (centerpiece)
+3. KPI strip
+4. Two-column Distribution / Engagement grid
+
+**Layout grid:**
+- Breadcrumb 24px tall mono 11px
+- Article header card: 88px tall, full width, Quality Score block 80×80px right-aligned
+- KPI strip: 4–5 cards 20% width each
+- Two-column grid: 50/50 split, 24px gutter
+- Mobile: header card stacks (title above score), KPIs 2×2/2×3, two columns become single column
+
+**Interaction states:**
+| State | Specification |
+|---|---|
+| **Loading** | Quality Score skeleton block, KPI skeleton, charts as gray placeholder rectangles |
+| **Empty (article exists but no events)** | "This article has no recorded views yet. Check the canonical URL matches the tracker payload." Centered card area; rest of layout (header, breadcrumb) renders normally |
+| **Error** | Inline banner. Per-section error fallback: bar chart fails → "Couldn't load shares" placeholder; sparkline fails → "Couldn't load decay" placeholder |
+| **Partial** | Render whatever loaded; show "—" or fallback on missing sections |
+| **Success** | Full render. Read depth bars use existing scroll-depth-funnel component. Visit decay = sparkline. Inbound Social Referrers = list with platform glyph + post-id (truncated) + visit count + avg engaged time |
+
+**Quality Score block:**
+- 80×80px square, 6px radius, 1px border #e7e5e4, white surface
+- Number: 36px mono near-black if 5–6.9, accent #dc6b14 if ≥ 7, muted #78716c if < 5 (matches mockup)
+- Label below: "QUALITY SCORE" mono uppercase 9px muted
+
+**Outbound Shares bar chart:**
+- Horizontal bar per platform (Bluesky, Facebook, X, LinkedIn, etc.)
+- Accent #dc6b14 fill
+- Mono labels left ("Bluesky", "Facebook", ...), values right ("12", "8", ...)
+- Bar height 14px, 4px gap between bars
+
+**Read Depth scroll-funnel:**
+- 4 horizontal bars at 25/50/75/100% milestones
+- Existing scroll-depth-funnel component: 6px tall, accent fill on reached %, stone-600 unfilled
+- Label left mono 11px ("25%", "50%", "75%", "100%"), value right ("87% reached", "64%", ...)
+
+**Visit Decay sparkline:**
+- 100% width × 60–80px tall SVG
+- Accent stroke 1.5px, 30% opacity area fill
+- X-axis labels: "Day 1", "Day 7", "Day 14" mono 9px muted
+- No y-axis
+
+**Engaged Seconds Distribution:**
+- Compact histogram (10 bars × 12px wide, 60px tall total)
+- Accent fill
+- Mono summary text below: "Median: 1:42 · P95: 6:30"
+
+**Inbound Social Referrers list:**
+- Each row: platform glyph (8×8px monospace letter `B`/`F`/`X`/`L` in muted box), social_post_id (truncated `did:plc:...post/abc...` mono 11px), `78 visits` mono 11px, `avg 4:12 engaged` mono 11px muted
+- 5 visible rows + "show all →" small text-link in #b45309
+
+**Responsive:**
+- Desktop: 50/50 two-column grid
+- Tablet: keep two-column but compress charts
+- Mobile: single column, score block moves below title (no longer right-aligned)
+
+**Accessibility:**
+- Quality Score block: `role="meter" aria-valuenow="84" aria-valuemin="0" aria-valuemax="100" aria-label="Distribution Quality Score"`
+- Bar charts: `role="img" aria-label="Outbound shares by platform: Bluesky 12, Facebook 8, X 4, LinkedIn 1"`
+- Read Depth funnel: list semantics with each milestone as `<li>`
+- All interactive elements (View live article, Compare to average, Export) keyboard-reachable, focus rings 2px accent
+
+### 16.4 Lighter-touch views (specs added but no mockups)
+
+**Portfolio Overview** — extends current dashboard pattern. Adds:
+- KPI: "Distribution Quality Score (avg across portfolio)" mono accent
+- Stacked-card per site: site name, top 3 metrics, click → site-scoped dashboard
+- Empty state: "No sites yet. Add your first site." link → site switcher add form
+
+**Social Referrers** — adapts existing referrer-list pattern. Adds:
+- Per-platform group header (Bluesky / Facebook / HN / Reddit / Mastodon / X / Other)
+- Within each group: post-ID rows (mono truncated 11px), visit count, landing article (link)
+- Sortable by visit count
+- Empty: "No social referrers yet for this period."
+
+**AI & Crawlers (sidebar)** — opt-in panel, NOT main nav. Toggle in dashboard settings. When active:
+- Right sidebar 280px wide on desktop (collapses to bottom drawer on mobile)
+- Sections: "Human vs Bot Traffic" (small bar chart, accent + stone-600), "Top AI Actors" (list of `chatgpt 234 / claude-web 87 / perplexity 23 / unknown-ai 41`), "Most-Crawled Content" (top 5 article list)
+- This section is sidebar-only until promoted (Phase 0.5+ premium criterion: AI traffic changes ≥1 editorial decision per 14 days)
+
+### 16.5 Cross-view design decisions
+
+**Time-range picker (used in all views):**
+- Mono pill row: "7d / 14d / 30d / 90d / All"
+- Active pill: dark bg #1c1917, white text
+- Inactive: white surface, 1px border #e7e5e4, mono #57534e
+- Hover inactive: border #1c1917
+- 30px height, 4px radius, 12px horizontal padding
+
+**Drill-down navigation:**
+- All Article Scorecard entry points (Loop row click, Content Performance row click) use the same modal-or-route pattern
+- Phase 0.5 implementation: full route `/article/<content_id>` (deep-linkable, shareable). Modal overlay deferred to Phase 2 if needed.
+
+**Empty states (universal pattern):**
+- Centered text, mono 14px muted
+- Optional sub-link in #b45309
+- NO illustration, NO emoji, NO 3D blob, NO stock photo
+- 64px vertical padding minimum
+
+### 16.6 Unresolved design decisions (to be tracked)
+
+| Decision | If deferred, what happens |
+|---|---|
+| Filter row exact composition for Loop view (date + platform sufficient, or also locale/content_type?) | Engineer ships date+platform only; future expansion easy |
+| Article Scorecard: render as full route or modal? Plan defaults route — confirm before Phase 0.5 implementation | Defaults to route (deep-linkable). Modal pattern available later |
+| Recent Loops link target — chronological feed or just expanded table? | Chronological feed by default. Table expansion is fallback if list view doesn't add value |
+| Distribution Quality Score visualization in Loop table — number alone or also a small bar/dial? | Number alone (matches mockup). Reconsider if user testing shows poor scanability |
+| AI & Crawlers sidebar promotion criterion — what specifically counts as "changes editorial decision"? | Kalle documents in §14 Phase 0.5 outcomes. If absent, sidebar stays sidebar indefinitely |
+
+These are not blockers — defaults exist for each. Surface in `/design-review` after implementation if visual QA flags concerns.
+
+---
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
@@ -755,7 +986,7 @@ To be completed by Kalle after 14 days of Kiiru pilot use.
 | CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | not run |
 | Codex Review | `/codex review` | Independent 2nd opinion | 0 | — | not run (diff-level) |
 | Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR (PLAN) | 12 issues found, all resolved (7 architecture, 1 quality, 1 test, 2 perf, 2 cross-model tensions); 1 critical gap flagged (D1 bulk lookup timeout handling — Phase 1 implementation requirement) |
-| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | not run (recommended next — Loop view, Content Performance, Article Scorecard need design) |
+| Design Review | `/plan-design-review` | UI/UX gaps | 1 | CLEAR (FULL) | initial 2/10 → final 9/10; 3 mockups generated and approved (Distribution Loop A, Content Performance A, Article Scorecard C); §15 + §16 added with hierarchy, state tables, mobile breakpoints, a11y per view; 5 unresolved decisions captured as defaults (§16.6) |
 | DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | not run |
 | Outside Voice | `/plan-eng-review --outside` | Independent plan challenge | 1 | CHALLENGED | Codex found 20 issues; 18 corrections applied to plan; 2 cross-model tensions resolved (T1A content_id semantics, T2A pilot-first sequencing) |
 
