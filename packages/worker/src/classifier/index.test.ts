@@ -22,6 +22,19 @@ describe('classifyUserAgent — empty / missing', () => {
     const ua = undefined as unknown as string;
     expect(classifyUserAgent(ua)).toEqual({ bot_class: 'unknown-bot', ai_actor: '' });
   });
+
+  it('classifies whitespace-only UA as unknown-bot', () => {
+    expect(classifyUserAgent('   ')).toEqual({ bot_class: 'unknown-bot', ai_actor: '' });
+    expect(classifyUserAgent('\t\n  ')).toEqual({ bot_class: 'unknown-bot', ai_actor: '' });
+  });
+
+  it('does not throw on non-string input', () => {
+    const obj = {} as unknown as string;
+    expect(() => classifyUserAgent(obj)).not.toThrow();
+    expect(classifyUserAgent(obj)).toEqual({ bot_class: 'unknown-bot', ai_actor: '' });
+    const num = 42 as unknown as string;
+    expect(classifyUserAgent(num)).toEqual({ bot_class: 'unknown-bot', ai_actor: '' });
+  });
 });
 
 describe('classifyUserAgent — AI crawlers', () => {
@@ -99,6 +112,43 @@ describe('classifyUserAgent — priority', () => {
   it('promotes Google-Extended over Googlebot when both present', () => {
     const ua = 'Mozilla/5.0 (compatible; Googlebot/2.1; Google-Extended)';
     expect(classifyUserAgent(ua)).toEqual({ bot_class: 'ai-crawler', ai_actor: 'gemini' });
+  });
+});
+
+describe('classifyUserAgent — token-boundary matching', () => {
+  it('does not classify gptbotmalicious as ai-crawler', () => {
+    expect(classifyUserAgent('gptbotmalicious/1.0')).not.toEqual(
+      expect.objectContaining({ ai_actor: 'gptbot' })
+    );
+  });
+
+  it('does not classify slurpsomething as search-bot', () => {
+    const result = classifyUserAgent('slurpsomething/1.0');
+    expect(result.bot_class).not.toBe('search-bot');
+  });
+
+  it('still detects gptbot when surrounded by punctuation', () => {
+    expect(classifyUserAgent('Mozilla/5.0 GPTBot/1.0;')).toEqual({
+      bot_class: 'ai-crawler',
+      ai_actor: 'gptbot',
+    });
+  });
+
+  it('still detects Yahoo Slurp in real UA', () => {
+    const ua = 'Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)';
+    expect(classifyUserAgent(ua)).toEqual({ bot_class: 'search-bot', ai_actor: '' });
+  });
+
+  it('does not classify googlebottesting as search-bot', () => {
+    const result = classifyUserAgent('googlebottesting/1.0');
+    expect(result.bot_class).not.toBe('search-bot');
+  });
+
+  it('falls back to generic-bot detection for fake-AI substrings (gptbotmalicious has bot)', () => {
+    expect(classifyUserAgent('gptbotmalicious/1.0')).toEqual({
+      bot_class: 'unknown-bot',
+      ai_actor: '',
+    });
   });
 });
 

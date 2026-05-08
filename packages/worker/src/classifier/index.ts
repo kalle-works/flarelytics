@@ -52,19 +52,37 @@ function truncateUtf8(value: string, maxBytes: number): string {
   return new TextDecoder().decode(bytes.slice(0, end));
 }
 
+// Token-boundary match: needle must be flanked by non-alphanumeric or string
+// edges. Prevents `gptbotmalicious` from matching `gptbot` and `slurpsomething`
+// from matching `slurp`. Generic-bot patterns intentionally stay substring-based
+// so `MyBot/1.0` is still detected as a bot.
+function tokenBoundaryRegex(needle: string): RegExp {
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`);
+}
+
+const AI_REGEXES: Array<{ re: RegExp; actor: string }> = AI_PATTERNS.map(({ needle, actor }) => ({
+  re: tokenBoundaryRegex(needle),
+  actor,
+}));
+
+const SEARCH_BOT_REGEXES: RegExp[] = SEARCH_BOT_PATTERNS.map(tokenBoundaryRegex);
+
 export function classifyUserAgent(ua: string): ClassifyResult {
-  if (!ua) return { bot_class: 'unknown-bot', ai_actor: '' };
+  if (typeof ua !== 'string' || ua.trim() === '') {
+    return { bot_class: 'unknown-bot', ai_actor: '' };
+  }
 
   const lower = ua.toLowerCase();
 
-  for (const { needle, actor } of AI_PATTERNS) {
-    if (lower.includes(needle)) {
+  for (const { re, actor } of AI_REGEXES) {
+    if (re.test(lower)) {
       return { bot_class: 'ai-crawler', ai_actor: truncateUtf8(actor, 32) };
     }
   }
 
-  for (const needle of SEARCH_BOT_PATTERNS) {
-    if (lower.includes(needle)) {
+  for (const re of SEARCH_BOT_REGEXES) {
+    if (re.test(lower)) {
       return { bot_class: 'search-bot', ai_actor: '' };
     }
   }
