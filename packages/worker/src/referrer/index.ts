@@ -40,6 +40,10 @@ export function parseReferrer(url: string): { social_platform: string; social_po
     return empty();
   }
 
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return empty();
+  if (u.username || u.password) return empty();
+  if (!u.hostname) return empty();
+
   const originalHost = u.hostname.toLowerCase();
   const host = stripPrefix(originalHost);
   const path = u.pathname;
@@ -64,7 +68,7 @@ export function parseReferrer(url: string): { social_platform: string; social_po
     return empty();
   }
 
-  if (host === 'reddit.com') {
+  if (originalHost === 'reddit.com' || originalHost.endsWith('.reddit.com')) {
     const m = path.match(/^\/r\/[^/]+\/comments\/([^/]+)(?:\/|$)/);
     if (m) return result('reddit', m[1]);
     return empty();
@@ -75,7 +79,7 @@ export function parseReferrer(url: string): { social_platform: string; social_po
   }
 
   if (host === 'twitter.com' || host === 'x.com') {
-    const m = path.match(/^\/[^/]+\/status\/(\d+)\/?$/);
+    const m = path.match(/^\/(?:[^/]+\/status|i\/web\/status)\/(\d+)\/?$/);
     if (m) return result('x', m[1]);
     return empty();
   }

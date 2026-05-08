@@ -118,6 +118,66 @@ describe('parseReferrer', () => {
     });
   });
 
+  it('rejects non-http(s) schemes (file:// false-Mastodon match)', () => {
+    expect(parseReferrer('file:///@alice/12345')).toEqual({
+      social_platform: '',
+      social_post_id: '',
+    });
+  });
+
+  it('rejects javascript: scheme', () => {
+    expect(parseReferrer('javascript:alert(1)')).toEqual({
+      social_platform: '',
+      social_post_id: '',
+    });
+  });
+
+  it('rejects URLs with userinfo (attacker spoof)', () => {
+    expect(parseReferrer('https://attacker@bsky.app/profile/alice.bsky.social/post/3kabc')).toEqual({
+      social_platform: '',
+      social_post_id: '',
+    });
+    expect(parseReferrer('https://user:pass@bsky.app/profile/alice/post/3kabc')).toEqual({
+      social_platform: '',
+      social_post_id: '',
+    });
+  });
+
+  it('parses reddit on np. subdomain (any-subdomain rule)', () => {
+    expect(parseReferrer('https://np.reddit.com/r/programming/comments/xyz789/some_title')).toEqual({
+      social_platform: 'reddit',
+      social_post_id: 'xyz789',
+    });
+  });
+
+  it('parses reddit on sh. subdomain (any-subdomain rule)', () => {
+    expect(parseReferrer('https://sh.reddit.com/r/foo/comments/abc/title/')).toEqual({
+      social_platform: 'reddit',
+      social_post_id: 'abc',
+    });
+  });
+
+  it('rejects fake-reddit suffix host (subdomain confusion)', () => {
+    expect(parseReferrer('https://reddit.com.evil.example/r/foo/comments/abc/title')).toEqual({
+      social_platform: '',
+      social_post_id: '',
+    });
+  });
+
+  it('parses x.com /i/web/status/N (in-app web view URLs)', () => {
+    expect(parseReferrer('https://x.com/i/web/status/1234567890')).toEqual({
+      social_platform: 'x',
+      social_post_id: '1234567890',
+    });
+  });
+
+  it('parses twitter.com /i/web/status/N', () => {
+    expect(parseReferrer('https://twitter.com/i/web/status/9876')).toEqual({
+      social_platform: 'x',
+      social_post_id: '9876',
+    });
+  });
+
   it('truncates Mastodon post_id to <= 80 UTF-8 bytes when instance is long', () => {
     const longHost = 'a'.repeat(63) + '.' + 'b'.repeat(63) + '.example.com';
     const url = `https://${longHost}/@user/9876543210`;
