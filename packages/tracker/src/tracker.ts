@@ -25,15 +25,23 @@ export interface InitOptions {
   emitCanonical?: boolean;
 }
 
-function resolveCanonical(): string {
+function resolveCanonical(): string | null {
   let raw = location.href;
   const link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
   const href = link?.getAttribute('href');
   if (href) {
-    try { raw = new URL(href, location.href).toString(); } catch {}
+    try {
+      const candidate = new URL(href, location.href);
+      if (candidate.protocol === 'http:' || candidate.protocol === 'https:') {
+        raw = candidate.toString();
+      }
+    } catch {}
   }
   try {
     const u = new URL(raw);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    u.username = '';
+    u.password = '';
     u.hostname = u.hostname.toLowerCase();
     if ((u.protocol === 'http:' && u.port === '80') || (u.protocol === 'https:' && u.port === '443')) {
       u.port = '';
@@ -44,7 +52,7 @@ function resolveCanonical(): string {
     }
     return u.toString();
   } catch {
-    return raw;
+    return null;
   }
 }
 
@@ -75,7 +83,8 @@ function send(event: string, data: Record<string, unknown> = {}): void {
     }
 
     if (emitCanonical) {
-      payload.canonical_url = resolveCanonical();
+      const canonical = resolveCanonical();
+      if (canonical) payload.canonical_url = canonical;
     }
   }
 

@@ -191,6 +191,65 @@ describe('tracker', () => {
     expect(payload).not.toHaveProperty('canonical_url');
   });
 
+  it('strips userinfo (user:pass@) from canonical_url', async () => {
+    const link = document.createElement('link');
+    link.rel = 'canonical';
+    link.setAttribute('href', 'https://user:pass@kiiru.fi/a/leak');
+    document.head.appendChild(link);
+
+    const tracker = await import('./tracker');
+    tracker.init('https://analytics.example.com', { emitCanonical: true });
+
+    const payload = JSON.parse(lastBlobContent);
+    expect(payload.canonical_url).toBe('https://kiiru.fi/a/leak');
+    expect(payload.canonical_url).not.toContain('user');
+    expect(payload.canonical_url).not.toContain('pass');
+  });
+
+  it('rejects javascript: scheme canonical and falls back to location.href', async () => {
+    stubLocation('https://kiiru.fi/safe');
+    const link = document.createElement('link');
+    link.rel = 'canonical';
+    link.setAttribute('href', 'javascript:alert(1)');
+    document.head.appendChild(link);
+
+    const tracker = await import('./tracker');
+    tracker.init('https://analytics.example.com', { emitCanonical: true });
+
+    const payload = JSON.parse(lastBlobContent);
+    expect(payload.canonical_url).toBe('https://kiiru.fi/safe');
+    expect(payload.canonical_url).not.toContain('javascript:');
+  });
+
+  it('rejects file:// canonical and falls back to location.href', async () => {
+    stubLocation('https://kiiru.fi/safe');
+    const link = document.createElement('link');
+    link.rel = 'canonical';
+    link.setAttribute('href', 'file:///etc/passwd');
+    document.head.appendChild(link);
+
+    const tracker = await import('./tracker');
+    tracker.init('https://analytics.example.com', { emitCanonical: true });
+
+    const payload = JSON.parse(lastBlobContent);
+    expect(payload.canonical_url).toBe('https://kiiru.fi/safe');
+    expect(payload.canonical_url).not.toContain('file:');
+  });
+
+  it('omits canonical_url when location.href itself is non-http(s)', async () => {
+    stubLocation('https://kiiru.fi/x');
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, href: 'about:blank', protocol: 'about:' },
+    });
+
+    const tracker = await import('./tracker');
+    tracker.init('https://analytics.example.com', { emitCanonical: true });
+
+    const payload = JSON.parse(lastBlobContent);
+    expect(payload).not.toHaveProperty('canonical_url');
+  });
+
   it('reads emitCanonical feature flag from script data-attribute', async () => {
     const script = document.createElement('script');
     script.dataset.endpoint = 'https://analytics.example.com';
