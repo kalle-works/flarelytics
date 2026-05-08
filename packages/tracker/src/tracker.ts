@@ -11,6 +11,7 @@
  */
 
 let endpoint = '';
+let emitCanonical = false;
 
 interface TrackOptions {
   props?: Record<string, string>;
@@ -20,6 +21,31 @@ interface TrackOptions {
 export interface InitOptions {
   /** Track scroll depth at 25/50/75/100% milestones using IntersectionObserver */
   scrollDepth?: boolean;
+  /** Emit normalized canonical_url on pageview events */
+  emitCanonical?: boolean;
+}
+
+function resolveCanonical(): string {
+  let raw = location.href;
+  const link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+  const href = link?.getAttribute('href');
+  if (href) {
+    try { raw = new URL(href, location.href).toString(); } catch {}
+  }
+  try {
+    const u = new URL(raw);
+    u.hostname = u.hostname.toLowerCase();
+    if ((u.protocol === 'http:' && u.port === '80') || (u.protocol === 'https:' && u.port === '443')) {
+      u.port = '';
+    }
+    u.hash = '';
+    if (u.pathname.length > 1 && u.pathname.endsWith('/')) {
+      u.pathname = u.pathname.slice(0, -1);
+    }
+    return u.toString();
+  } catch {
+    return raw;
+  }
 }
 
 function send(event: string, data: Record<string, unknown> = {}): void {
@@ -46,6 +72,10 @@ function send(event: string, data: Record<string, unknown> = {}): void {
     for (const key of ['utm_source', 'utm_medium', 'utm_campaign']) {
       const val = params.get(key);
       if (val) payload[key] = val;
+    }
+
+    if (emitCanonical) {
+      payload.canonical_url = resolveCanonical();
     }
   }
 
@@ -104,6 +134,7 @@ function initScrollDepth(): void {
 /** Initialize Flarelytics with your worker endpoint */
 export function init(workerEndpoint: string, options: InitOptions = {}): void {
   endpoint = workerEndpoint.replace(/\/$/, '');
+  emitCanonical = options.emitCanonical === true;
 
   // Auto-track pageview
   send('pageview');
@@ -148,6 +179,7 @@ if (typeof document !== 'undefined') {
   if (ep) {
     init(ep, {
       scrollDepth: 'scrollDepth' in (script?.dataset ?? {}),
+      emitCanonical: script?.dataset?.emitCanonical === 'true',
     });
   }
 }
