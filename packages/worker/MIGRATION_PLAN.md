@@ -1,9 +1,9 @@
 # Flarelytics A+ Migration Plan: v0 → v1 schema
 
-Status: VERIFIED (§9 Task A complete 2026-05-08) — schemas locked; ready for Phase 0 setup pending §9 Task B (baseline p99) approval
+Status: VERIFIED (§9 Tasks A + B complete 2026-05-08) — schemas locked, baseline p99 captured; ready for Phase 0 provisioning
 Target architecture: see `~/.gstack/projects/kalle-works-flarelytics/kalle-main-design-20260508-094109.md`
 Author: Kalle
-Last updated: 2026-05-08 (post-§9 Task A AE limits verification)
+Last updated: 2026-05-08 (post-§9 Task B baseline measurement)
 
 This document is the load-bearing decision for A+. It describes how the existing 12-blob Analytics Engine events coexist with the new versioned per-family event schemas, exactly which queries change, and what rollback looks like. **No A+ code is written until §9 verifications are complete and Phase 0.5 pilot is approved.**
 
@@ -596,16 +596,35 @@ AE does not silently truncate below the documented 16 KB ceiling. Below that cei
 
 **Cleanup**: test worker (`flarelytics-ae-limits-test`) and test dataset (`flarelytics_ae_limits_test_v1`) deleted after verification. Source retained in `packages/worker/test-ae-limits/`.
 
-### Task B — `/track` p99 baseline measurement (P1A)
+### Task B — `/track` p99 baseline measurement (P1A) — **COMPLETE 2026-05-08**
 
-Before Phase 1 dual-emit deploys, capture p99 latency of the current (v0-only) `/track` endpoint under realistic load:
+Captured p99 latency of the current (v0-only) `/track` endpoint under realistic load:
 
-- Tooling: `k6` or `wrk` from a single non-CF region.
-- Load: 100 RPS sustained for 5 minutes against staging worker. (Production traffic is low enough that synthetic is acceptable.)
-- Output: p50/p95/p99 latency for `/track` POST. Stored in this section as **baseline**.
-- Repeat after Phase 1 deploy. Phase 1 risk gate compares against this baseline.
+- Tooling: `k6` v1.0+ with `constant-arrival-rate` executor from Helsinki (non-CF region).
+- Load: 100 RPS sustained for 5 minutes against `flarelytics-staging` (separate AE dataset `flarelytics_staging`, identical worker code as production).
+- Total: 30,001 successful POST `/track` requests, 0 failures.
+- Script: `packages/worker/perf/baseline-track.js` — kept in repo so re-runs are cheap.
 
-**Baseline** (to be filled): _______ ms p99
+**Baseline (locked):**
+
+| Percentile | Latency |
+|---|---|
+| min | 6.17 ms |
+| p50 (median) | 11.31 ms |
+| avg | 11.54 ms |
+| p75 | 12.40 ms |
+| p90 | 13.53 ms |
+| p95 | 14.44 ms |
+| **p99** | **18.18 ms** |
+| p99.9 | 53.66 ms |
+| max | 101.16 ms |
+
+**Derived risk gates:**
+
+- **Phase 1 dual-emit p99 ceiling: ≤ 23.63 ms** (baseline × 1.30, per §6 cutover criterion). If exceeded, fall back to `ctx.waitUntil()` for v1 writes per §4 Phase 1 risk gate.
+- p99 budget remaining for v1 emit code: **5.45 ms** (23.63 − 18.18). Comfortable for one extra `writeDataPoint` call (synchronous in JS but fire-and-forget at the network layer; observed cost in v0 today is sub-ms because writeDataPoint just enqueues to AE), but no slack for added I/O (D1 reads, queue.send retries on the hot path). This is why §0 1A locks `/track` to NOT call D1 — content_id minting is moved to the queue consumer.
+
+Re-run after Phase 1 deploy with the same script and target the new dual-emit worker; document the dual-emit p99 alongside this baseline before promoting to Phase 2.
 
 ### Task C — Cloudflare Queues throughput sanity check (Codex #18)
 

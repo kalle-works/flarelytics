@@ -22,3 +22,22 @@ DATASET_NAME = "flarelytics"
 #                    Create at: https://dash.cloudflare.com/profile/api-tokens
 #   CF_ACCOUNT_ID  — your Cloudflare account ID
 #                    Find at: https://dash.cloudflare.com → any zone → Overview sidebar
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Staging environment — used by MIGRATION_PLAN.md §9 Task B (baseline p99)
+# and Phase 1 dual-emit risk-gate measurements. Identical worker code,
+# isolated AE dataset so synthetic load never lands in production analytics.
+# Deploy: `npx wrangler deploy --env staging`
+# Tear down: `npx wrangler delete --name flarelytics-staging`
+# Run baseline: `k6 run perf/baseline-track.js`
+# ─────────────────────────────────────────────────────────────────────────────
+[env.staging]
+name = "flarelytics-staging"
+
+[[env.staging.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "flarelytics_staging"
+
+[env.staging.vars]
+ALLOWED_ORIGINS = "https://staging-loadtest.flarelytics.test"
+DATASET_NAME = "flarelytics_staging"
