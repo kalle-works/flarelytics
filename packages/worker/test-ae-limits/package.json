@@ -1,0 +1,16 @@
+{
+  "name": "@flarelytics/test-ae-limits",
+  "version": "0.0.1",
+  "private": true,
+  "description": "One-off verification harness for AE blob/row byte limits (MIGRATION_PLAN §9 Task A). Not production code.",
+  "main": "src/index.ts",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "delete": "wrangler delete --name flarelytics-ae-limits-test"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250312.0",
+    "typescript": "^5.8.0",
+    "wrangler": "^4.0.0"
+  }
+}

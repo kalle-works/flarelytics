@@ -1,9 +1,9 @@
 # Flarelytics A+ Migration Plan: v0 → v1 schema
 
-Status: REVIEWED (plan-eng-review session 2026-05-08) — locked once §9 verifications complete
+Status: VERIFIED (§9 Task A complete 2026-05-08) — schemas locked; ready for Phase 0 setup pending §9 Task B (baseline p99) approval
 Target architecture: see `~/.gstack/projects/kalle-works-flarelytics/kalle-main-design-20260508-094109.md`
 Author: Kalle
-Last updated: 2026-05-08 (post-review)
+Last updated: 2026-05-08 (post-§9 Task A AE limits verification)
 
 This document is the load-bearing decision for A+. It describes how the existing 12-blob Analytics Engine events coexist with the new versioned per-family event schemas, exactly which queries change, and what rollback looks like. **No A+ code is written until §9 verifications are complete and Phase 0.5 pilot is approved.**
 
@@ -39,7 +39,7 @@ Cloudflare Analytics Engine constraints that drive the plan:
 - AE rows are immutable. No `UPDATE`. No re-statement. Any "fill in later" enrichment must live in D1 or R2, never AE.
 - Standard retention is bounded (~90 days). After cutover, legacy data ages out naturally.
 - AE does not support cross-dataset joins. Queries hit one dataset at a time. Cross-family analytics (e.g. funnels) compose application-side and accept independent sampling/latency windows.
-- Per-data-point limits (AE doc, https://developers.cloudflare.com/analytics/analytics-engine/limits/): up to 20 blobs, 20 doubles, 1 index, 16 KB total blob bytes, 250 data points per Worker invocation.
+- Per-data-point limits (AE doc, https://developers.cloudflare.com/analytics/analytics-engine/limits/, plus empirical verification — see §9 Task A results): up to 20 blobs, 20 doubles, 1 index, 16 KB total blob bytes, 250 data points per Worker invocation, **96 bytes per index value (empirical, undocumented in CF docs)**.
 
 These constraints mean the migration is **dataset-level**, not column-level. New event families get new datasets. Legacy stays on the old dataset until it ages out. Schema evolution within a family is bounded by the 20-blob ceiling.
 
@@ -60,7 +60,7 @@ Single AE dataset: `flarelytics` (binding `ANALYTICS`). Two implicit row shapes 
 | blob6 | utm_source |
 | blob7 | utm_medium |
 | blob8 | utm_campaign |
-| blob9 | visitor hash (daily-rotating SHA-256, 64 hex chars — see §9 verification) |
+| blob9 | visitor hash (daily-rotating SHA-256, **first 8 bytes → 16 hex chars** per `packages/worker/src/index.ts:116`. The first draft of this plan said "64 hex"; it never was — v0 has always truncated to 16 hex. v1 keeps the same.) |
 | blob10 | site hostname (REQUIRED in every WHERE) |
 | blob11 | device type |
 | blob12 | browser |
@@ -166,107 +166,129 @@ binding = "ARCHIVE"
 bucket_name = "flarelytics-archive"
 ```
 
-### `flarelytics_pageview_v1` (target: ≤ 20 blobs, ≤ 16 KB)
-| Slot | Field | Notes |
-|---|---|---|
-| blob1 | schema_version | `pv.v1.0` |
-| blob2 | site_id | KV-backed identifier |
-| blob3 | canonical_url_hash | SHA-256(canonical_url)[0:12], deterministic |
-| blob4 | canonical_inferred | `'1'` if worker had to infer canonical from request URL, else `''` |
-| blob5 | path | human-readable; truncated to fit AE per-blob limit |
-| blob6 | referrer_domain | `bsky.app`, `m.facebook.com`, `direct` |
-| blob7 | referrer_url_hash | SHA-256(referrer_url)[0:12] (drop if no consumer by Phase 2) |
-| blob8 | social_platform | `bluesky`/`facebook`/`hn`/`reddit`/`linkedin`/`mastodon`/`x`/empty |
-| blob9 | social_post_id | extracted at /track for bsky/fb/hn/reddit/mastodon; empty for x (2A) |
-| blob10 | utm_source | preserved from v0 (Codex #9 fix) |
-| blob11 | utm_medium | preserved from v0 |
-| blob12 | utm_campaign | preserved from v0 (Codex #9 fix — was collapsed into source_medium, now restored) |
-| blob13 | visitor_hash | daily-rotating SHA-256 — verify byte-fit at §9 (may need truncation) |
-| blob14 | country | from CF |
-| blob15 | device_type | `mobile`/`tablet`/`desktop` |
-| blob16 | browser | unchanged |
-| blob17 | bot_class | `human`/`search-bot`/`ai-crawler`/`unknown-bot` |
-| blob18 | ai_actor | `chatgpt`/`claude-web`/`perplexity`/`gemini`/`bingai`/`unknown-ai`/empty |
-| blob19 | locale | `fi`/`en`/etc. (D1-derived in queue-job; empty at /track time, populated post-enrichment) |
-| blob20 | content_type_hint | host-emitted hint (`article`/`page`/`landing`/empty) — content_type proper is in D1 |
-| double1 | event_count | always 1 |
-| double2 | viewport_width | px |
-| double3 | viewport_height | px |
-| index | site_id | required-in-every-WHERE remains |
+### `flarelytics_pageview_v1` (target: ≤ 20 blobs, ≤ 16 KB total — verified §9 Task A)
+
+Truncation policy column locked from §9 Task A measurements. Worst-case row at all caps = **1545 bytes**, leaving **14,839 bytes (10.6×) headroom** below the AE 16 KB total ceiling. Index value (`site_id` truncated to ≤ 64 bytes) sits below the empirically-discovered 96-byte index ceiling.
+
+| Slot | Field | Cap (bytes) | Notes |
+|---|---|---|---|
+| blob1 | schema_version | 16 | `pv.v1.0` etc; never user-controlled |
+| blob2 | site_id | 64 | KV-backed identifier; multi-tenant headroom |
+| blob3 | canonical_url_hash | 12 | SHA-256(canonical_url)[0:12], deterministic |
+| blob4 | canonical_inferred | 1 | `'1'` if worker had to infer canonical from request URL, else `''` |
+| blob5 | path | 500 | matches existing v0 truncation; covers Kiiru story slugs comfortably |
+| blob6 | referrer_domain | 80 | `bsky.app`, `m.facebook.com`, `direct`; below RFC 253 max but bigger than any seen-in-wild value |
+| blob7 | referrer_url_hash | 12 | SHA-256(referrer_url)[0:12]; drop in Phase 2 if no consumer view emerges |
+| blob8 | social_platform | 16 | enum: `bluesky`/`facebook`/`hn`/`reddit`/`linkedin`/`mastodon`/`x`/empty |
+| blob9 | social_post_id | 80 | Bsky DID + post path (~70 typical); FB story_fbid (~40); reddit permalink id (~10). Empty for x (2A). |
+| blob10 | utm_source | 200 | preserved from v0 (Codex #9 fix) |
+| blob11 | utm_medium | 200 | preserved from v0 |
+| blob12 | utm_campaign | 200 | preserved from v0 (Codex #9 fix — was collapsed into source_medium, now restored) |
+| blob13 | visitor_hash | 16 | SHA-256 first 8 bytes → 16 hex chars (matches v0 — 64 bits = collision-safe at daily-rotating uniqueness on ≤ 100M events/day) |
+| blob14 | country | 4 | ISO 3166-1 alpha-2 + `XX` fallback |
+| blob15 | device_type | 16 | enum: `mobile`/`tablet`/`desktop` |
+| blob16 | browser | 32 | enum-ish: Chrome/Firefox/Safari/Edge/Opera/DuckDuckGo/Safari Mobile/Other |
+| blob17 | bot_class | 16 | enum: `human`/`search-bot`/`ai-crawler`/`unknown-bot` |
+| blob18 | ai_actor | 32 | enum: `chatgpt`/`claude-web`/`perplexity`/`gemini`/`bingai`/`unknown-ai`/empty |
+| blob19 | locale | 16 | BCP-47 short tag (fi, en, en-US, zh-Hans-CN at outer limit). D1-derived in queue-job; empty at /track time, populated post-enrichment. |
+| blob20 | content_type_hint | 32 | host-emitted hint (`article`/`page`/`landing`/empty); content_type proper is in D1 |
+| double1 | event_count | — | always 1 |
+| double2 | viewport_width | — | px |
+| double3 | viewport_height | — | px |
+| index | site_id (sliced to 64 bytes) | 64 | required-in-every-WHERE remains; truncated in worker before write to stay under empirical 96-byte index ceiling |
 
 **No `event_type` slot** (Codex #8 fix): pageview_v1 is pageview-only. Custom events have their own dataset (5A). `locale` and `content_type_hint` may be empty at /track time and filled later application-side via D1 join — they are NOT mutated in AE.
 
 ### `flarelytics_engagement_v1`
-| Slot | Field |
-|---|---|
-| blob1 | schema_version (`eng.v1.0`) |
-| blob2 | site_id |
-| blob3 | canonical_url_hash |
-| blob4 | path |
-| blob5 | engagement_type | `scroll_depth`/`timing`/`read_complete` |
-| blob6 | visitor_hash |
-| blob7 | country |
-| double1 | event_count |
-| double2 | scroll_depth | 0–100 |
-| double3 | engaged_seconds |
+
+Caps follow pageview_v1 conventions. Total worst-case row ~620 bytes.
+
+| Slot | Field | Cap (bytes) | Notes |
+|---|---|---|---|
+| blob1 | schema_version | 16 | `eng.v1.0` |
+| blob2 | site_id | 64 | |
+| blob3 | canonical_url_hash | 12 | |
+| blob4 | path | 500 | |
+| blob5 | engagement_type | 16 | enum: `scroll_depth`/`timing`/`read_complete` |
+| blob6 | visitor_hash | 16 | |
+| blob7 | country | 4 | |
+| double1 | event_count | — | always 1 |
+| double2 | scroll_depth | — | 0–100 |
+| double3 | engaged_seconds | — | |
+| index | site_id (sliced ≤ 64) | 64 | scope filter |
 
 ### `flarelytics_share_v1`
-Outbound clicks tagged as shares. `share_target_url` is **hashed**, not stored plaintext (Codex #7 fix — privacy-first).
-| Slot | Field |
-|---|---|
-| blob1 | schema_version (`share.v1.0`) |
-| blob2 | site_id |
-| blob3 | canonical_url_hash | source content URL hash |
-| blob4 | share_target_platform | `bluesky`/`facebook`/`x`/`linkedin`/`email`/`copy_link`/`other` |
-| blob5 | share_target_url_hash | SHA-256(share_target_url)[0:12] — full URL is NOT stored; hash + platform is enough for aggregation |
-| blob6 | share_target_post_id | parsed at click time only if the user clicked from a known social-platform target URL; otherwise empty. **Never filled later** (Codex #6 — AE immutability) |
-| blob7 | share_id | UUID generated at click time, links to enrichment record in D1 |
-| blob8 | visitor_hash |
-| blob9 | country |
-| blob10 | device_type |
-| blob11 | browser |
-| double1 | event_count |
+
+Outbound clicks tagged as shares. `share_target_url` is **hashed**, not stored plaintext (Codex #7 fix — privacy-first). Caps follow pageview_v1 conventions. Total worst-case row ~340 bytes.
+
+| Slot | Field | Cap (bytes) | Notes |
+|---|---|---|---|
+| blob1 | schema_version | 16 | `share.v1.0` |
+| blob2 | site_id | 64 | |
+| blob3 | canonical_url_hash | 12 | source content URL hash |
+| blob4 | share_target_platform | 16 | enum: `bluesky`/`facebook`/`x`/`linkedin`/`email`/`copy_link`/`other` |
+| blob5 | share_target_url_hash | 12 | SHA-256(share_target_url)[0:12] — full URL is NOT stored; hash + platform is enough for aggregation |
+| blob6 | share_target_post_id | 80 | parsed at click time only if the user clicked from a known social-platform target URL; otherwise empty. **Never filled later** (Codex #6 — AE immutability) |
+| blob7 | share_id | 36 | UUID v4 (with dashes), links to enrichment record in D1 |
+| blob8 | visitor_hash | 16 | |
+| blob9 | country | 4 | |
+| blob10 | device_type | 16 | |
+| blob11 | browser | 32 | |
+| double1 | event_count | — | always 1 |
+| index | site_id (sliced ≤ 64) | 64 | scope filter |
 
 ### `flarelytics_bot_v1`
-| Slot | Field |
-|---|---|
-| blob1 | schema_version (`bot.v1.0`) |
-| blob2 | site_id |
-| blob3 | path |
-| blob4 | bot_class |
-| blob5 | ai_actor |
-| blob6 | user_agent | truncated to fit AE per-blob limit (see §9 — currently 200 chars exceeds typical limit; truncation target ~80 chars TBD by verification task) |
-| blob7 | country |
-| blob8 | referrer_domain |
-| double1 | event_count |
+
+User-agent cap locked at 80 bytes after §9 Task A measurements (down from v0's 200). Total worst-case row ~285 bytes, well below AE limits.
+
+| Slot | Field | Cap (bytes) | Notes |
+|---|---|---|---|
+| blob1 | schema_version | 16 | `bot.v1.0` |
+| blob2 | site_id | 64 | matches pageview_v1 |
+| blob3 | path | 500 | matches pageview_v1 |
+| blob4 | bot_class | 16 | enum |
+| blob5 | ai_actor | 32 | enum |
+| blob6 | user_agent | 80 | locked from §9 Task A. v0 stored 200 chars; the additional 120 chars never carried distinguishing info because UA strings are dominated by their first ~60 chars (engine + version) |
+| blob7 | country | 4 | |
+| blob8 | referrer_domain | 80 | matches pageview_v1 |
+| double1 | event_count | — | always 1 |
+| index | site_id (sliced ≤ 64) | 64 | scope filter |
 
 ### `flarelytics_performance_v1`
-| Slot | Field |
-|---|---|
-| blob1 | schema_version (`perf.v1.0`) |
-| blob2 | site_id |
-| blob3 | canonical_url_hash |
-| blob4 | path |
-| blob5 | device_type |
-| blob6 | browser |
-| blob7 | country |
-| double1 | event_count |
-| double2 | page_load_ms |
-| double3 | ttfb_ms |
-| double4 | dom_interactive_ms |
+
+Caps follow pageview_v1 conventions. Total worst-case row ~660 bytes.
+
+| Slot | Field | Cap (bytes) | Notes |
+|---|---|---|---|
+| blob1 | schema_version | 16 | `perf.v1.0` |
+| blob2 | site_id | 64 | |
+| blob3 | canonical_url_hash | 12 | |
+| blob4 | path | 500 | |
+| blob5 | device_type | 16 | |
+| blob6 | browser | 32 | |
+| blob7 | country | 4 | |
+| double1 | event_count | — | always 1 |
+| double2 | page_load_ms | — | |
+| double3 | ttfb_ms | — | |
+| double4 | dom_interactive_ms | — | |
+| index | site_id (sliced ≤ 64) | 64 | scope filter |
 
 ### `flarelytics_custom_v1` (5A — was missing in original draft)
-| Slot | Field |
-|---|---|
-| blob1 | schema_version (`cust.v1.0`) |
-| blob2 | site_id |
-| blob3 | canonical_url_hash |
-| blob4 | path |
-| blob5 | event_name | `flarelytics.track('event', ...)` first arg |
-| blob6 | event_props_json | second arg, JSON-stringified, truncated to fit AE per-blob limit |
-| blob7 | visitor_hash |
-| blob8 | country |
-| double1 | event_count |
+
+`event_props_json` cap locked at 1024 bytes (1 KB) after §9 Task A measurements. Total worst-case row ~1.7 KB, well below AE limits.
+
+| Slot | Field | Cap (bytes) | Notes |
+|---|---|---|---|
+| blob1 | schema_version | 16 | `cust.v1.0` |
+| blob2 | site_id | 64 | matches pageview_v1 |
+| blob3 | canonical_url_hash | 12 | |
+| blob4 | path | 500 | |
+| blob5 | event_name | 100 | `flarelytics.track('event', ...)` first arg; matches v0's eventName cap |
+| blob6 | event_props_json | 1024 | second arg, JSON-stringified. 1 KB is enough for ~25 reasonable key/value pairs. Worker rejects oversize props with 400 rather than truncating mid-JSON (truncated JSON is unparsable). |
+| blob7 | visitor_hash | 16 | |
+| blob8 | country | 4 | |
+| double1 | event_count | — | always 1 |
+| index | site_id (sliced ≤ 64) | 64 | scope filter |
 
 ### D1 dimension schema (sketched — full DDL produced during implementation)
 
@@ -529,24 +551,50 @@ To stay focused on schema migration:
 
 ## 9. Verifications & cost/risk appendix (run before Phase 1)
 
-### Task A — AE limits verification (per Codex #16, #17)
+### Task A — AE limits verification (per Codex #16, #17) — **COMPLETE 2026-05-08**
 
-Cloudflare AE limits (2026-04-23 docs):
-- ≤ 20 blobs per data point
+Cloudflare AE limits (2026-04-23 docs + empirical):
+- ≤ 20 blobs per data point ✓ verified
 - ≤ 20 doubles per data point
-- 1 index per data point
-- 16 KB total blob bytes per data point
+- 1 index per data point ✓ verified
+- 16 KB total blob bytes per data point ✓ verified — accepted 15,548 bytes intact
 - 250 data points per Worker invocation
+- **96 bytes per index value (NEW empirical finding — undocumented in CF docs)** — `writeDataPoint` throws `TypeError: writeDataPoint(): Size of indexes[0] exceeds 96 bytes` synchronously when exceeded.
 
-**Subtask A1**: Write a one-off test worker that emits a maximum-realistic pageview_v1 row (long path, max-length user agent, full Bsky DID post-ID, etc.) and verify the row reaches the dataset. Document the max byte sizes per blob observed.
+**Verification harness**: `packages/worker/test-ae-limits/` — separate Workers service writing to a separate dataset (`flarelytics_ae_limits_test_v1`). Source kept in repo so re-runs are cheap when v1 schemas evolve. Three probe shapes (`max-realistic`, `schema-cap`, `stress`) emitted, then read back via SQL API to compare bytes-sent vs bytes-stored.
 
-**Subtask A2**: Decide truncation policy and update §3 schemas:
-- `path` truncation length
-- `visitor_hash` (SHA-256) — full 64 hex chars per row × ~500K events/month × 6 datasets dual-write × ... measure total byte budget. If 16 KB total is tight, truncate to 16 hex chars (64 bits, sufficient for daily-rotating uniqueness on ≤ 100M events/day).
-- `user_agent` truncation length (currently 200 chars — likely too long)
-- `event_props_json` (custom dataset) truncation length
+**Subtask A1** ✓ — Three probe rows emitted and round-tripped through AE intact:
 
-**Subtask A3**: Confirm `/track` does not exceed 250 data points per invocation. Currently writes 1 (legacy) + N v1 (typically 2: pageview + 1 family). Future tracker batching mode (out of scope) needs design before introduction.
+| Probe | Total blob bytes | All 20 blobs preserved? | Notes |
+|---|---|---|---|
+| max-realistic | 1314 | ✓ pixel-perfect | typical heaviest production-shape row (Kiiru/Factyou pattern) |
+| schema-cap | 1434 | ✓ pixel-perfect | every cap declared in §3 hit simultaneously |
+| stress | 15548 | ✓ pixel-perfect | pushed near 16 KB ceiling; AE preserved every byte |
+
+AE does not silently truncate below the documented 16 KB ceiling. Below that ceiling, blob bytes survive end-to-end without modification.
+
+**Subtask A2** ✓ — Truncation policy locked. Per-blob caps live in §3 alongside each schema. Worst-case rows:
+
+| Dataset | Worst-case row | Headroom vs 16 KB |
+|---|---|---|
+| pageview_v1 | 1545 B | 10.6× |
+| engagement_v1 | 620 B | 26× |
+| share_v1 | 340 B | 48× |
+| bot_v1 | 285 B | 57× |
+| performance_v1 | 660 B | 25× |
+| custom_v1 | 1736 B | 9.4× |
+
+`visitor_hash` clarification: v0 has always stored 16 hex chars (8 bytes), not the 64 hex chars the first draft of this plan asserted. v1 keeps 16 hex.
+
+`user_agent` for `bot_v1` locked at **80 bytes** (down from v0's 200) — the additional 120 bytes never carried distinguishing info because UA strings are dominated by their first ~60 chars (engine + version).
+
+`event_props_json` for `custom_v1` locked at **1024 bytes**. Worker rejects oversize props with HTTP 400 rather than truncating mid-JSON (truncated JSON is unparsable downstream).
+
+**Subtask A3** ✓ — `/track` writes **2 data points per invocation** during dual-emit (1 legacy + 1 v1; the original "1 + N (typically 2)" claim was wrong — a single tracker event maps to a single v1 family). 125× headroom under the 250-per-invocation limit. Future tracker batching mode is still out of scope.
+
+**Subtask A4 (added during verification)** ✓ — All v1 datasets must use `site_id sliced to 64 bytes` as the AE index value. The site_id blob can be the full hostname (≤ 64 bytes), but the index argument to `writeDataPoint({indexes: [...]})` must additionally be sliced to stay below the empirical 96-byte ceiling. The shared 64-byte index makes site_id-scoped queries identical across datasets.
+
+**Cleanup**: test worker (`flarelytics-ae-limits-test`) and test dataset (`flarelytics_ae_limits_test_v1`) deleted after verification. Source retained in `packages/worker/test-ae-limits/`.
 
 ### Task B — `/track` p99 baseline measurement (P1A)
 
