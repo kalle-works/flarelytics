@@ -67,6 +67,10 @@ Check the project root:
 
 ## Step 3: Install the tracker
 
+The worker serves an auto-configured tracker at `WORKER_URL/tracker.js` — no
+build step, no bundler. The `@flarelytics/tracker` npm package is not yet
+published; use the script tag.
+
 **Script tag (any stack):**
 
 ```html
@@ -75,21 +79,6 @@ Check the project root:
 
 <!-- With scroll depth tracking (25/50/75/100%) -->
 <script defer data-endpoint="WORKER_URL" data-scroll-depth src="WORKER_URL/tracker.js"></script>
-```
-
-**npm:**
-
-```bash
-npm install @flarelytics/tracker
-```
-
-```ts
-import { init, track } from '@flarelytics/tracker'
-
-init('WORKER_URL')                          // basic
-init('WORKER_URL', { scrollDepth: true })   // with scroll depth
-
-track('signup', { props: { plan: 'pro' } }) // custom event
 ```
 
 **Stack-specific placement:**
@@ -104,14 +93,21 @@ track('signup', { props: { plan: 'pro' } }) // custom event
   import Script from 'next/script'
   <Script src="WORKER_URL/tracker.js" data-endpoint="WORKER_URL" strategy="afterInteractive" />
   ```
-- **Nuxt** — `plugins/flarelytics.client.ts`
-- **SvelteKit** — `src/app.html` or `src/routes/+layout.svelte`
+- **Nuxt** — `plugins/flarelytics.client.ts` — wrap the script tag in a client-only plugin
+- **SvelteKit** — `src/app.html` (head) or `src/routes/+layout.svelte` (with `onMount` if you need DOM access first)
 
 **CSP headers:** If the site uses Content-Security-Policy, add the worker URL:
 ```
 script-src 'self' WORKER_URL;
 connect-src 'self' WORKER_URL;
 ```
+
+**Coming soon — `data-emit-canonical`:** A future tracker version will support
+`data-emit-canonical="true"` to emit the page's `<link rel="canonical">` URL
+on each event. The worker already accepts this field (Phase 0.5 pilot for
+content-level analytics like Distribution Loop) but the served `/tracker.js`
+does not yet emit it. When it ships, sites with canonical tags will get
+content-level aggregation across translations and URL renames automatically.
 
 ---
 
@@ -155,18 +151,16 @@ If `data` is empty, wait 30 seconds — Analytics Engine has a short ingestion d
 
 ## Step 6: Custom events (optional)
 
-```ts
-import { track } from '@flarelytics/tracker'
+The script-tag tracker exposes a global `window.flarelytics.track()`:
 
+```js
 document.querySelector('#signup-btn')?.addEventListener('click', () => {
-  track('signup', { props: { plan: 'pro', source: 'hero' } })
+  window.flarelytics?.track('signup', { props: { plan: 'pro', source: 'hero' } })
 })
 ```
 
-Script tag global:
-```js
-window.flarelytics.track('signup', { props: { plan: 'pro' } })
-```
+Use `window.flarelytics?.track()` with optional chaining — safe if the tracker
+hasn't loaded yet (e.g. ad blocker, slow connection, fired pre-DOM).
 
 **Real-world examples (from kiiru.fi):**
 
@@ -181,7 +175,7 @@ window.flarelytics?.track('share', { props: { method: 'bluesky', url: window.loc
 window.flarelytics?.track('newsletter_signup', { props: { location: window.location.pathname } })
 ```
 
-Use `window.flarelytics?.track()` with optional chaining — safe if the tracker hasn't loaded yet.
+**Property values must be strings.** Coerce numbers with `String(n)` before passing.
 
 ---
 

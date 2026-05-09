@@ -3,9 +3,60 @@ main = "src/index.ts"
 compatibility_date = "2025-03-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Legacy v0 dataset — still bound, dual-emitted to during the v0 → v1 migration.
 [[analytics_engine_datasets]]
 binding = "ANALYTICS"
 dataset = "flarelytics"
+
+# v1 datasets per MIGRATION_PLAN.md §3. AE auto-creates datasets on first
+# write, so declaring bindings is enough. Phase 0 declares them but the
+# worker doesn't write to them yet — that starts in Phase 0.5 (Kiiru pilot).
+[[analytics_engine_datasets]]
+binding = "PAGEVIEW_EVENTS"
+dataset = "flarelytics_pageview_v1"
+
+[[analytics_engine_datasets]]
+binding = "ENGAGEMENT_EVENTS"
+dataset = "flarelytics_engagement_v1"
+
+[[analytics_engine_datasets]]
+binding = "SHARE_EVENTS"
+dataset = "flarelytics_share_v1"
+
+[[analytics_engine_datasets]]
+binding = "BOT_EVENTS"
+dataset = "flarelytics_bot_v1"
+
+[[analytics_engine_datasets]]
+binding = "PERFORMANCE_EVENTS"
+dataset = "flarelytics_performance_v1"
+
+[[analytics_engine_datasets]]
+binding = "CUSTOM_EVENTS"
+dataset = "flarelytics_custom_v1"
+
+# D1 — content/social/share/referrer/AI-actor dimension tables.
+# Create with: `npx wrangler d1 create flarelytics-dimensions`
+# Apply schema: `npx wrangler d1 migrations apply flarelytics-dimensions --remote`
+[[d1_databases]]
+binding = "DIMENSIONS"
+database_name = "flarelytics-dimensions"
+database_id = "your-d1-database-id-here"
+migrations_dir = "migrations"
+
+# Queues — content_id minting + post-ID resolution enrichment pipeline.
+# Create with:
+#   npx wrangler queues create flarelytics-enrich
+#   npx wrangler queues create flarelytics-enrich-dlq
+[[queues.producers]]
+binding = "ENRICH_QUEUE"
+queue = "flarelytics-enrich"
+
+# R2 — DLQ daily logs + query-comparison samples (Phase 2+).
+# Create with: `npx wrangler r2 bucket create flarelytics-archive`
+[[r2_buckets]]
+binding = "ARCHIVE"
+bucket_name = "flarelytics-archive"
 
 [vars]
 # Comma-separated list of allowed origins for CORS
@@ -22,3 +73,22 @@ DATASET_NAME = "flarelytics"
 #                    Create at: https://dash.cloudflare.com/profile/api-tokens
 #   CF_ACCOUNT_ID  — your Cloudflare account ID
 #                    Find at: https://dash.cloudflare.com → any zone → Overview sidebar
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Staging environment — used by MIGRATION_PLAN.md §9 Task B (baseline p99)
+# and Phase 1 dual-emit risk-gate measurements. Identical worker code,
+# isolated AE dataset so synthetic load never lands in production analytics.
+# Deploy: `npx wrangler deploy --env staging`
+# Tear down: `npx wrangler delete --name flarelytics-staging`
+# Run baseline: `k6 run perf/baseline-track.js`
+# ─────────────────────────────────────────────────────────────────────────────
+[env.staging]
+name = "flarelytics-staging"
+
+[[env.staging.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "flarelytics_staging"
+
+[env.staging.vars]
+ALLOWED_ORIGINS = "https://staging-loadtest.flarelytics.test"
+DATASET_NAME = "flarelytics_staging"

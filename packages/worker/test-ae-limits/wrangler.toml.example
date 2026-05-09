@@ -1,0 +1,18 @@
+name = "flarelytics-ae-limits-test"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+
+# Throwaway verification harness for MIGRATION_PLAN.md §9 Task A.
+# Deploy under your own Cloudflare account; SEPARATE from any production worker.
+account_id = "your-account-id-here"
+
+[[analytics_engine_datasets]]
+binding = "AE_TEST"
+dataset = "flarelytics_ae_limits_test_v1"
+
+[vars]
+CF_ACCOUNT_ID = "your-account-id-here"
+
+# Secrets (set via `wrangler secret put`):
+#   CF_API_TOKEN   — Cloudflare API token with `Account > Account Analytics > Read`
+#                    (used by /verify to read probe rows back via the SQL API)
