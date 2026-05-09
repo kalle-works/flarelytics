@@ -228,10 +228,11 @@ export interface CustomV1Params {
 }
 
 /**
- * Custom event emit. Per §3, the worker rejects oversized event_props_json with
- * 400 rather than truncating mid-JSON (truncated JSON is unparsable). The size
- * check itself happens in the caller (handleTrack) before this function is
- * invoked; here we only enforce the byte cap as a safety net.
+ * Custom event emit. Per §3, the worker rejects oversized event_props_json
+ * with 400 in handleTrack BEFORE this function is invoked (truncated JSON is
+ * unparsable, so reject-rather-than-truncate is the contract). The trunc()
+ * call below is a defense-in-depth safety net only; if it ever fires, the
+ * caller-side preflight has a bug.
  */
 export function emitCustomV1(ds: AnalyticsEngineDataset, p: CustomV1Params): boolean {
   try {

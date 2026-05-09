@@ -436,6 +436,54 @@ describe('POST /track — Phase 0.5 dual-emit (Kiiru only)', () => {
     expect(env.PAGEVIEW_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects custom events with oversize event_props_json (>1024 bytes) on Kiiru with 400', async () => {
+    const env = makeEnv();
+    const { ctx } = makeCtx();
+    // Build a props object whose JSON exceeds 1024 bytes
+    const big = 'x'.repeat(1100);
+    const req = trackReq(
+      { event: 'newsletter_signup', path: '/about', props: { large_field: big } },
+      { Origin: 'https://kiiru.fi' },
+    );
+    const res = await worker.fetch(req, env, ctx);
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toMatch(/event_props_json exceeds/);
+    // No writes should have happened — neither legacy nor v1
+    expect(env.ANALYTICS.writeDataPoint).not.toHaveBeenCalled();
+    expect(env.CUSTOM_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+  });
+
+  it('does NOT enforce custom-event size cap on non-Kiiru sites (legacy v0 behavior preserved)', async () => {
+    const env = makeEnv();
+    const { ctx } = makeCtx();
+    const big = 'x'.repeat(1100);
+    const req = trackReq(
+      { event: 'newsletter_signup', path: '/about', props: { large_field: big } },
+      { Origin: 'https://example.com' },
+    );
+    const res = await worker.fetch(req, env, ctx);
+    expect(res.status).toBe(204);
+    // v0 silently truncates and writes; v1 dataset stays untouched (non-Kiiru)
+    expect(env.ANALYTICS.writeDataPoint).toHaveBeenCalledTimes(1);
+    expect(env.CUSTOM_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+  });
+
+  it('does NOT apply custom-event size cap to reserved event names (pageview/timing/scroll_depth/outbound)', async () => {
+    const env = makeEnv();
+    const { ctx, settle } = makeCtx();
+    // Reserved event with large props (e.g. timing event with arbitrary metadata)
+    const big = 'x'.repeat(1100);
+    const req = trackReq(
+      { event: 'timing', path: '/a/foo', props: { seconds: '42', meta: big } },
+      { Origin: 'https://kiiru.fi' },
+    );
+    const res = await worker.fetch(req, env, ctx);
+    expect(res.status).toBe(204);
+    await settle();
+    expect(env.ENGAGEMENT_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
+  });
+
   it('strips www. from origin when matching against Kiiru allowlist', async () => {
     const env = makeEnv({ ALLOWED_ORIGINS: 'https://www.kiiru.fi' });
     const { ctx, settle } = makeCtx();

@@ -294,11 +294,27 @@ async function handleTrack(request: Request, env: Env, ctx: ExecutionContext): P
   const country = (request.cf?.country as string) || 'XX';
   const propValue = body.props ? Object.values(body.props).join('|').slice(0, 200) : '';
 
+  // Derive site early so we can preflight v1-only constraints.
+  const site = origin ? (() => { try { return new URL(origin).hostname.replace(/^www\./, ''); } catch { return origin; } })() : '';
+
+  // Custom event preflight (§3 / §11 contract): for sites in V1_EMIT_SITES,
+  // reject oversize event_props_json with 400 rather than silently truncating
+  // mid-JSON (truncated JSON is unparsable at read time). Non-pilot sites keep
+  // v0's silent-truncation behavior for backwards compatibility.
+  const RESERVED_EVENTS = new Set(['pageview', 'timing', 'scroll_depth', 'outbound', 'bot_hit']);
+  if (V1_EMIT_SITES.has(site) && !RESERVED_EVENTS.has(eventName) && body.props) {
+    const propsJson = JSON.stringify(body.props);
+    const propsBytes = new TextEncoder().encode(propsJson).length;
+    if (propsBytes > 1024) {
+      return Response.json(
+        { error: 'event_props_json exceeds 1024 byte limit', hint: `Sent ${propsBytes} bytes; maximum is 1024. Trim or split the props object.` },
+        { status: 400, headers: cors },
+      );
+    }
+  }
+
   const ip = request.headers.get('CF-Connecting-IP') || '0.0.0.0';
   const vid = await visitorHash(ip, ua);
-
-  // Derive site from Origin header, strip www. prefix
-  const site = origin ? (() => { try { return new URL(origin).hostname.replace(/^www\./, ''); } catch { return origin; } })() : '';
 
   // If referrer hostname matches the site itself, treat as direct (internal navigation)
   const rawReferrer = (body.referrer || 'direct').slice(0, 500);
