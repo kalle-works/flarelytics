@@ -1,133 +1,132 @@
-# Ohjeet seuraavalle sessiolle — Phase 0.5 (Kiiru-pilotti)
+# Ohjeet seuraavalle sessiolle — Phase 1 (portfolio dual-emit) + Queue consumer
 
-Status: **Phase 0 livessä tuotannossa 2026-05-08.** Schemat lukittu, baseline mitattu, infrastruktuuri provisioitu, käyttäytyminen identtinen v0:n kanssa. Valmis aloittamaan Phase 0.5:n Kiiru-pilotin.
+Status: **Phase 0.5 mainissa ja tuotannossa 2026-05-10.** Worker `dbf9c23f` Cloudflaressa, dual-emit aktiivinen Kiirulle, p99 22.80 ms (gate 23.63 ms PASS). §6 cutover-kello käynnissä — Kiirun dual-write ≥99.9 % vaaditaan 7 vrk ennen Phase 1:tä.
 
 ---
 
 ## Lue ensin (tässä järjestyksessä)
 
-1. **`packages/worker/CLAUDE.md`** — projektin konventiot (suomi, conventional commits, älä mergea mainiin ilman lupaa)
-2. **`packages/worker/MIGRATION_PLAN.md`** — Single Source of Truth. Erityisesti:
-   - §0 lukitut päätökset (12 kpl)
-   - §3 v1-skeemat **byte-cap-sarakkeineen** (lukittu §9 Task A:n mittauksilla)
-   - §4 Phase 0.5 -kuvaus (rivi 386–400)
-   - §6 cutover-kriteerit (Phase 0.5 → 1 erityisesti — usefulness gate)
-   - §9 Tasks A + B (lukitut mittaukset, **älä mittaa uudelleen**)
-   - §11 Phase 0.5 -testivaatimukset (~25 testikohtaa)
-   - §13 worktree-parallelization (mikä riippuu mistä)
-   - §15–§16 design-speksit Distribution Loop -näkymälle
-3. **`packages/worker/src/index.ts`** — nykyinen v0-koodi. Phase 0:n bindings ovat olemassa (`PAGEVIEW_EVENTS`, `ENGAGEMENT_EVENTS`, `SHARE_EVENTS`, `BOT_EVENTS`, `PERFORMANCE_EVENTS`, `CUSTOM_EVENTS`, `DIMENSIONS`, `ENRICH_QUEUE`, `ARCHIVE`) mutta käyttämättä.
-4. **`packages/tracker/src/tracker.ts`** ja `tracker.test.ts` — nykyinen tracker. Phase 0.5 lisää `canonical_url`-kentän payloadiin.
-5. **Approved-mockupit** (Distribution Loop / Content Performance / Article Scorecard) — `~/.gstack/projects/kalle-works-flarelytics/designs/` (variant-A, variant-A, variant-C). Implementer lukee ne `Read`-toolilla kun rakennat näkymää.
+1. **`packages/worker/CLAUDE.md`** — projektin konventiot (suomi, conventional commits, älä mergea mainiin ilman lupaa, älä deployata ilman lupaa)
+2. **`packages/worker/MIGRATION_PLAN.md`** — Single Source of Truth. Phase 1:n osalta erityisesti:
+   - §4 Phase 1 (rivi 420–426) — full portfolio dual-emit + risk gate
+   - §6 cutover-kriteerit (Phase 0.5→1 sarake) — 7 vrk klausuulit
+   - §11 Phase 1 -testivaatimukset (rivi 730–734)
+   - §13 worktree-parallelization (Lane B vs Lane D vs Lane E -riippuvuudet)
+3. **`packages/worker/src/index.ts`** — nykyinen dual-emit, gate `V1_EMIT_SITES = new Set(['kiiru.fi'])` rivillä 28
+4. **`packages/worker/src/v1/`** — `canonical.ts` + `emit.ts` (140 testiä, älä riko)
 
 ---
 
-## Mitä on jo varmistettu — älä toista
+## Mitä on jo tuotannossa — älä toista
 
 | Asia | Tulos | Lukittu |
 |---|---|---|
-| AE 16 KB total blob limit | ✓ Empiirisesti 15.5 KB rivit menevät pixel-perfect | §9 Task A |
-| AE 96B index ceiling (uusi löydös) | site_id slicetään 64B:hen kaikissa v1-datasetissä | §9 Task A4 |
+| Phase 0 infra (D1, Queues, R2, 6 v1 AE-datasetit) | ✓ provisioitu | wrangler.toml |
 | /track p99 baseline | 18.18 ms (Helsinki → CF edge, 100 RPS × 5 min) | §9 Task B |
-| Phase 1 dual-emit risk gate | p99 ≤ 23.63 ms (×1.30) | §6 |
-| Per-blob byte-budjetit | Kuusi schema-taulua §3:ssa | §3 |
-| Visitor hash-pituus | 16 hex (8B), v0:lla aina ollut tämä | §3 |
-| /track datapointit/invokaatio | 1 v0 + 1 v1 = 2 (125× headroom) | §9 Task A3 |
+| Phase 0.5 dual-emit Kiirulle | ✓ live, ctx.waitUntil-mitigaatio | commit `0011c97` |
+| Phase 1 dual-emit p99 mittaus | 22.80 ms (gate 23.63, 0.83 ms headroom) | §9 (päivitettävä) |
+| Custom event_props_json reject (>1024 B) | ✓ V1_EMIT_SITES-sivuille | commit `0551cfd` |
+| Production-deploy | `dbf9c23f` flarelytics worker | 2026-05-10 |
 
-Älä uudelleenmittaa näitä; aja k6-skripti vain Phase 1 -dual-emit-mittausta varten **kun /track-koodissa on dual-emit**.
+**ÄLÄ uudelleenmittaa baselinea.** Phase 1 -mittaus on jo tehty waitUntil-koodille.
 
 ---
 
-## Ensimmäinen tehtävä — kolme rinnakkaista, riippumatonta moduulia
+## §6 cutover-kello (alkanut 2026-05-10)
 
-Plan §13 Lane C: nämä eivät riipu /track-muutoksista ja voi tehdä rinnakkain. Kaikki ovat puhdasta logiikkaa, helppoja unit-testata, EI vaadi deployta:
+Phase 0.5 → 1 vaatii **kaikki** ≥7 vrk:n ajan:
 
-### Tehtävä 1A — Tracker `canonical_url` -emit (Kiiru-only feature flag)
+| Kriteeri | Mittauspaikka | Status |
+|---|---|---|
+| Dual-write success rate ≥ 99.9 % | Kiiru AE `flarelytics_pageview_v1` rivimäärä vs `flarelytics` (legacy) Kiirulle | tarkista 2026-05-17 jälkeen |
+| /track p99 ≤ baseline + 30 % (≤23.63 ms) | k6-ajo `perf/baseline-track.js` | OK 2026-05-10 (22.80 ms) |
+| /track 5xx rate ≤ baseline + 0.1 % | CF dashboard worker analytics | tarkista |
+| Per-query shadow drift (30 sample Kiiru) | EI VIELÄ — vaatii v1-querit (Phase 2) | ei sovellu Phase 0.5→1 |
+| Distribution Loop view ≥3 editorial-päätöstä | qualitative — Kalle dokumentoi | **odottaa Loop-näkymän rakentamista** |
 
-`packages/tracker/src/tracker.ts`:
-- Lue `<link rel="canonical">` jos olemassa
-- Fallback: `location.href` normalisoituna (lowercase host, strip default port, strip fragment, optional trailing slash)
-- Lisää payloadiin `canonical_url`-kenttä
-- Feature flag: emit vain jos `data-emit-canonical="true"` tracker-tagissä — Kiiru opt-in (muut sivustot lähettävät ilman canonical_url:ää, worker tekee server-side fallbackin)
-- Unit-testit kattamaan: canonical-tagin parsiminen, normalisointi, fallback-polut
+**Loop-näkymä** on Phase 0.5 deliverable joka EI vielä ole toteutettu. Phase 1:hin ei voi siirtyä ennen sitä JA 14 vrk käyttöä siitä.
 
-Plan §11 Phase 0.5 -testivaatimukset (rivi 631–635):
-- "SHA256(canonical_url)[0:12] same input → same hash"
-- "Different canonical → different hash"
-- "Trailing slash, case, fragment normalization"
-- "Tracker payload missing canonical_url → fallback to request URL with `canonical_inferred='1'`"
+---
 
-(Hash-puoli on workerin vastuulla; trackerin vastuulla on emit + normalize.)
+## Kolme rinnakkaista työpolkua (valitse alku)
 
-### Tehtävä 1B — Referrer resolver -moduuli
+### Polku A — Distribution Loop -näkymä (Phase 0.5 deliverable, vaadittu cutoverille)
 
-`packages/worker/src/referrer/index.ts` (uusi tiedosto, EI vielä kutsuttu /track:sta):
-- Funktio `parseReferrer(url: string): { social_platform: string; social_post_id: string }`
-- Tukee plan §0 päätös 2A + §11 testivaatimukset:
-  - `bsky.app/profile/X/post/Y` → `{platform: 'bluesky', post_id: 'X/post/Y'}`
-  - `l.facebook.com/?u=...&story_fbid=N` → `{platform: 'facebook', post_id: 'N'}`
-  - `news.ycombinator.com/item?id=X` → `{platform: 'hn', post_id: 'X'}`
-  - `reddit.com/r/X/comments/Y/Z` → `{platform: 'reddit', post_id: 'Y'}`
-  - `t.co/...` → `{platform: 'x', post_id: ''}` (2A: ei HTTP-resolveä)
-  - Mastodon any-instance → `{platform: 'mastodon', post_id: 'instance/post'}`
-  - Tuntematon → `{platform: '', post_id: ''}`
-- Truncation: post_id ≤ 80 tavua (§3 cap)
-- Vitest-testit kunkin platformin happy path + edge case
+Approved-mockupit: `~/.gstack/projects/kalle-works-flarelytics/designs/` (variant-A Distribution Loop, variant-A Content Performance, variant-C Article Scorecard).
 
-### Tehtävä 1C — Bot/AI classifier -moduuli
+Ongelma: v1-data on AE:ssa mutta `QUERY_TEMPLATES` osoittaa v0:aan. Tarvitaan:
+1. Uudet v1-queryt `packages/worker/src/queries/v1/` — pelkkä Loop-näkymä riittää aluksi
+2. Loop-view `packages/dashboard/src/pages/loop.astro` — pageview_v1 + share_v1 + engagement_v1 join
+3. **Important:** §3 D1-data ei vielä virtaa (queue consumer puuttuu) → `content_id`-aggregaatti ei toimi → Loop näyttää canonical_url_hash-tasolla. Käytännössä toimii Kiirulla koska 1 canonical = 1 article (ei vielä käännöksiä).
 
-`packages/worker/src/classifier/index.ts` (uusi tiedosto):
-- Funktio `classifyUserAgent(ua: string): { bot_class: 'human'|'search-bot'|'ai-crawler'|'unknown-bot', ai_actor: string }`
-- Hyödyntää nykyistä `DEFAULT_BOT_PATTERNS`-listaa (`packages/worker/src/index.ts:52-58`) mutta laajentaa sen AI-actor-tunnistukseen:
-  - ChatGPT-User → `{bot_class: 'ai-crawler', ai_actor: 'chatgpt'}`
-  - Claude-Web / ClaudeBot → `{ai_actor: 'claude-web'}`
-  - PerplexityBot → `{ai_actor: 'perplexity'}`
-  - Gemini → `{ai_actor: 'gemini'}`
-  - BingAI → `{ai_actor: 'bingai'}`
-  - Googlebot/Bingbot → `{bot_class: 'search-bot', ai_actor: ''}`
-  - Vakio human → `{bot_class: 'human', ai_actor: ''}`
-- Tuntematon AI-pattern → `{bot_class: 'ai-crawler', ai_actor: 'unknown-ai'}`
-- Tuntematon bot → `{bot_class: 'unknown-bot', ai_actor: ''}`
-- Caps: bot_class ≤ 16B, ai_actor ≤ 32B (§3)
+Riippuvuus: ei riipu queue consumerista, mutta D1-aggregaatti hyötyisi siitä.
 
-**Sano käyttäjälle ennen koodaamista:** Kerro kumman tehtävän aiot tehdä ensin tai aiotko rinnakkaisia worktree-instancesseja. Kysy vahvistus tehtävän scopelle ennen kuin kirjoitat enempää kuin 50 riviä koodia. Älä aloita aiheesta poikkeavasti.
+### Polku B — Queue consumer + DIMENSIONS-kirjoitukset (alkuperäinen lista 3)
+
+`packages/worker/src/enrich/` (uusi):
+- Cloudflare Queue consumer-handler
+- Lukee enrichment-jobit ENRICH_QUEUE:sta
+- Mintaa content_id ja kirjoittaa D1.content + content_aliases (UPSERT)
+- Resolvoi social_post_id-metadatan kun mahdollista
+- Backpressure: queue depth > 5000 → degrade content_id minting -only
+
+**TÄRKEÄÄ:** /track ei vielä push enrichment-jobeja queueen — se rajattiin pois Phase 0.5 scope:sta. Tarvitsee:
+1. Lisää queue.send() handleTrack:n waitUntil-blokkiin Kiirulle
+2. Toteuta consumer
+3. Erillinen wrangler.toml [[queues.consumers]]-osio (jo olemassa example:ssa)
+4. Oma deploy-keskustelu
+
+Riippuvuus: tarvitsee D1-skeeman (✓ jo applied) ja queue-bindingin (✓).
+
+### Polku C — Phase 1 portfolio dual-emit -laajennus
+
+Kun §6 7 vrk Kiirulla on OK:
+1. Muuta `V1_EMIT_SITES = new Set(['kiiru.fi'])` (index.ts:28) lukemaan KV-allowlistasta JA fallbackina koko `ALLOWED_ORIGINS`
+2. Plan §4 Phase 1: "Tracker payload contract enforced for all sites (canonical_url required; fallback to inferred-canonical with flag)" → server-side fallback toimii jo (resolveCanonical), ei muutos tarvita
+3. Phase 1 risk gate: re-mittaa /track p99 koko portfolion kuormalla (ei vain Kiiru) — odotettavissa sama tai parempi koska waitUntil on jo paikoilla
+4. Queue depth alarm > 5000 — vaatii Polku B:n ensin
+
+Riippuvuus: vaatii §6 cutover-kellon päättymisen + Loop-näkymän hyväksynnän.
+
+---
+
+## Kriittinen production-tila (älä riko)
+
+**Worker:** `flarelytics` (https://flarelytics.kl100.workers.dev) — Cloudflare account `4afa9a2ef256ff7f1cec9ed91ff03561`
+**Deploy-komento:** `cd packages/worker && npx wrangler deploy` (ei `--env staging`)
+**Staging:** `flarelytics-staging` — käytä Phase 1 risk-gate-uudelleenmittauksiin
+**Wrangler auth:** `npx wrangler login --browser` (OAuth-token vanhenee, ei pitkää tokenia)
+
+**Bindings tuotannossa (ÄLÄ MUUTA NIMIÄ):**
+- ANALYTICS (legacy) → `flarelytics`
+- PAGEVIEW_EVENTS → `flarelytics_pageview_v1`
+- ENGAGEMENT_EVENTS → `flarelytics_engagement_v1`
+- SHARE_EVENTS → `flarelytics_share_v1`
+- BOT_EVENTS → `flarelytics_bot_v1`
+- PERFORMANCE_EVENTS → `flarelytics_performance_v1`
+- CUSTOM_EVENTS → `flarelytics_custom_v1`
+- DIMENSIONS (D1) → `flarelytics-dimensions` (id `7e55f9f3-700e-466c-95d5-cf267e3fed67`)
+- ENRICH_QUEUE → `flarelytics-enrich` (id `864e5c89a3a647e9ae53b30279a7804d`)
+- ARCHIVE (R2) → `flarelytics-archive`
+- SITE_CONFIG (KV) → id `d332c72d6ea64643a1ed43ee732814b5`
 
 ---
 
 ## Mitä saa varmasti tehdä
 
 - Lukea kaikki tiedostot reposta
-- Kirjoittaa uutta lähdekoodia `packages/worker/src/referrer/`, `packages/worker/src/classifier/`, `packages/tracker/src/`
-- Lisätä unit-testejä vitest-formaatissa
-- Ajaa `npm test` `packages/worker/` ja `packages/tracker/` -juuressa
-- Committaa + pushata `design/migration-plan` -branchille
-- Käyttää `Edit`-toolia muokkaamaan olemassa olevia tiedostoja MIKÄLI muutos on tehtävän scopeissa
+- Tehdä uusi feature-branch (esim `feat/distribution-loop`, `feat/queue-consumer`, `feat/phase-1-portfolio`) **mainin päältä** — `design/migration-plan` on poistettu
+- Kirjoittaa uusia moduuleja `packages/worker/src/queries/v1/`, `packages/worker/src/enrich/`, `packages/dashboard/src/`
+- Lisätä testejä vitest-formaatissa (140 olemassa olevaa pass — älä riko)
+- Committaa + pushata feature-branchiin
 
 ## Mitä EI saa ilman lupaa
 
-- Mergetä mainiin (CLAUDE.md vaatii `/review` ennen mergea + erillisen luvan)
-- Deployata Cloudflareen (`wrangler deploy`) — Phase 0.5:n Kiiru-pilotin kytkeminen tuotantoon vaatii Kallen erillisen luvan
-- Lisätä /track-koodiin v1-kirjoituksia ennen kuin referrer + classifier -moduulit ovat unit-testattu erikseen
-- Käynnistää queue consumer -workeria (oma deploy, oma scope-keskustelu)
-- Aloittaa Distribution Loop -näkymän rakentamista ennen kuin v1-queryt ovat olemassa ja v1-data virtaa Kiirun /track:sta
-
----
-
-## Skills jotka kannattaa käyttää
-
-| Skill | Milloin |
-|---|---|
-| `/investigate` | Jos kohtaat odottamattoman virheen (ennen kuin kosket koodiin) |
-| `/codex challenge` | Kun olet luonnos uuden moduulin julkista API:a tai SQL-templatea ennen committia |
-| `/codex review` | Diff-tason 2nd opinion ennen pushia |
-| `/review` | Ennen jokaista mergea — CLAUDE.md vaatii |
-| `/ship` | Kun branch on valmis mergetä; ajaa testit + diff-reviewn ennen kuin avaa PR:n |
-| `/qa` | Jos lisäät dashboard-näkymän — kattava QA + bug-fix loop |
-
-**ÄLÄ** käytä:
-- `/design-shotgun` (mockupit ovat jo §15:ssä)
-- `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/plan-devex-review` (kaikki ajettu, lukittu)
-- `/office-hours` (alkuperäinen tarve on lukittu plan §0:ssa)
+- Mergetä mainiin (vaatii `/review` + erillisen luvan, kuten Phase 0.5:lla)
+- Deployata Cloudflareen (`wrangler deploy`) — jokainen tuotanto-deploy vaatii Kallen luvan
+- Käynnistää queue consumer -workeria tuotannossa (Polku B:n omat deploy-keskustelut)
+- Muuttaa V1_EMIT_SITES-sisältöä ennen §6 cutover-kellon umpeutumista
+- Poistaa legacy ANALYTICS-write — pysyy mukana Phase 4 saakka
 
 ---
 
@@ -136,64 +135,16 @@ Plan §11 Phase 0.5 -testivaatimukset (rivi 631–635):
 | Polku | Mitä on |
 |---|---|
 | `packages/worker/MIGRATION_PLAN.md` | SSOT — kaikki päätökset |
-| `packages/worker/src/index.ts` | Tuotannon worker (v0 + Phase 0 bindings) |
-| `packages/worker/src/index.test.ts` | 25 unit-testiä — säilyy 100% pass aina |
-| `packages/worker/migrations/0001_initial.sql` | D1 schema (applied to remote) |
-| `packages/worker/wrangler.toml` | (gitignored) tuotannon konfiguraatio resurssi-ID:illä |
-| `packages/worker/wrangler.toml.example` | Committoitu blueprint self-hostereille |
-| `packages/worker/perf/baseline-track.js` | k6-skripti — uudelleenajettavissa Phase 1 -mittausta varten |
-| `packages/worker/test-ae-limits/` | §9 Task A:n harnessi (deletoitu CF:stä, source jää) |
-| `packages/tracker/src/tracker.ts` | Vanilla JS tracker (vähimmäismuutoksia mieluiten) |
-
-## Tuotannon resurssit (älä luo uusia)
-
-| Resurssi | Tunniste |
-|---|---|
-| CF account | `4afa9a2ef256ff7f1cec9ed91ff03561` |
-| Worker (prod) | `flarelytics` (https://flarelytics.kl100.workers.dev) |
-| KV namespace | `d332c72d6ea64643a1ed43ee732814b5` (SITE_CONFIG) |
-| D1 database | `7e55f9f3-700e-466c-95d5-cf267e3fed67` (`flarelytics-dimensions`) |
-| Queue | `flarelytics-enrich` (id `864e5c89a3a647e9ae53b30279a7804d`) |
-| DLQ | `flarelytics-enrich-dlq` (id `9b7172d6f73f418186954467b7a896f6`) |
-| R2 bucket | `flarelytics-archive` |
-| AE datasets (legacy) | `flarelytics` (jatkaa kirjoitusta Phase 4 saakka) |
-| AE datasets (v1) | `flarelytics_pageview_v1`, `_engagement_v1`, `_share_v1`, `_bot_v1`, `_performance_v1`, `_custom_v1` |
-
----
-
-## Tracker payload -kontrakti (lukittu §3)
-
-Phase 0.5:n `/track` POST body täytyy hyväksyä molemmat:
-
-**v0 (legacy, jatkuu):**
-```json
-{ "event": "pageview", "path": "/...", "referrer": "...", "utm_source": "..." }
-```
-
-**v1 (uusi, opt-in `data-emit-canonical`):**
-```json
-{
-  "event": "pageview",
-  "path": "/...",
-  "canonical_url": "https://kiiru.fi/a/...",
-  "referrer": "...",
-  "utm_source": "..."
-}
-```
-
-Worker server-side:
-- Jos `canonical_url` puuttuu → `canonical_inferred='1'`, hash request URL:istä
-- Jos olemassa → `canonical_inferred=''`, hash siitä
-- `canonical_url_hash` = `SHA-256(canonical_url)[0:12]` molemmissa tapauksissa
-
----
-
-## Testikäytännöt (CLAUDE.md vaatii)
-
-- Jokaisen featuren jälkeen: `npm test` (worker + tracker)
-- E2E-testit Phase 0.5:n end-to-end -kululle: synthetic article → outbound share → return-pageview → loop view (§11 rivi 656)
-- Älä mockaa Cloudflaren bindingseja AE-emit-testeissä; käytä `vi.fn()` -spya kuten nykyinen `index.test.ts:7-12`
-- Pre-existing TS-virheet `index.test.ts:24,30,45,58,69,70,86`: `worker.fetch(req, env, ctx)` kutsuu 3 argumentilla mutta signature ottaa 2. Vitest hyväksyy runtimeen. Älä korjaa Phase 0.5:n osana — vaatii oman commitin.
+| `packages/worker/src/index.ts` | Tuotannon worker, dual-emit + waitUntil |
+| `packages/worker/src/index.test.ts` | 42 testiä /track:lle (säilyy 100 % pass) |
+| `packages/worker/src/v1/canonical.ts` | normalize + SHA-256[0:12] hash |
+| `packages/worker/src/v1/emit.ts` | 5 typed emit-funktiota per family |
+| `packages/worker/src/referrer/index.ts` | Social-platform parsing |
+| `packages/worker/src/classifier/index.ts` | Bot/AI UA-luokittelu |
+| `packages/worker/migrations/0001_initial.sql` | D1-skeema (applied to remote) |
+| `packages/worker/wrangler.toml` | (gitignored) tuotannon konfiguraatio |
+| `packages/worker/wrangler.toml.example` | Committoitu blueprint |
+| `packages/worker/perf/baseline-track.js` | k6-skripti — `ORIGIN=https://kiiru.fi` Phase 1 -mittauksiin |
 
 ---
 
@@ -201,6 +152,17 @@ Worker server-side:
 
 Sano näin:
 
-> "Aloitan Phase 0.5:n. Olen lukenut MIGRATION_PLAN.md §:t 0, 3, 4, 6, 9 (A+B), 11, 13, 15, 16. Nykyiset Phase 0 bindings ovat valmiit, perustyö ennen /track-dual-emitiä on kolme rinnakkaista moduulia: (1A) tracker canonical_url -emit, (1B) referrer resolver, (1C) bot/AI classifier. Aloitan **[VALITSE 1A | 1B | 1C | rinnakkaisena worktreessa]**, kirjoitan ensin julkisen API:n + unit-testit, ajan testit, ja palaan sinulle 2nd opinion -tarkistusta varten ennen commitia. Vahvistatko suunnan?"
+> "Phase 0.5 on tuotannossa, §6 cutover-kello käynnissä. Olen lukenut MIGRATION_PLAN.md §4 (Phase 1) + §6 (cutover) + §11 (test reqs). Kolme polkua auki: A) Distribution Loop -näkymä (Phase 0.5 deliverable, vaadittu cutoverille), B) Queue consumer + D1-DIMENSIONS-kirjoitukset (alkuperäinen lista 3), C) Phase 1 portfolio dual-emit -laajennus (vaatii §6 cutoverin). Aloitan **[VALITSE A | B | C]**, teen feature-branchin mainin päältä, ja palaan sinulle review-tarkistuksiin ennen mergea. Vahvistatko suunnan?"
 
 Odota vahvistus ennen kuin alat kirjoittaa lähdekoodia (yli 50 rivin scope).
+
+---
+
+## Muista (CLAUDE.md project + user)
+
+- **Suomi** kommunikaatiossa, conventional commits committeihin
+- **Älä mergea mainiin ilman lupaa** — `/review` ennen mergea, sitten erillinen "merge"-pyyntö
+- **Älä mene palvelimille ilman lupaa** — wrangler deploy, ssh, kaikki remote-actionit luvanvaraisia
+- **Tarkista context7:sta** kirjastojen toiminta ennen käyttämistä (esim. CF Queues, D1)
+- **Featurebranch + testit + git push** jokaisesta featuresta
+- **Älä koskaan poista AE legacy-kirjoituksia** ennen Phase 4
