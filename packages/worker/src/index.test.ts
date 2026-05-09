@@ -1,21 +1,44 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import worker, { isBot, deviceType, browserName } from './index';
+import { PV_SCHEMA, ENG_SCHEMA, SHARE_SCHEMA, BOT_SCHEMA, CUSTOM_SCHEMA } from './v1/emit';
 
 function makeEnv(overrides: Record<string, unknown> = {}) {
   const store = new Map<string, string>();
   return {
     ANALYTICS: { writeDataPoint: vi.fn() },
+    PAGEVIEW_EVENTS: { writeDataPoint: vi.fn() },
+    ENGAGEMENT_EVENTS: { writeDataPoint: vi.fn() },
+    SHARE_EVENTS: { writeDataPoint: vi.fn() },
+    BOT_EVENTS: { writeDataPoint: vi.fn() },
+    PERFORMANCE_EVENTS: { writeDataPoint: vi.fn() },
+    CUSTOM_EVENTS: { writeDataPoint: vi.fn() },
     SITE_CONFIG: {
       get: vi.fn(async (k: string) => store.get(k) ?? null),
       put: vi.fn(async (k: string, v: string) => { store.set(k, v); }),
     } as unknown as KVNamespace,
-    ALLOWED_ORIGINS: 'https://example.com',
+    ALLOWED_ORIGINS: 'https://example.com,https://kiiru.fi',
     QUERY_API_KEY: 'test-key',
     CF_ACCOUNT_ID: '',
     CF_API_TOKEN: '',
     DATASET_NAME: 'test',
     ...overrides,
   };
+}
+
+// Realistic UA strings used across dual-emit tests.
+const HUMAN_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
+const GPTBOT_UA = 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.0; +https://openai.com/gptbot)';
+
+function trackReq(body: Record<string, unknown>, headers: Record<string, string> = {}): Request {
+  return new Request('https://worker.test/track', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': HUMAN_UA,
+      ...headers,
+    },
+    body: JSON.stringify(body),
+  });
 }
 
 describe('GET /admin/sites', () => {
@@ -170,5 +193,190 @@ describe('browserName', () => {
 
   it('returns Other for unknown', () => {
     expect(browserName('SomeRandomAgent/1.0')).toBe('Other');
+  });
+});
+
+describe('POST /track — Phase 0.5 dual-emit (Kiiru only)', () => {
+  it('writes legacy + pageview_v1 for a Kiiru pageview', async () => {
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'pageview', path: '/a/foo', referrer: 'bsky.app', canonical_url: 'https://kiiru.fi/a/foo' },
+      { Origin: 'https://kiiru.fi' },
+    );
+    const res = await worker.fetch(req, env, {} as ExecutionContext);
+    expect(res.status).toBe(204);
+    expect(env.ANALYTICS.writeDataPoint).toHaveBeenCalledTimes(1);
+    expect(env.PAGEVIEW_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
+    const v1Call = (env.PAGEVIEW_EVENTS.writeDataPoint as any).mock.calls[0][0];
+    expect(v1Call.blobs[0]).toBe(PV_SCHEMA);
+    expect(v1Call.blobs[1]).toBe('kiiru.fi');
+    expect(v1Call.blobs[3]).toBe(''); // canonical_inferred=false → ''
+    expect(v1Call.blobs[4]).toBe('/a/foo'); // path
+    expect(v1Call.indexes[0]).toBe('kiiru.fi');
+  });
+
+  it('does NOT write any v1 dataset for non-Kiiru pageview', async () => {
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'pageview', path: '/foo', referrer: 'direct' },
+      { Origin: 'https://example.com' },
+    );
+    const res = await worker.fetch(req, env, {} as ExecutionContext);
+    expect(res.status).toBe(204);
+    expect(env.ANALYTICS.writeDataPoint).toHaveBeenCalledTimes(1);
+    expect(env.PAGEVIEW_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+    expect(env.ENGAGEMENT_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+    expect(env.SHARE_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+    expect(env.BOT_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+    expect(env.CUSTOM_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+  });
+
+  it('flags canonical_inferred when the tracker omits canonical_url', async () => {
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'pageview', path: '/a/no-canonical', referrer: 'direct' },
+      { Origin: 'https://kiiru.fi' },
+    );
+    await worker.fetch(req, env, {} as ExecutionContext);
+    const v1Call = (env.PAGEVIEW_EVENTS.writeDataPoint as any).mock.calls[0][0];
+    expect(v1Call.blobs[3]).toBe('1'); // canonical_inferred=true → '1'
+    expect(v1Call.blobs[2]).toMatch(/^[0-9a-f]{12}$/); // canonical_url_hash still present
+  });
+
+  it('hashes a tracker-supplied canonical_url to the same value as the inferred fallback for the same target', async () => {
+    const env1 = makeEnv();
+    const env2 = makeEnv();
+    await worker.fetch(
+      trackReq({ event: 'pageview', path: '/a/foo', canonical_url: 'https://kiiru.fi/a/foo' }, { Origin: 'https://kiiru.fi' }),
+      env1, {} as ExecutionContext,
+    );
+    await worker.fetch(
+      trackReq({ event: 'pageview', path: '/a/foo' }, { Origin: 'https://kiiru.fi' }),
+      env2, {} as ExecutionContext,
+    );
+    const hash1 = (env1.PAGEVIEW_EVENTS.writeDataPoint as any).mock.calls[0][0].blobs[2];
+    const hash2 = (env2.PAGEVIEW_EVENTS.writeDataPoint as any).mock.calls[0][0].blobs[2];
+    expect(hash1).toBe(hash2);
+  });
+
+  it('routes timing events to engagement_v1', async () => {
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'timing', path: '/a/foo', props: { seconds: '42' } },
+      { Origin: 'https://kiiru.fi' },
+    );
+    await worker.fetch(req, env, {} as ExecutionContext);
+    expect(env.ENGAGEMENT_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
+    expect(env.PAGEVIEW_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+    const v1Call = (env.ENGAGEMENT_EVENTS.writeDataPoint as any).mock.calls[0][0];
+    expect(v1Call.blobs[0]).toBe(ENG_SCHEMA);
+    expect(v1Call.blobs[4]).toBe('timing');
+    expect(v1Call.doubles[2]).toBe(42);
+  });
+
+  it('routes scroll_depth events to engagement_v1 with scroll_depth double', async () => {
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'scroll_depth', path: '/a/foo', props: { depth: '75' } },
+      { Origin: 'https://kiiru.fi' },
+    );
+    await worker.fetch(req, env, {} as ExecutionContext);
+    expect(env.ENGAGEMENT_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
+    const v1Call = (env.ENGAGEMENT_EVENTS.writeDataPoint as any).mock.calls[0][0];
+    expect(v1Call.blobs[4]).toBe('scroll_depth');
+    expect(v1Call.doubles[1]).toBe(75);
+  });
+
+  it('routes outbound events to share_v1', async () => {
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'outbound', path: '/a/foo', props: { url: 'bsky.app/profile/x/post/y' } },
+      { Origin: 'https://kiiru.fi' },
+    );
+    await worker.fetch(req, env, {} as ExecutionContext);
+    expect(env.SHARE_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
+    expect(env.PAGEVIEW_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+    const v1Call = (env.SHARE_EVENTS.writeDataPoint as any).mock.calls[0][0];
+    expect(v1Call.blobs[0]).toBe(SHARE_SCHEMA);
+    expect(v1Call.blobs[3]).toBe('bluesky'); // platform parsed from target URL
+    expect(v1Call.blobs[6]).toMatch(/^[0-9a-f-]{36}$/); // share_id is UUID v4
+  });
+
+  it('routes a custom event to custom_v1 with JSON-serialized props', async () => {
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'newsletter_signup', path: '/about', props: { plan: 'pro', source: 'banner' } },
+      { Origin: 'https://kiiru.fi' },
+    );
+    await worker.fetch(req, env, {} as ExecutionContext);
+    expect(env.CUSTOM_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
+    const v1Call = (env.CUSTOM_EVENTS.writeDataPoint as any).mock.calls[0][0];
+    expect(v1Call.blobs[0]).toBe(CUSTOM_SCHEMA);
+    expect(v1Call.blobs[4]).toBe('newsletter_signup');
+    expect(JSON.parse(v1Call.blobs[5])).toEqual({ plan: 'pro', source: 'banner' });
+  });
+
+  it('writes bot_v1 for bot UAs on Kiiru and skips the pageview path', async () => {
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'pageview', path: '/a/foo' },
+      { Origin: 'https://kiiru.fi', 'User-Agent': GPTBOT_UA },
+    );
+    const res = await worker.fetch(req, env, {} as ExecutionContext);
+    expect(res.status).toBe(204);
+    expect(env.ANALYTICS.writeDataPoint).toHaveBeenCalledTimes(1); // legacy bot_hit
+    expect(env.BOT_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
+    expect(env.PAGEVIEW_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+    const v1Call = (env.BOT_EVENTS.writeDataPoint as any).mock.calls[0][0];
+    expect(v1Call.blobs[0]).toBe(BOT_SCHEMA);
+    expect(v1Call.blobs[3]).toBe('ai-crawler');
+    expect(v1Call.blobs[4]).toBe('gptbot'); // ai_actor
+  });
+
+  it('does not write bot_v1 for bot UAs on non-Kiiru sites', async () => {
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'pageview', path: '/foo' },
+      { Origin: 'https://example.com', 'User-Agent': GPTBOT_UA },
+    );
+    await worker.fetch(req, env, {} as ExecutionContext);
+    expect(env.ANALYTICS.writeDataPoint).toHaveBeenCalledTimes(1);
+    expect(env.BOT_EVENTS.writeDataPoint).not.toHaveBeenCalled();
+  });
+
+  it('legacy write still succeeds when v1 emit throws (failsafe)', async () => {
+    const env = makeEnv({
+      PAGEVIEW_EVENTS: { writeDataPoint: vi.fn(() => { throw new Error('AE down'); }) },
+    });
+    const req = trackReq(
+      { event: 'pageview', path: '/a/foo', canonical_url: 'https://kiiru.fi/a/foo' },
+      { Origin: 'https://kiiru.fi' },
+    );
+    const res = await worker.fetch(req, env, {} as ExecutionContext);
+    expect(res.status).toBe(204);
+    expect(env.ANALYTICS.writeDataPoint).toHaveBeenCalledTimes(1);
+  });
+
+  it('v1 emit still runs when legacy write throws (forward-compat)', async () => {
+    const env = makeEnv({
+      ANALYTICS: { writeDataPoint: vi.fn(() => { throw new Error('legacy down'); }) },
+    });
+    const req = trackReq(
+      { event: 'pageview', path: '/a/foo', canonical_url: 'https://kiiru.fi/a/foo' },
+      { Origin: 'https://kiiru.fi' },
+    );
+    const res = await worker.fetch(req, env, {} as ExecutionContext);
+    expect(res.status).toBe(204);
+    expect(env.PAGEVIEW_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
+  });
+
+  it('strips www. from origin when matching against Kiiru allowlist', async () => {
+    const env = makeEnv({ ALLOWED_ORIGINS: 'https://www.kiiru.fi' });
+    const req = trackReq(
+      { event: 'pageview', path: '/a/foo', canonical_url: 'https://kiiru.fi/a/foo' },
+      { Origin: 'https://www.kiiru.fi' },
+    );
+    await worker.fetch(req, env, {} as ExecutionContext);
+    expect(env.PAGEVIEW_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
   });
 });

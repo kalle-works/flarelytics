@@ -9,6 +9,23 @@
  *   GET  /health       — Health check
  */
 
+import { parseReferrer } from './referrer/index';
+import { classifyUserAgent } from './classifier/index';
+import { normalizeCanonicalUrl, canonicalUrlHash, referrerUrlHash } from './v1/canonical';
+import {
+  emitPageviewV1,
+  emitEngagementV1,
+  emitShareV1,
+  emitBotV1,
+  emitCustomV1,
+} from './v1/emit';
+
+// Phase 0.5 dual-emit allowlist. Hardcoded to Kiiru per MIGRATION_PLAN.md §4
+// "Phase 0.5 (Day 0 — Day 21) — Pilot validation on Kiiru only (T2A)".
+// Other sites continue writing only to v0. Phase 1 expands this to the KV
+// allowlist (§4 Phase 1).
+const V1_EMIT_SITES = new Set(['kiiru.fi']);
+
 interface Env {
   // v0 (legacy)
   ANALYTICS: AnalyticsEngineDataset;
@@ -47,6 +64,8 @@ interface TrackPayload {
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
+  /** Tracker-resolved canonical URL (Phase 0.5 opt-in via data-emit-canonical) */
+  canonical_url?: string;
 }
 
 // Legacy short-form payload (backwards compatible with mailtoolfinder format)
@@ -156,6 +175,36 @@ function normalizePayload(raw: TrackPayload | LegacyPayload): TrackPayload {
   };
 }
 
+/**
+ * Resolve the canonical URL hash and inferred-flag for a tracked event.
+ *
+ * - If the tracker sent a normalize-able canonical_url, hash that and flag = false.
+ * - Otherwise reconstruct from Origin + path, hash that, flag = true. This gives
+ *   a stable per-URL grouping key even before sites opt into emitCanonical.
+ *
+ * Returns the hash and the inferred flag. Hash is empty string if neither input
+ * normalizes (e.g. unknown protocol) — caller should treat that as "skip v1".
+ */
+async function resolveCanonical(
+  rawCanonical: string | undefined,
+  origin: string | null,
+  path: string,
+): Promise<{ hash: string; inferred: boolean }> {
+  if (typeof rawCanonical === 'string' && rawCanonical !== '') {
+    const normalized = normalizeCanonicalUrl(rawCanonical);
+    if (normalized) {
+      return { hash: await canonicalUrlHash(normalized), inferred: false };
+    }
+  }
+  if (origin) {
+    const inferred = normalizeCanonicalUrl(`${origin}${path}`);
+    if (inferred) {
+      return { hash: await canonicalUrlHash(inferred), inferred: true };
+    }
+  }
+  return { hash: '', inferred: true };
+}
+
 async function handleTrack(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get('Origin');
   const allowed = await fetchAllowedOrigins(env);
@@ -171,25 +220,45 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
     const botOrigin = request.headers.get('Origin');
     const botSite = botOrigin ? (() => { try { return new URL(botOrigin).hostname.replace(/^www\./, ''); } catch { return botOrigin; } })() : '';
     let botPath = '/';
+    let botReferrer = '';
     try {
-      const botBody = await request.clone().json() as { path?: string; p?: string };
+      const botBody = await request.clone().json() as { path?: string; p?: string; referrer?: string; r?: string };
       botPath = (botBody.path || botBody.p || '/').replace(/\/+$/, '').slice(0, 500) || '/';
+      botReferrer = (botBody.referrer || botBody.r || '').slice(0, 500);
     } catch { /* ignore parse errors */ }
+    const country = (request.cf?.country as string) || 'XX';
 
-    env.ANALYTICS.writeDataPoint({
-      blobs: [
-        botPath,           // blob1: path
-        '',                // blob2: referrer (not relevant)
-        (request.cf?.country as string) || 'XX', // blob3: country
-        'bot_hit',         // blob4: event name
-        ua.slice(0, 200),  // blob5: user-agent string as prop
-        '', '', '', '',    // blob6-9: unused
-        botSite,           // blob10: site hostname
-        '', '',            // blob11-12: unused
-      ],
-      doubles: [1, 0],
-      indexes: [botPath],
-    });
+    try {
+      env.ANALYTICS.writeDataPoint({
+        blobs: [
+          botPath,           // blob1: path
+          '',                // blob2: referrer (not relevant)
+          country,           // blob3: country
+          'bot_hit',         // blob4: event name
+          ua.slice(0, 200),  // blob5: user-agent string as prop
+          '', '', '', '',    // blob6-9: unused
+          botSite,           // blob10: site hostname
+          '', '',            // blob11-12: unused
+        ],
+        doubles: [1, 0],
+        indexes: [botPath],
+      });
+    } catch (err) {
+      console.log(`[track] legacy bot write failed: ${err}`);
+    }
+
+    if (V1_EMIT_SITES.has(botSite)) {
+      const cls = classifyUserAgent(ua);
+      emitBotV1(env.BOT_EVENTS, {
+        site_id: botSite,
+        path: botPath,
+        bot_class: cls.bot_class,
+        ai_actor: cls.ai_actor,
+        user_agent: ua,
+        country,
+        referrer_domain: botReferrer,
+      });
+    }
 
     return new Response(null, { status: 204, headers: cors });
   }
@@ -230,24 +299,138 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
   const device = deviceType(ua);
   const browser = browserName(ua);
 
-  env.ANALYTICS.writeDataPoint({
-    blobs: [
-      path,                                      // blob1: path
-      referrer,                                  // blob2: referrer
-      country,                                   // blob3: country
-      eventName,                                 // blob4: event name
-      propValue,                                 // blob5: event properties
-      (body.utm_source || '').slice(0, 200),     // blob6: utm_source
-      (body.utm_medium || '').slice(0, 200),     // blob7: utm_medium
-      (body.utm_campaign || '').slice(0, 200),   // blob8: utm_campaign
-      vid,                                       // blob9: visitor_id
-      site,                                      // blob10: site hostname
-      device,                                    // blob11: device type (mobile/tablet/desktop)
-      browser,                                   // blob12: browser name
-    ],
-    doubles: [1, timingSeconds],               // double1: event count, double2: timing seconds
-    indexes: [path],
-  });
+  // Legacy v0 write — wrapped so a v0 failure does not block v1 dual-emit.
+  try {
+    env.ANALYTICS.writeDataPoint({
+      blobs: [
+        path,                                      // blob1: path
+        referrer,                                  // blob2: referrer
+        country,                                   // blob3: country
+        eventName,                                 // blob4: event name
+        propValue,                                 // blob5: event properties
+        (body.utm_source || '').slice(0, 200),     // blob6: utm_source
+        (body.utm_medium || '').slice(0, 200),     // blob7: utm_medium
+        (body.utm_campaign || '').slice(0, 200),   // blob8: utm_campaign
+        vid,                                       // blob9: visitor_id
+        site,                                      // blob10: site hostname
+        device,                                    // blob11: device type (mobile/tablet/desktop)
+        browser,                                   // blob12: browser name
+      ],
+      doubles: [1, timingSeconds],               // double1: event count, double2: timing seconds
+      indexes: [path],
+    });
+  } catch (err) {
+    console.log(`[track] legacy write failed: ${err}`);
+  }
+
+  // Phase 0.5 dual-emit (Kiiru only). Wrapped so v1 failures never affect the
+  // legacy write or the response — see §11 failsafe tests.
+  if (V1_EMIT_SITES.has(site)) {
+    try {
+      const { hash: canonicalHash, inferred: canonicalInferred } = await resolveCanonical(
+        (raw as TrackPayload).canonical_url,
+        origin,
+        path,
+      );
+      const refUrlHash = referrer === 'direct' ? '' : await referrerUrlHash(referrer);
+      // Build a synthetic absolute URL for parseReferrer (which expects http/https).
+      // Tracker only sends referrer hostname, so parseReferrer's path-aware rules
+      // (e.g. /profile/X/post/Y) will only match if a future tracker change emits
+      // the full referrer URL. Today this resolves to empty platform for all
+      // hostname-only referrers, which is correct.
+      const refForParse = referrer === 'direct' ? '' : `https://${referrer}`;
+      const social = parseReferrer(refForParse);
+      const cls = classifyUserAgent(ua);
+
+      switch (eventName) {
+        case 'pageview':
+          emitPageviewV1(env.PAGEVIEW_EVENTS, {
+            site_id: site,
+            canonical_url_hash: canonicalHash,
+            canonical_inferred: canonicalInferred,
+            path,
+            referrer_domain: referrer,
+            referrer_url_hash: refUrlHash,
+            social_platform: social.social_platform,
+            social_post_id: social.social_post_id,
+            utm_source: body.utm_source || '',
+            utm_medium: body.utm_medium || '',
+            utm_campaign: body.utm_campaign || '',
+            visitor_hash: vid,
+            country,
+            device_type: device,
+            browser,
+            bot_class: cls.bot_class,
+            ai_actor: cls.ai_actor,
+            locale: '',
+            content_type_hint: '',
+            viewport_width: 0,
+            viewport_height: 0,
+          });
+          break;
+
+        case 'timing':
+          emitEngagementV1(env.ENGAGEMENT_EVENTS, {
+            site_id: site,
+            canonical_url_hash: canonicalHash,
+            path,
+            engagement_type: 'timing',
+            visitor_hash: vid,
+            country,
+            scroll_depth: 0,
+            engaged_seconds: timingSeconds,
+          });
+          break;
+
+        case 'scroll_depth': {
+          const depth = parseInt(body.props?.depth || '0', 10) || 0;
+          emitEngagementV1(env.ENGAGEMENT_EVENTS, {
+            site_id: site,
+            canonical_url_hash: canonicalHash,
+            path,
+            engagement_type: 'scroll_depth',
+            visitor_hash: vid,
+            country,
+            scroll_depth: depth,
+            engaged_seconds: 0,
+          });
+          break;
+        }
+
+        case 'outbound': {
+          const targetUrl = body.props?.url || '';
+          const targetUrlHash = targetUrl ? await referrerUrlHash(targetUrl) : '';
+          const targetParsed = targetUrl ? parseReferrer(`https://${targetUrl}`) : { social_platform: '', social_post_id: '' };
+          emitShareV1(env.SHARE_EVENTS, {
+            site_id: site,
+            canonical_url_hash: canonicalHash,
+            share_target_platform: targetParsed.social_platform || 'other',
+            share_target_url_hash: targetUrlHash,
+            share_target_post_id: targetParsed.social_post_id,
+            share_id: crypto.randomUUID(),
+            visitor_hash: vid,
+            country,
+            device_type: device,
+            browser,
+          });
+          break;
+        }
+
+        default:
+          emitCustomV1(env.CUSTOM_EVENTS, {
+            site_id: site,
+            canonical_url_hash: canonicalHash,
+            path,
+            event_name: eventName,
+            event_props_json: body.props ? JSON.stringify(body.props) : '',
+            visitor_hash: vid,
+            country,
+          });
+      }
+    } catch (err) {
+      console.log(`[track] v1 dual-emit failed: ${err}`);
+    }
+  }
 
   return new Response(null, { status: 204, headers: cors });
 }
