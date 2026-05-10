@@ -19,6 +19,7 @@ import {
   emitBotV1,
   emitCustomV1,
 } from './v1/emit';
+import { isV1Query, V1_QUERIES } from './queries/v1/index';
 
 // Phase 0.5 dual-emit allowlist. Hardcoded to Kiiru per MIGRATION_PLAN.md §4
 // "Phase 0.5 (Day 0 — Day 21) — Pilot validation on Kiiru only (T2A)".
@@ -49,6 +50,13 @@ interface Env {
   DIMENSIONS: D1Database;
   ENRICH_QUEUE: Queue;
   ARCHIVE: R2Bucket;
+
+  // v1 query dataset names — interpolated into AE SQL FROM clauses by the
+  // /query?v=1 path. Defaults match wrangler.toml.example bindings; override
+  // here only if you renamed the underlying datasets.
+  PV_DATASET?: string;
+  ENG_DATASET?: string;
+  SHARE_DATASET?: string;
 }
 
 interface TrackPayload {
@@ -921,6 +929,41 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   const siteParam = url.searchParams.get('site');
   const eventNameParam = url.searchParams.get('event_name') || '';
   const pageParam = url.searchParams.get('page') || '';
+  const isV1 = url.searchParams.get('v') === '1';
+
+  // v1 path — Phase 0.5 Distribution Loop view. Reuses the same auth + site/period
+  // validators as v0 but dispatches to the v1 query registry, which reads from
+  // the per-family v1 datasets and aggregates in JS.
+  if (isV1) {
+    if (!queryName || !isV1Query(queryName)) {
+      return Response.json(
+        {
+          error: 'Invalid v1 query',
+          available: Object.entries(V1_QUERIES).map(([name, q]) => ({ name, description: q.description })),
+        },
+        { status: 400, headers: cors },
+      );
+    }
+    if (!siteParam) {
+      return Response.json({ error: 'Missing required param: site', hint: 'Add ?site=yoursite.com to scope the query to a single site.' }, { status: 400, headers: cors });
+    }
+    if (!/^[a-zA-Z0-9.\-]+$/.test(siteParam)) {
+      return Response.json({ error: 'Invalid site param', hint: 'The site param must be a plain hostname.' }, { status: 400, headers: cors });
+    }
+    const v1Period = PERIOD_MAP[periodParam];
+    if (!v1Period) {
+      return Response.json({ error: 'Invalid period', available: Object.keys(PERIOD_MAP) }, { status: 400, headers: cors });
+    }
+    try {
+      const data = await V1_QUERIES[queryName].run(env, v1Period, siteParam);
+      return Response.json(data, {
+        headers: { ...cors, 'Cache-Control': 'public, max-age=300' },
+      });
+    } catch (err) {
+      console.log(`[v1 query] ${queryName} failed: ${err}`);
+      return Response.json({ error: 'Query execution failed', hint: `v1 query "${queryName}" could not complete. Check CF_API_TOKEN / CF_ACCOUNT_ID and that the v1 datasets exist.` }, { status: 502, headers: cors });
+    }
+  }
 
   const validQueries = [...Object.keys(QUERY_TEMPLATES), 'new-vs-returning'];
   if (!queryName || !validQueries.includes(queryName)) {
@@ -1083,6 +1126,7 @@ function handleConfig(env: Env): Response {
       ...Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
       { name: 'new-vs-returning', description: 'New vs returning visitors in the selected period' },
     ],
+    queries_v1: Object.entries(V1_QUERIES).map(([name, q]) => ({ name, description: q.description })),
     periods: Object.keys(PERIOD_MAP),
     tracking: {
       endpoint: '/track',

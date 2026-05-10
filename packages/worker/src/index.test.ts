@@ -496,3 +496,109 @@ describe('POST /track — Phase 0.5 dual-emit (Kiiru only)', () => {
     expect(env.PAGEVIEW_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('GET /query?v=1 (Distribution Loop)', () => {
+  function v1Req(qs: string, headers: Record<string, string> = { 'X-API-Key': 'test-key' }): Request {
+    return new Request(`https://worker.test/query?v=1&${qs}`, { headers });
+  }
+
+  it('rejects without API key', async () => {
+    const res = await worker.fetch(v1Req('q=loop-overview&site=kiiru.fi&period=30d', {}), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects unknown v1 query name', async () => {
+    const res = await worker.fetch(v1Req('q=nope&site=kiiru.fi&period=30d'), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string; available: { name: string }[] };
+    expect(body.error).toBe('Invalid v1 query');
+    expect(body.available.map((q) => q.name)).toContain('loop-overview');
+  });
+
+  it('rejects missing site param', async () => {
+    const res = await worker.fetch(v1Req('q=loop-overview&period=30d'), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects invalid site param (SQL-injection guard)', async () => {
+    const res = await worker.fetch(v1Req("q=loop-overview&site=evil';DROP--&period=30d"), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects unsupported period', async () => {
+    const res = await worker.fetch(v1Req('q=loop-overview&site=kiiru.fi&period=1y'), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(400);
+  });
+
+  it('aggregates the six CF SQL responses into LoopOverview shape', async () => {
+    const env = makeEnv({ CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      const sql = String((init as RequestInit | undefined)?.body ?? '');
+      if (sql.includes('flarelytics_share_v1') && sql.includes('LIMIT 20')) {
+        return new Response(JSON.stringify({ data: [
+          { canonical_url_hash: 'a1', shares_out: 125 },
+          { canonical_url_hash: 'b2', shares_out: 98 },
+        ]}), { status: 200 });
+      }
+      if (sql.includes('flarelytics_share_v1') && sql.includes('shares_out_total')) {
+        return new Response(JSON.stringify({ data: [
+          { shares_out_total: 273, articles_driving_shares: 47 },
+        ]}), { status: 200 });
+      }
+      if (sql.includes('flarelytics_pageview_v1') && sql.includes('inbound_visits_from_social')) {
+        return new Response(JSON.stringify({ data: [{ inbound_visits_from_social: 2341 }] }), { status: 200 });
+      }
+      if (sql.includes('flarelytics_pageview_v1') && sql.includes('GROUP BY canonical_url_hash, path')) {
+        return new Response(JSON.stringify({ data: [
+          { canonical_url_hash: 'a1', path: '/breaking', views: 800, first_seen: '2026-05-01T00:00:00Z' },
+          { canonical_url_hash: 'b2', path: '/howto', views: 572, first_seen: '2026-05-03T00:00:00Z' },
+        ]}), { status: 200 });
+      }
+      if (sql.includes('flarelytics_pageview_v1') && sql.includes('GROUP BY canonical_url_hash')) {
+        return new Response(JSON.stringify({ data: [
+          { canonical_url_hash: 'a1', inbound_visits: 846 },
+          { canonical_url_hash: 'b2', inbound_visits: 572 },
+        ]}), { status: 200 });
+      }
+      if (sql.includes('flarelytics_engagement_v1')) {
+        return new Response(JSON.stringify({ data: [
+          { canonical_url_hash: 'a1', engaged_reads: 488 },
+          { canonical_url_hash: 'b2', engaged_reads: 137 },
+        ]}), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    });
+
+    const res = await worker.fetch(v1Req('q=loop-overview&site=kiiru.fi&period=30d'), env, {} as ExecutionContext);
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      period: string; site: string;
+      kpis: { articles_driving_shares: number; inbound_visits_from_social: number; secondary_share_rate: number; avg_distribution_quality_score: number };
+      articles: { canonical_url_hash: string; path: string; shares_out: number; inbound_visits: number; engaged_reads: number; quality_score: number }[];
+    };
+    expect(body.site).toBe('kiiru.fi');
+    expect(body.kpis.articles_driving_shares).toBe(47);
+    expect(body.kpis.inbound_visits_from_social).toBe(2341);
+    expect(body.articles).toHaveLength(2);
+    expect(body.articles[0]).toMatchObject({ canonical_url_hash: 'a1', path: '/breaking', shares_out: 125, quality_score: 58 });
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    fetchMock.mockRestore();
+  });
+
+  it('returns 502 with hint when the CF SQL API errors', async () => {
+    const env = makeEnv({ CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('boom', { status: 500 }));
+    const res = await worker.fetch(v1Req('q=loop-overview&site=kiiru.fi&period=30d'), env, {} as ExecutionContext);
+    expect(res.status).toBe(502);
+    fetchMock.mockRestore();
+  });
+});
+
+describe('GET /config', () => {
+  it('lists v1 queries alongside v0', async () => {
+    const res = await worker.fetch(new Request('https://worker.test/config'), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { queries_v1: { name: string }[] };
+    expect(body.queries_v1.map((q) => q.name)).toContain('loop-overview');
+  });
+});
