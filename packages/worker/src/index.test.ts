@@ -496,3 +496,158 @@ describe('POST /track — Phase 0.5 dual-emit (Kiiru only)', () => {
     expect(env.PAGEVIEW_EVENTS.writeDataPoint).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('GET /query?v=1 (Distribution Loop)', () => {
+  function v1Req(qs: string, headers: Record<string, string> = { 'X-API-Key': 'test-key' }): Request {
+    return new Request(`https://worker.test/query?v=1&${qs}`, { headers });
+  }
+
+  it('rejects without API key', async () => {
+    const res = await worker.fetch(v1Req('q=loop-overview&site=kiiru.fi&period=30d', {}), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects unknown v1 query name', async () => {
+    const res = await worker.fetch(v1Req('q=nope&site=kiiru.fi&period=30d'), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string; available: { name: string }[] };
+    expect(body.error).toBe('Invalid v1 query');
+    expect(body.available.map((q) => q.name)).toContain('loop-overview');
+  });
+
+  it('rejects missing site param', async () => {
+    const res = await worker.fetch(v1Req('q=loop-overview&period=30d'), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects invalid site param (SQL-injection guard)', async () => {
+    const res = await worker.fetch(v1Req("q=loop-overview&site=evil';DROP--&period=30d"), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects unsupported period', async () => {
+    const res = await worker.fetch(v1Req('q=loop-overview&site=kiiru.fi&period=1y'), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(400);
+  });
+
+  function classifyV1Sql(sql: string): 'shares' | 'sharesTotal' | 'pageviews' | 'paths' | 'engagement' | 'socialInbound' | 'unknown' {
+    // Order matters — paths and pageviews both query pageview_v1; check the
+    // (canonical, path) GROUP BY first so it doesn't fall through to pageviews.
+    if (sql.includes('flarelytics_engagement_v1')) return 'engagement';
+    if (sql.includes('flarelytics_share_v1') && sql.includes('shares_out_total')) return 'sharesTotal';
+    if (sql.includes('flarelytics_share_v1')) return 'shares';
+    if (sql.includes('flarelytics_pageview_v1') && sql.includes('inbound_visits_from_social')) return 'socialInbound';
+    if (sql.includes('flarelytics_pageview_v1') && sql.includes('GROUP BY canonical_url_hash, path')) return 'paths';
+    if (sql.includes('flarelytics_pageview_v1')) return 'pageviews';
+    return 'unknown';
+  }
+
+  function happyPathBody(bucket: ReturnType<typeof classifyV1Sql>): unknown {
+    switch (bucket) {
+      case 'shares': return { data: [
+        { canonical_url_hash: 'a1', shares_out: 125 },
+        { canonical_url_hash: 'b2', shares_out: 98 },
+      ]};
+      case 'sharesTotal': return { data: [{ shares_out_total: 273, articles_driving_shares: 47 }] };
+      case 'pageviews': return { data: [
+        { canonical_url_hash: 'a1', inbound_visits: 846 },
+        { canonical_url_hash: 'b2', inbound_visits: 572 },
+      ]};
+      case 'paths': return { data: [
+        { canonical_url_hash: 'a1', path: '/breaking', views: 800, first_seen: '2026-05-01T00:00:00Z' },
+        { canonical_url_hash: 'b2', path: '/howto', views: 572, first_seen: '2026-05-03T00:00:00Z' },
+      ]};
+      case 'engagement': return { data: [
+        { canonical_url_hash: 'a1', engaged_reads: 488 },
+        { canonical_url_hash: 'b2', engaged_reads: 137 },
+      ]};
+      case 'socialInbound': return { data: [{ inbound_visits_from_social: 2341 }] };
+      default: return { data: [] };
+    }
+  }
+
+  it('aggregates the six CF SQL responses into LoopOverview shape with partial=false', async () => {
+    const env = makeEnv({ CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      const sql = String((init as RequestInit | undefined)?.body ?? '');
+      return new Response(JSON.stringify(happyPathBody(classifyV1Sql(sql))), { status: 200 });
+    });
+
+    const res = await worker.fetch(v1Req('q=loop-overview&site=kiiru.fi&period=30d'), env, {} as ExecutionContext);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('private, max-age=300, must-revalidate');
+    const body = await res.json() as {
+      period: string; site: string; partial: boolean;
+      status: Record<string, 'ok' | 'failed'>;
+      kpis: { articles_driving_shares: number; inbound_visits_from_social: number; secondary_share_rate: number; avg_distribution_quality_score: number };
+      articles: { canonical_url_hash: string; path: string; shares_out: number; inbound_visits: number; engaged_reads: number; quality_score: number }[];
+    };
+    expect(body.site).toBe('kiiru.fi');
+    expect(body.partial).toBe(false);
+    expect(Object.values(body.status).every((s) => s === 'ok')).toBe(true);
+    expect(body.kpis.articles_driving_shares).toBe(47);
+    expect(body.kpis.inbound_visits_from_social).toBe(2341);
+    expect(body.articles).toHaveLength(2);
+    expect(body.articles[0]).toMatchObject({ canonical_url_hash: 'a1', path: '/breaking', shares_out: 125, quality_score: 58 });
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    fetchMock.mockRestore();
+  });
+
+  it('returns 200 with partial=true when one CF SQL bucket fails (engagement)', async () => {
+    const env = makeEnv({ CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      const sql = String((init as RequestInit | undefined)?.body ?? '');
+      const bucket = classifyV1Sql(sql);
+      if (bucket === 'engagement') return new Response('engagement temporarily unavailable', { status: 500 });
+      return new Response(JSON.stringify(happyPathBody(bucket)), { status: 200 });
+    });
+
+    const res = await worker.fetch(v1Req('q=loop-overview&site=kiiru.fi&period=30d'), env, {} as ExecutionContext);
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      partial: boolean;
+      status: Record<string, 'ok' | 'failed'>;
+      kpis: { articles_driving_shares: number; inbound_visits_from_social: number; avg_distribution_quality_score: number | null };
+      articles: { engaged_reads: number }[];
+    };
+    expect(body.partial).toBe(true);
+    expect(body.status.engagement).toBe('failed');
+    // Quality KPI requires engagement, so it nulls out
+    expect(body.kpis.avg_distribution_quality_score).toBeNull();
+    // Other KPIs survive
+    expect(body.kpis.articles_driving_shares).toBe(47);
+    expect(body.kpis.inbound_visits_from_social).toBe(2341);
+    // Article rows still render with engaged_reads=0 (engagement bucket missing)
+    expect(body.articles).toHaveLength(2);
+    expect(body.articles[0].engaged_reads).toBe(0);
+    fetchMock.mockRestore();
+  });
+
+  it('returns 200 with partial=true and all-null KPIs when every bucket fails', async () => {
+    const env = makeEnv({ CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('boom', { status: 500 }));
+    const res = await worker.fetch(v1Req('q=loop-overview&site=kiiru.fi&period=30d'), env, {} as ExecutionContext);
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      partial: boolean;
+      status: Record<string, 'ok' | 'failed'>;
+      kpis: { articles_driving_shares: null; inbound_visits_from_social: null; secondary_share_rate: null; avg_distribution_quality_score: null };
+      articles: unknown[];
+    };
+    expect(body.partial).toBe(true);
+    expect(Object.values(body.status).every((s) => s === 'failed')).toBe(true);
+    expect(body.kpis.articles_driving_shares).toBeNull();
+    expect(body.kpis.secondary_share_rate).toBeNull();
+    expect(body.articles).toEqual([]);
+    fetchMock.mockRestore();
+  });
+});
+
+describe('GET /config', () => {
+  it('lists v1 queries alongside v0', async () => {
+    const res = await worker.fetch(new Request('https://worker.test/config'), makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { queries_v1: { name: string }[] };
+    expect(body.queries_v1.map((q) => q.name)).toContain('loop-overview');
+  });
+});

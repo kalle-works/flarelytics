@@ -1,0 +1,653 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Distribution Loop — Flarelytics">
+  <!-- No-session gate: matches index.astro behavior so users who land directly here are told what to do. -->
+  <div id="no-session" style="display:none;max-width:520px;margin:5rem auto;text-align:center;">
+    <svg width="40" height="40" viewBox="0 0 32 32" fill="none" style="margin:0 auto 1rem;">
+      <rect width="32" height="32" rx="6" fill="#1c1917"/>
+      <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+      <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+      <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+    </svg>
+    <h1 style="font-family:var(--mono);font-size:1.25rem;font-weight:600;margin-bottom:0.5rem;">Distribution Loop</h1>
+    <p style="font-size:0.875rem;color:var(--ink-muted);margin-bottom:1.5rem;">
+      Open the main dashboard first to connect your worker, then come back here.
+    </p>
+    <a href="/" class="cta-dark">Open dashboard</a>
+  </div>
+
+  <!-- Loop view -->
+  <div id="loop-view" style="display:none;">
+    <h1 class="sr-only">Distribution Loop</h1>
+
+    <!-- Header row -->
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.5rem;">
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <a href="/" aria-label="Back to dashboard" style="display:flex;align-items:center;gap:0.75rem;text-decoration:none;color:inherit;">
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <rect width="32" height="32" rx="6" fill="#1c1917"/>
+            <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+            <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+            <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+          </svg>
+          <span style="font-family:var(--mono);font-size:1rem;font-weight:500;">flarelytics</span>
+        </a>
+        <span class="breadcrumb">/ distribution loop</span>
+        <!-- Site switcher -->
+        <div id="site-switcher" style="position:relative;">
+          <button id="site-switcher-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Switch site">
+            <span id="site-switcher-label"></span>
+            <span aria-hidden="true" style="font-size:10px;color:var(--ink-muted);">&#9660;</span>
+          </button>
+          <div id="site-switcher-menu" role="menu" aria-label="Available sites" hidden></div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <div id="period-group" role="radiogroup" aria-label="Time window">
+          <button class="period-btn" type="button" data-period="7d" role="radio" aria-checked="false">7d</button>
+          <button class="period-btn" type="button" data-period="14d" role="radio" aria-checked="false">14d</button>
+          <button class="period-btn active" type="button" data-period="30d" role="radio" aria-checked="true">30d</button>
+        </div>
+        <button id="refresh-btn" class="icon-btn" type="button" aria-label="Refresh data" title="Refresh">&#x21BB;</button>
+      </div>
+    </div>
+
+    <!-- Partial-data badge — shown only when one of the six CF SQL buckets failed. -->
+    <div id="partial-banner" hidden role="status" aria-live="polite" class="partial-banner">
+      Some data failed to load — showing what we have. Try refresh if this persists.
+    </div>
+
+    <!-- KPI cards -->
+    <div id="kpi-cards">
+      <div class="card kpi" data-kpi="articles">
+        <span class="kpi-label">Articles driving shares</span>
+        <span class="kpi-value" data-bind="articles_driving_shares">—</span>
+      </div>
+      <div class="card kpi" data-kpi="inbound">
+        <span class="kpi-label">Inbound visits from social</span>
+        <span class="kpi-value" data-bind="inbound_visits_from_social">—</span>
+      </div>
+      <div class="card kpi" data-kpi="rate">
+        <span class="kpi-label">Secondary share rate</span>
+        <span class="kpi-value" data-bind="secondary_share_rate">—</span>
+      </div>
+      <div class="card kpi" data-kpi="quality">
+        <span class="kpi-label">Avg distribution quality score</span>
+        <span class="kpi-value" data-bind="avg_distribution_quality_score">—</span>
+      </div>
+    </div>
+
+    <!-- Top articles section -->
+    <section class="card" aria-labelledby="loop-heading">
+      <h2 id="loop-heading">Distribution Loop — Top Articles</h2>
+      <p class="section-subtext">Each row shows the full loop for articles that generated the most shares.</p>
+
+      <div class="table-wrap">
+        <table class="tbl" id="loop-table">
+          <thead>
+            <tr>
+              <th style="text-align:left;">Article</th>
+              <th style="text-align:right;">Shares Out <span aria-hidden="true" style="color:var(--ink-muted);">→</span></th>
+              <th style="text-align:right;">Inbound Visits</th>
+              <th style="text-align:left;width:32%;">Engaged Reads</th>
+              <th style="text-align:right;">Quality Score</th>
+            </tr>
+          </thead>
+          <tbody id="loop-tbody">
+            <tr><td colspan="5" class="state-cell">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="loop-empty" class="empty-state" hidden>
+        No shares recorded for this site in the selected period yet. Once readers share an article, the loop appears here.
+      </div>
+
+      <div id="loop-error" class="error-banner" hidden role="alert"></div>
+    </section>
+
+    <p class="footnote">
+      Loop view aggregates at canonical_url_hash level. Article titles come from the most-viewed path per article — Phase 1 will replace path with the editorial title once the queue consumer ships.
+    </p>
+  </div>
+</Layout>
+
+<style>
+  #kpi-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
+  @media (min-width: 768px) {
+    #kpi-cards { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .breadcrumb {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .cta-dark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 1.25rem;
+    border-radius: var(--radius-lg);
+    background: var(--ink);
+    color: #ffffff;
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .cta-dark:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    padding: 16px;
+  }
+  .kpi { display: flex; flex-direction: column; gap: 4px; }
+  .kpi-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
+  }
+  .kpi-value {
+    font-family: var(--mono);
+    font-size: 1.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+
+  #loop-heading {
+    font-family: var(--font);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 0.25rem;
+  }
+  .section-subtext {
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+    margin-bottom: 1rem;
+  }
+
+  .table-wrap { overflow-x: auto; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .tbl thead th {
+    font-family: var(--mono);
+    padding: 7px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
+    border-bottom: 2px solid var(--border);
+  }
+  .tbl tbody td {
+    padding: 10px 12px;
+    color: var(--ink-secondary);
+    border-bottom: 1px solid var(--border-light);
+    font-variant-numeric: tabular-nums;
+    vertical-align: middle;
+  }
+  .tbl tbody tr:hover { background: var(--surface); }
+  .tbl tbody tr:last-child td { border-bottom: none; }
+
+  .state-cell {
+    text-align: center;
+    padding: 2rem;
+    color: var(--ink-muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .article-cell { display: flex; flex-direction: column; gap: 2px; }
+  .article-title {
+    font-family: var(--font);
+    color: var(--ink);
+    font-size: 15px;
+  }
+  .article-meta {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+  .num-accent {
+    color: var(--accent-hover);
+    font-weight: 600;
+  }
+  .num-strong { color: var(--ink); font-weight: 600; }
+
+  .engaged-cell { display: flex; align-items: center; gap: 8px; }
+  .engaged-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border-light);
+    border-radius: 2px;
+    overflow: hidden;
+    min-width: 60px;
+  }
+  .engaged-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+  .engaged-bar-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+    min-width: 48px;
+    text-align: right;
+  }
+
+  #period-group {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .period-btn {
+    font-family: var(--mono);
+    min-height: 40px;
+    padding: 0 16px;
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    color: var(--ink-secondary);
+    cursor: pointer;
+    transition: background 120ms, color 120ms;
+  }
+  .period-btn:not(:last-child) { border-right: 1px solid var(--border); }
+  .period-btn.active { background: var(--ink); color: #ffffff; }
+  .period-btn:hover:not(.active) { background: var(--surface); }
+  .period-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .icon-btn {
+    font-family: var(--mono);
+    min-height: 40px;
+    min-width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    color: var(--ink-secondary);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 120ms;
+  }
+  .icon-btn:hover { background: var(--surface); }
+  .icon-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  #site-switcher-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    border-radius: var(--radius-lg);
+    padding: 0 0.625rem;
+    color: var(--ink);
+    cursor: pointer;
+    min-height: 36px;
+  }
+  #site-switcher-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  #site-switcher-label {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #site-switcher-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 200px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+    z-index: 100;
+    overflow: hidden;
+  }
+
+  .site-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+  }
+  .site-item:hover { background: var(--surface); }
+  .site-item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .site-item.active { color: var(--accent-hover); font-weight: 600; }
+
+  .partial-banner {
+    margin-bottom: 1rem;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--accent);
+    background: var(--accent-light);
+    border-radius: var(--radius-md);
+    color: var(--accent-hover);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .empty-state {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
+    max-width: 38ch;
+    margin: 0 auto;
+  }
+
+  .error-banner {
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--red);
+    background: var(--red-light);
+    border-radius: var(--radius-md);
+    color: var(--red);
+    font-size: 0.875rem;
+    font-family: var(--mono);
+  }
+
+  .footnote {
+    margin-top: 1rem;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+</style>
+
+<script is:inline>
+  (function() {
+    var noSession = document.getElementById('no-session');
+    var loopView = document.getElementById('loop-view');
+    var tbody = document.getElementById('loop-tbody');
+    var emptyMsg = document.getElementById('loop-empty');
+    var errBox = document.getElementById('loop-error');
+    var partialBanner = document.getElementById('partial-banner');
+    var siteSwitcherBtn = document.getElementById('site-switcher-btn');
+    var siteSwitcherMenu = document.getElementById('site-switcher-menu');
+    var siteSwitcherLabel = document.getElementById('site-switcher-label');
+
+    var session = null;
+    var current = 0;
+    var period = '30d';
+    var inflight = null; // AbortController for the active fetch
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function fmtNum(n) {
+      if (n == null || isNaN(n)) return '—';
+      var x = Number(n);
+      if (x >= 1000) return x.toLocaleString('en-US');
+      return String(Math.round(x));
+    }
+
+    function fmtPct(n) {
+      if (n == null || isNaN(n)) return '—';
+      return Number(n).toFixed(2).replace(/\.?0+$/, '') + '%';
+    }
+
+    function fmtScore(n) {
+      if (n == null || isNaN(n)) return '—';
+      return Number(n).toFixed(1);
+    }
+
+    function daysAgo(iso) {
+      if (!iso) return '';
+      var t = Date.parse(iso);
+      if (isNaN(t)) return '';
+      var d = Math.max(0, Math.round((Date.now() - t) / 86400000));
+      if (d === 0) return 'today';
+      if (d === 1) return '1 day ago';
+      return d + ' days ago';
+    }
+
+    function loadSession() {
+      var raw = localStorage.getItem('flarelytics_session') || sessionStorage.getItem('flarelytics_session');
+      if (!raw) return null;
+      try {
+        var s = JSON.parse(raw);
+        if (!s || !s.sites || !s.sites.length) return null;
+        return s;
+      } catch (e) { return null; }
+    }
+
+    function applyParamSite() {
+      // ?site=hostname → switch session.current to matching site if present.
+      var qs = new URLSearchParams(location.search);
+      var want = qs.get('site');
+      if (!want || !session) return;
+      for (var i = 0; i < session.sites.length; i++) {
+        if (session.sites[i].site === want) { current = i; return; }
+      }
+    }
+
+    function setMenuOpen(open) {
+      if (open) {
+        siteSwitcherMenu.removeAttribute('hidden');
+      } else {
+        siteSwitcherMenu.setAttribute('hidden', '');
+      }
+      siteSwitcherBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    function renderSwitcher() {
+      var cur = session.sites[current];
+      siteSwitcherLabel.textContent = cur.label || cur.site;
+      var html = '';
+      session.sites.forEach(function(s, i) {
+        html += '<button type="button" role="menuitem" class="site-item' + (i === current ? ' active' : '') + '" data-idx="' + i + '">';
+        html += '<span>' + esc(s.label || s.site) + '</span>';
+        html += '</button>';
+      });
+      siteSwitcherMenu.innerHTML = html;
+      siteSwitcherMenu.querySelectorAll('.site-item').forEach(function(el) {
+        el.addEventListener('click', function() {
+          var idx = parseInt(el.dataset.idx, 10) || 0;
+          current = idx;
+          session.current = idx;
+          try { localStorage.setItem('flarelytics_session', JSON.stringify(session)); } catch(e) {}
+          setMenuOpen(false);
+          renderSwitcher();
+          load();
+        });
+      });
+    }
+
+    siteSwitcherBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var open = siteSwitcherBtn.getAttribute('aria-expanded') === 'true';
+      setMenuOpen(!open);
+    });
+    document.addEventListener('click', function(e) {
+      if (!document.getElementById('site-switcher').contains(e.target)) {
+        setMenuOpen(false);
+      }
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') setMenuOpen(false);
+    });
+
+    document.querySelectorAll('.period-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.period-btn').forEach(function(b) {
+          b.classList.remove('active');
+          b.setAttribute('aria-checked', 'false');
+        });
+        btn.classList.add('active');
+        btn.setAttribute('aria-checked', 'true');
+        period = btn.dataset.period;
+        load();
+      });
+    });
+
+    document.getElementById('refresh-btn').addEventListener('click', load);
+
+    function bindKpis(k) {
+      function set(name, value) {
+        var el = document.querySelector('[data-bind="' + name + '"]');
+        if (el) el.textContent = value;
+      }
+      set('articles_driving_shares', fmtNum(k.articles_driving_shares));
+      set('inbound_visits_from_social', fmtNum(k.inbound_visits_from_social));
+      set('secondary_share_rate', fmtPct(k.secondary_share_rate));
+      set('avg_distribution_quality_score', fmtScore(k.avg_distribution_quality_score));
+    }
+
+    function setPartialBanner(show) {
+      if (show) partialBanner.removeAttribute('hidden');
+      else partialBanner.setAttribute('hidden', '');
+    }
+
+    function renderArticles(rows) {
+      if (!rows.length) {
+        tbody.innerHTML = '';
+        emptyMsg.removeAttribute('hidden');
+        return;
+      }
+      emptyMsg.setAttribute('hidden', '');
+
+      var maxEngaged = 0;
+      rows.forEach(function(r) { if (r.engaged_reads > maxEngaged) maxEngaged = r.engaged_reads; });
+      if (maxEngaged < 1) maxEngaged = 1;
+
+      var html = '';
+      rows.forEach(function(r) {
+        var titleLabel = r.path || r.canonical_url_hash;
+        var meta = daysAgo(r.first_seen);
+        var pct = Math.round((r.engaged_reads / maxEngaged) * 100);
+        html += '<tr>';
+        html += '<td><div class="article-cell">';
+        html += '<span class="article-title">' + esc(titleLabel) + '</span>';
+        html += '<span class="article-meta">' + esc(meta) + '</span>';
+        html += '</div></td>';
+        html += '<td style="text-align:right;"><span class="num-accent">' + fmtNum(r.shares_out) + '</span></td>';
+        html += '<td style="text-align:right;"><span class="num-strong">' + fmtNum(r.inbound_visits) + '</span></td>';
+        html += '<td><div class="engaged-cell">';
+        html += '<div class="engaged-bar-track"><div class="engaged-bar-fill" style="width:' + pct + '%;"></div></div>';
+        html += '<span class="engaged-bar-label">' + fmtNum(r.engaged_reads) + '</span>';
+        html += '</div></td>';
+        html += '<td style="text-align:right;"><span class="num-strong">' + fmtNum(r.quality_score) + '</span></td>';
+        html += '</tr>';
+      });
+      tbody.innerHTML = html;
+    }
+
+    function showError(msg) {
+      errBox.textContent = msg;
+      errBox.removeAttribute('hidden');
+      tbody.innerHTML = '';
+      emptyMsg.setAttribute('hidden', '');
+      setPartialBanner(false);
+    }
+
+    function load() {
+      // Cancel any in-flight request — keeps the slow response from
+      // overwriting the fast one if user clicks period/site quickly.
+      if (inflight) inflight.abort();
+      inflight = new AbortController();
+      var ctrl = inflight;
+
+      errBox.setAttribute('hidden', '');
+      var s = session.sites[current];
+      // Strip trailing slash on the worker URL — legacy sessions migrated
+      // before the auth-form normalization may carry one and produce //query.
+      var base = String(s.url || '').replace(/\/+$/, '');
+      var url = base + '/query?v=1&q=loop-overview&site=' + encodeURIComponent(s.site) + '&period=' + encodeURIComponent(period);
+      tbody.innerHTML = '<tr><td colspan="5" class="state-cell">Loading…</td></tr>';
+      emptyMsg.setAttribute('hidden', '');
+      setPartialBanner(false);
+
+      fetch(url, { headers: { 'X-API-Key': s.key }, signal: ctrl.signal })
+        .then(function(r) {
+          if (r.status === 401) throw new Error('auth');
+          if (!r.ok) throw new Error('http_' + r.status);
+          return r.json();
+        })
+        .then(function(data) {
+          if (ctrl !== inflight) return; // a newer load() superseded us
+          if (!data || !data.kpis) throw new Error('shape');
+          bindKpis(data.kpis);
+          renderArticles(Array.isArray(data.articles) ? data.articles : []);
+          setPartialBanner(!!data.partial);
+        })
+        .catch(function(err) {
+          if (err && err.name === 'AbortError') return; // superseded; ignore
+          if (ctrl !== inflight) return;
+          var msg = err && err.message === 'auth' ? 'Invalid API key for this site. Reconnect on the main dashboard.' :
+                    err && err.message && err.message.indexOf('http_') === 0 ? 'Worker returned ' + err.message.replace('http_', '') + '. Check that v1 datasets exist and CF credentials are set.' :
+                    'Could not reach the worker. Is your URL correct?';
+          showError(msg);
+        });
+    }
+
+    // Boot
+    session = loadSession();
+    if (!session) {
+      noSession.style.display = '';
+      return;
+    }
+    current = (typeof session.current === 'number' && session.current >= 0 && session.current < session.sites.length) ? session.current : 0;
+    applyParamSite();
+    loopView.style.display = '';
+    renderSwitcher();
+    load();
+  })();
+</script>

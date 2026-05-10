@@ -65,6 +65,13 @@ DATASET_NAME = "flarelytics"
 # Comma-separated hostnames whose stats are public (optional)
 # PUBLIC_STATS_SITES = "flarelytics.dev"
 
+# v1 query dataset names — read by the /query?v=1 path when interpolating AE
+# SQL FROM clauses. Defaults match the bindings declared above; only set these
+# if you renamed the underlying Analytics Engine datasets.
+# PV_DATASET = "flarelytics_pageview_v1"
+# ENG_DATASET = "flarelytics_engagement_v1"
+# SHARE_DATASET = "flarelytics_share_v1"
+
 # Secrets (set via `wrangler secret put`):
 #   QUERY_API_KEY  — random string for dashboard authentication
 #   CF_API_TOKEN   — Cloudflare API token with these permissions:
