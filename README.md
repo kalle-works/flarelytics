@@ -310,6 +310,56 @@ GET /health
 { "status": "healthy", "checks": { "analytics_binding": true, ... }, "version": "0.2.0" }
 ```
 
+### Versioned queries (v1)
+
+The v0 queries above return the raw Cloudflare Analytics Engine envelope (`{ data: [...] }`). The **v1** family is a separate, structured query surface that aggregates multiple parallel SQL calls inside the worker and returns a strongly typed payload. v1 queries read from the per-family v1 datasets (pageview/engagement/share) introduced during the schema migration.
+
+Dispatch by adding `v=1`:
+
+```bash
+GET /query?v=1&q=loop-overview&site=yoursite.com&period=30d
+X-API-Key: your-api-key
+```
+
+Available v1 queries (also discoverable via `GET /config` → `queries_v1`):
+
+| Query | Description |
+|---|---|
+| `loop-overview` | Distribution Loop view: shares → social inbound → engaged reads → quality score, surfaced at canonical_url_hash level |
+
+Example response (`loop-overview`):
+
+```json
+{
+  "period": "'30' DAY",
+  "site": "yoursite.com",
+  "partial": false,
+  "status": {
+    "shares": "ok", "pageviews": "ok", "paths": "ok",
+    "engagement": "ok", "socialInbound": "ok", "sharesTotal": "ok"
+  },
+  "kpis": {
+    "articles_driving_shares": 47,
+    "inbound_visits_from_social": 2341,
+    "secondary_share_rate": 11.66,
+    "avg_distribution_quality_score": 6.8
+  },
+  "articles": [
+    {
+      "canonical_url_hash": "a1b2c3d4e5f6",
+      "path": "/articles/breaking",
+      "first_seen": "2026-05-01T10:00:00Z",
+      "shares_out": 125,
+      "inbound_visits": 846,
+      "engaged_reads": 488,
+      "quality_score": 58
+    }
+  ]
+}
+```
+
+When one or more underlying SQL buckets fails, the worker still returns 200 with `partial: true` and the affected KPIs as `null` (the dashboard renders `—`). The v0 query path is untouched — omit `v=1` and you get the v0 contract.
+
 ## Privacy
 
 Flarelytics collects only what you need to understand your traffic:

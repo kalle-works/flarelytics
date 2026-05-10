@@ -138,6 +138,24 @@ All queries must include `AND blob10 = '${site}'` to scope to a single site.
 
 Periods: `7d`, `14d`, `30d`, `60d`, `90d`, `180d`
 
+## v1 Queries (Phase 0.5+)
+
+Versioned query surface for the per-family v1 datasets (PAGEVIEW_EVENTS, ENGAGEMENT_EVENTS, SHARE_EVENTS). Dispatched by adding `v=1` to the request:
+
+```
+GET /query?v=1&q=<name>&site=<hostname>&period=<period>
+```
+
+| Query | Returns |
+|---|---|
+| `loop-overview` | `{ period, site, partial, status, kpis, articles[] }` — Distribution Loop view: shares → social inbound → engaged reads → quality score, surfaced at canonical_url_hash level |
+
+v1 queries return a structured object (not the raw CF SQL `{data:[...]}` envelope). They aggregate multiple parallel SQL calls inside the worker using `Promise.allSettled`, so partial failures degrade gracefully — failed buckets surface as `null` KPIs and `partial: true`. v0 queries are unchanged.
+
+Loop view filters:
+- `shares_out` counts only outbound clicks whose target URL was recognized as a known social platform (`bluesky`, `facebook`, `hn`, `reddit`, `x`, `mastodon`) — non-social outbound clicks (source links, ads) are excluded.
+- `inbound_visits_from_social` counts pageviews whose `referrer_domain` matches a hostname allowlist (`SOCIAL_REFERRER_HOSTS` in `queries/v1/loop.ts`).
+
 ## Design System
 
 Always read DESIGN.md before making any visual or UI decisions.
