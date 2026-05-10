@@ -5,13 +5,29 @@
  *
  * MIGRATION_PLAN.md §4 Phase 0.5 deliverable: aggregates surface at
  * canonical_url_hash level, not content_id, because the queue consumer that
- * mints D1 content_ids ships in Phase 1. Kiiru maps 1 canonical = 1 article so
- * this is sufficient for the cutover gate (§6 "Distribution Loop view ≥3
- * editorial decisions").
+ * mints D1 content_ids ships in Phase 1 (TODO(phase-1): swap to content_id).
  *
  * Functions in this file are pure — builders return SQL strings, aggregators
  * fold raw CF-API responses into the dashboard shape — so they're testable
  * without touching Analytics Engine.
+ *
+ * Two intentional filters scope the loop view to social distribution semantics:
+ *
+ *   1. shares_out counts only share_v1 rows whose share_target_platform was
+ *      recognized by parseReferrer (blob4 NOT IN ('other', '')). The dual-emit
+ *      writes every outbound click as a share_v1 row, so without this filter
+ *      every external link click (source links, ads, embeds) inflates
+ *      shares_out. Filter lives here, not in dual-emit, so the underlying
+ *      data stays uncolored for Phase 1 alternative views.
+ *
+ *   2. inbound_visits_from_social falls back to a referrer_domain hostname
+ *      allowlist (blob6 IN SOCIAL_REFERRER_HOSTS) instead of the
+ *      social_platform field, because the tracker today sends only the
+ *      referrer hostname (no path) and parseReferrer needs paths to set
+ *      social_platform for most platforms — see comment in handleTrack on
+ *      the v1 dual-emit. Once the tracker emits full referrer URLs, the
+ *      hostname check still matches and the platform-extraction layer can
+ *      enrich on top.
  */
 
 export interface LoopDatasets {
@@ -27,12 +43,47 @@ export const DEFAULT_LOOP_DATASETS: LoopDatasets = {
 };
 
 export const TOP_ARTICLES_LIMIT = 20;
+// Path/canonical cardinality cap — a busy site with many query-string variants
+// per article can balloon the (canonical, path) cross-product. Cap keeps the
+// CF SQL response small enough for the worker to fold in memory.
+export const PATHS_QUERY_LIMIT = 500;
 
 // Distinct visitors who hit at least this scroll % count as an "engaged read".
 // Matches the tracker's IntersectionObserver milestones (25/50/75/100) — 75 is
 // the strictest defensible threshold without requiring 100 % which would
 // underweight long-form content.
 export const ENGAGED_SCROLL_THRESHOLD = 75;
+
+// Hostnames that count as "social inbound" when present in pageview blob6
+// (referrer_domain). Mirrors what parseReferrer in src/referrer/index.ts
+// recognizes, plus a short list of common social/aggregator hosts that lack
+// path-extractable post IDs. Keep in sync with the parser when adding new
+// social platforms.
+export const SOCIAL_REFERRER_HOSTS: readonly string[] = [
+  'bsky.app',
+  'facebook.com', 'm.facebook.com', 'l.facebook.com',
+  'news.ycombinator.com',
+  'reddit.com', 'old.reddit.com', 'new.reddit.com',
+  't.co',
+  'twitter.com', 'x.com',
+  'mastodon.social',
+  'linkedin.com', 'lnkd.in',
+  'threads.net',
+];
+
+// Platform names that parseReferrer emits when it recognizes a share-target
+// URL. Anything else lands as 'other' (in the dual-emit fallback) or '' (when
+// the URL is missing). The loop counts only recognized platforms so editorial
+// users don't see ad-link clicks as shares.
+export const RECOGNIZED_SHARE_PLATFORMS: readonly string[] = [
+  'bluesky', 'facebook', 'hn', 'reddit', 'x', 'mastodon',
+];
+
+function sqlList(values: readonly string[]): string {
+  // values are hardcoded constants above — never user input — but keep the
+  // quote-escaping defensive in case the lists grow.
+  return values.map((v) => `'${v.replace(/'/g, "''")}'`).join(',');
+}
 
 export interface LoopSqlBundle {
   sharesPerArticle: string;
@@ -53,13 +104,16 @@ export interface LoopSqlBundle {
 export function buildLoopSql(period: string, site: string, ds: LoopDatasets): LoopSqlBundle {
   const win = `timestamp > NOW() - INTERVAL ${period}`;
   const siteFilter = `blob2 = '${site}'`;
+  const hashNotEmpty = `blob3 != ''`;
+  const sharePlatformIn = `blob4 IN (${sqlList(RECOGNIZED_SHARE_PLATFORMS)})`;
+  const socialHostIn = `blob6 IN (${sqlList(SOCIAL_REFERRER_HOSTS)})`;
 
   return {
     sharesPerArticle: `
       SELECT blob3 AS canonical_url_hash,
              SUM(_sample_interval * double1) AS shares_out
       FROM ${ds.share}
-      WHERE ${win} AND ${siteFilter}
+      WHERE ${win} AND ${siteFilter} AND ${hashNotEmpty} AND ${sharePlatformIn}
       GROUP BY canonical_url_hash
       ORDER BY shares_out DESC
       LIMIT ${TOP_ARTICLES_LIMIT}
@@ -68,7 +122,7 @@ export function buildLoopSql(period: string, site: string, ds: LoopDatasets): Lo
       SELECT blob3 AS canonical_url_hash,
              SUM(_sample_interval * double1) AS inbound_visits
       FROM ${ds.pageview}
-      WHERE ${win} AND ${siteFilter}
+      WHERE ${win} AND ${siteFilter} AND ${hashNotEmpty}
       GROUP BY canonical_url_hash
     `,
     pathsPerArticle: `
@@ -77,27 +131,29 @@ export function buildLoopSql(period: string, site: string, ds: LoopDatasets): Lo
              SUM(_sample_interval * double1) AS views,
              MIN(timestamp) AS first_seen
       FROM ${ds.pageview}
-      WHERE ${win} AND ${siteFilter}
+      WHERE ${win} AND ${siteFilter} AND ${hashNotEmpty}
       GROUP BY canonical_url_hash, path
+      ORDER BY views DESC
+      LIMIT ${PATHS_QUERY_LIMIT}
     `,
     engagementPerArticle: `
       SELECT blob3 AS canonical_url_hash,
              COUNT(DISTINCT blob6) AS engaged_reads
       FROM ${ds.engagement}
-      WHERE ${win} AND ${siteFilter}
+      WHERE ${win} AND ${siteFilter} AND ${hashNotEmpty}
         AND blob5 = 'scroll_depth' AND double2 >= ${ENGAGED_SCROLL_THRESHOLD}
       GROUP BY canonical_url_hash
     `,
     socialInboundTotal: `
       SELECT SUM(_sample_interval * double1) AS inbound_visits_from_social
       FROM ${ds.pageview}
-      WHERE ${win} AND ${siteFilter} AND blob8 != ''
+      WHERE ${win} AND ${siteFilter} AND ${hashNotEmpty} AND ${socialHostIn}
     `,
     sharesTotal: `
       SELECT SUM(_sample_interval * double1) AS shares_out_total,
              COUNT(DISTINCT blob3) AS articles_driving_shares
       FROM ${ds.share}
-      WHERE ${win} AND ${siteFilter}
+      WHERE ${win} AND ${siteFilter} AND ${hashNotEmpty} AND ${sharePlatformIn}
     `,
   };
 }
@@ -125,12 +181,26 @@ export interface LoopArticleRow {
 }
 
 export interface LoopKpis {
-  articles_driving_shares: number;
-  inbound_visits_from_social: number;
+  /** null when the underlying SQL bucket failed; UI renders '—'. */
+  articles_driving_shares: number | null;
+  inbound_visits_from_social: number | null;
   /** shares_out_total ÷ inbound_visits_from_social × 100, two decimals. 0 when no social inbound. */
-  secondary_share_rate: number;
+  secondary_share_rate: number | null;
   /** Mean per-article quality score, scaled to 0.0–10.0, one decimal. */
-  avg_distribution_quality_score: number;
+  avg_distribution_quality_score: number | null;
+}
+
+/**
+ * Per-bucket health for the partial-failure path. UI uses this to badge the
+ * KPIs as '(partial)' when one of the six SQL calls failed.
+ */
+export interface LoopBucketStatus {
+  shares: 'ok' | 'failed';
+  pageviews: 'ok' | 'failed';
+  paths: 'ok' | 'failed';
+  engagement: 'ok' | 'failed';
+  socialInbound: 'ok' | 'failed';
+  sharesTotal: 'ok' | 'failed';
 }
 
 export interface LoopOverview {
@@ -138,6 +208,9 @@ export interface LoopOverview {
   site: string;
   kpis: LoopKpis;
   articles: LoopArticleRow[];
+  /** True when at least one of the six CF SQL calls failed but others succeeded. */
+  partial: boolean;
+  status: LoopBucketStatus;
 }
 
 // ─── Aggregation helpers ────────────────────────────────────────────────────
@@ -181,22 +254,35 @@ function qualityScore(engaged: number, visits: number): number {
   return Math.min(100, Math.round((engaged / visits) * 100));
 }
 
+/** Rows-or-null per bucket; null marks a failed CF SQL call so the aggregator can render partial KPIs. */
 export interface LoopRawData {
-  sharesPerArticle: SharesRow[];
-  pageviewsPerArticle: PageviewsRow[];
-  pathsPerArticle: PathRow[];
-  engagementPerArticle: EngagementRow[];
-  socialInbound: SocialInboundRow[];
-  sharesTotal: SharesTotalRow[];
+  sharesPerArticle: SharesRow[] | null;
+  pageviewsPerArticle: PageviewsRow[] | null;
+  pathsPerArticle: PathRow[] | null;
+  engagementPerArticle: EngagementRow[] | null;
+  socialInbound: SocialInboundRow[] | null;
+  sharesTotal: SharesTotalRow[] | null;
 }
 
 export function aggregateLoop(period: string, site: string, raw: LoopRawData): LoopOverview {
-  const pageviewsByHash = indexBy(raw.pageviewsPerArticle);
-  const engagementByHash = indexBy(raw.engagementPerArticle);
-  const pathByHash = collapsePaths(raw.pathsPerArticle);
+  const status: LoopBucketStatus = {
+    shares: raw.sharesPerArticle == null ? 'failed' : 'ok',
+    pageviews: raw.pageviewsPerArticle == null ? 'failed' : 'ok',
+    paths: raw.pathsPerArticle == null ? 'failed' : 'ok',
+    engagement: raw.engagementPerArticle == null ? 'failed' : 'ok',
+    socialInbound: raw.socialInbound == null ? 'failed' : 'ok',
+    sharesTotal: raw.sharesTotal == null ? 'failed' : 'ok',
+  };
+  const partial = Object.values(status).some((s) => s === 'failed');
 
-  // Top articles — already sorted DESC by shares_out + LIMITed by SQL.
-  const articles: LoopArticleRow[] = raw.sharesPerArticle.map((s) => {
+  const pageviewsByHash = indexBy(raw.pageviewsPerArticle ?? []);
+  const engagementByHash = indexBy(raw.engagementPerArticle ?? []);
+  const pathByHash = collapsePaths(raw.pathsPerArticle ?? []);
+
+  // Top articles — already sorted DESC by shares_out + LIMITed by SQL. When
+  // shares bucket failed, the article list is empty (we don't synthesize one
+  // from pageviews because the column ordering is "by shares").
+  const articles: LoopArticleRow[] = (raw.sharesPerArticle ?? []).map((s) => {
     const inbound = num(pageviewsByHash.get(s.canonical_url_hash)?.inbound_visits);
     const engaged = num(engagementByHash.get(s.canonical_url_hash)?.engaged_reads);
     const meta = pathByHash.get(s.canonical_url_hash);
@@ -211,29 +297,39 @@ export function aggregateLoop(period: string, site: string, raw: LoopRawData): L
     };
   });
 
-  // KPIs.
-  const sharesTotal = raw.sharesTotal[0];
-  const sharesOutTotal = num(sharesTotal?.shares_out_total);
-  const articlesDrivingShares = num(sharesTotal?.articles_driving_shares);
-  const socialInbound = num(raw.socialInbound[0]?.inbound_visits_from_social);
+  // KPIs — null when the underlying bucket failed; downstream UI renders '—'.
+  const sharesTotalRow = raw.sharesTotal?.[0];
+  const sharesOutTotal = num(sharesTotalRow?.shares_out_total);
+  const articlesDrivingShares = raw.sharesTotal == null ? null : num(sharesTotalRow?.articles_driving_shares);
 
-  const secondaryShareRate = socialInbound > 0
-    ? Math.round((sharesOutTotal / socialInbound) * 100 * 100) / 100
-    : 0;
+  const socialInboundVal = raw.socialInbound?.[0]?.inbound_visits_from_social;
+  const socialInbound = raw.socialInbound == null ? null : num(socialInboundVal);
+
+  let secondaryShareRate: number | null;
+  if (raw.socialInbound == null || raw.sharesTotal == null) {
+    secondaryShareRate = null;
+  } else if (socialInbound != null && socialInbound > 0) {
+    secondaryShareRate = Math.round((sharesOutTotal / socialInbound) * 100 * 100) / 100;
+  } else {
+    secondaryShareRate = 0;
+  }
 
   // Mean quality across every article with at least 1 inbound visit (not just
   // top-20-by-shares, so leaders don't dominate the average).
-  let sum = 0;
-  let n = 0;
-  for (const pv of raw.pageviewsPerArticle) {
-    const inbound = num(pv.inbound_visits);
-    if (inbound < 1) continue;
-    const engaged = num(engagementByHash.get(pv.canonical_url_hash)?.engaged_reads);
-    sum += qualityScore(engaged, inbound);
-    n += 1;
+  let avgDistributionQuality: number | null = null;
+  if (raw.pageviewsPerArticle != null && raw.engagementPerArticle != null) {
+    let sum = 0;
+    let n = 0;
+    for (const pv of raw.pageviewsPerArticle) {
+      const inbound = num(pv.inbound_visits);
+      if (inbound < 1) continue;
+      const engaged = num(engagementByHash.get(pv.canonical_url_hash)?.engaged_reads);
+      sum += qualityScore(engaged, inbound);
+      n += 1;
+    }
+    const avg100 = n > 0 ? sum / n : 0;
+    avgDistributionQuality = Math.round(avg100) / 10; // 0.0–10.0
   }
-  const avg100 = n > 0 ? sum / n : 0;
-  const avgDistributionQuality = Math.round(avg100 / 10 * 10) / 10; // 0.0–10.0
 
   return {
     period,
@@ -245,5 +341,7 @@ export function aggregateLoop(period: string, site: string, raw: LoopRawData): L
       avg_distribution_quality_score: avgDistributionQuality,
     },
     articles,
+    partial,
+    status,
   };
 }

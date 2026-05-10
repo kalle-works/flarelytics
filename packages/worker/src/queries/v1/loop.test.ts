@@ -4,6 +4,9 @@ import {
   buildLoopSql,
   DEFAULT_LOOP_DATASETS,
   ENGAGED_SCROLL_THRESHOLD,
+  PATHS_QUERY_LIMIT,
+  RECOGNIZED_SHARE_PLATFORMS,
+  SOCIAL_REFERRER_HOSTS,
   TOP_ARTICLES_LIMIT,
   type LoopRawData,
 } from './loop';
@@ -32,13 +35,43 @@ describe('buildLoopSql', () => {
     expect(sql.sharesPerArticle).toContain('ORDER BY shares_out DESC');
   });
 
+  it('caps pathsPerArticle so high-cardinality sites do not balloon the response', () => {
+    expect(sql.pathsPerArticle).toContain(`LIMIT ${PATHS_QUERY_LIMIT}`);
+    expect(sql.pathsPerArticle).toContain('ORDER BY views DESC');
+  });
+
   it('engagement query filters by engagement_type and scroll threshold', () => {
     expect(sql.engagementPerArticle).toContain("blob5 = 'scroll_depth'");
     expect(sql.engagementPerArticle).toContain(`double2 >= ${ENGAGED_SCROLL_THRESHOLD}`);
   });
 
-  it('social-inbound total filters by non-empty social_platform (blob8)', () => {
-    expect(sql.socialInboundTotal).toContain("blob8 != ''");
+  it('social-inbound total filters by referrer_domain hostname allowlist', () => {
+    // Verify the hostname list is interpolated as a SQL IN clause on blob6
+    // (referrer_domain) — not blob8 (social_platform), which the tracker
+    // cannot populate with hostname-only referrers.
+    expect(sql.socialInboundTotal).toContain('blob6 IN');
+    for (const host of SOCIAL_REFERRER_HOSTS) {
+      expect(sql.socialInboundTotal).toContain(`'${host}'`);
+    }
+  });
+
+  it('share queries filter to recognized share-target platforms only', () => {
+    expect(sql.sharesPerArticle).toContain('blob4 IN');
+    expect(sql.sharesTotal).toContain('blob4 IN');
+    for (const p of RECOGNIZED_SHARE_PLATFORMS) {
+      expect(sql.sharesPerArticle).toContain(`'${p}'`);
+      expect(sql.sharesTotal).toContain(`'${p}'`);
+    }
+    // No 'other' — the dual-emit fallback for unrecognized targets must NOT
+    // count toward shares_out (it represents arbitrary outbound clicks).
+    expect(sql.sharesPerArticle).not.toContain("'other'");
+    expect(sql.sharesTotal).not.toContain("'other'");
+  });
+
+  it('every query excludes empty canonical_url_hash', () => {
+    for (const key of Object.keys(sql) as (keyof typeof sql)[]) {
+      expect(sql[key]).toContain("blob3 != ''");
+    }
   });
 });
 
@@ -85,6 +118,22 @@ describe('aggregateLoop', () => {
     expect(a1.first_seen).toBe('2026-05-01T10:00:00Z');
   });
 
+  it('keeps the first-seen path on a views tie and picks the earliest first_seen', () => {
+    const out = aggregateLoop("'30' DAY", 'kiiru.fi', {
+      sharesPerArticle: [{ canonical_url_hash: 'tie', shares_out: 1 }],
+      pageviewsPerArticle: [{ canonical_url_hash: 'tie', inbound_visits: 100 }],
+      pathsPerArticle: [
+        { canonical_url_hash: 'tie', path: '/first', views: 50, first_seen: '2026-05-02T00:00:00Z' },
+        { canonical_url_hash: 'tie', path: '/second', views: 50, first_seen: '2026-05-01T00:00:00Z' },
+      ],
+      engagementPerArticle: [],
+      socialInbound: [],
+      sharesTotal: [],
+    });
+    expect(out.articles[0].path).toBe('/first');
+    expect(out.articles[0].first_seen).toBe('2026-05-01T00:00:00Z');
+  });
+
   it('computes quality_score = round(engaged ÷ visits × 100)', () => {
     expect(result.articles[0].quality_score).toBe(58); // 488/846 = 0.5768 → 58
     expect(result.articles[1].quality_score).toBe(24); // 137/572 = 0.2395 → 24
@@ -117,6 +166,14 @@ describe('aggregateLoop', () => {
     expect(result.kpis.avg_distribution_quality_score).toBe(2.7);
   });
 
+  it('reports partial=false and all-ok status when every bucket succeeded', () => {
+    expect(result.partial).toBe(false);
+    expect(result.status).toEqual({
+      shares: 'ok', pageviews: 'ok', paths: 'ok',
+      engagement: 'ok', socialInbound: 'ok', sharesTotal: 'ok',
+    });
+  });
+
   it('handles empty inputs without throwing', () => {
     const empty = aggregateLoop("'7' DAY", 'kiiru.fi', {
       sharesPerArticle: [],
@@ -133,6 +190,7 @@ describe('aggregateLoop', () => {
       secondary_share_rate: 0,
       avg_distribution_quality_score: 0,
     });
+    expect(empty.partial).toBe(false);
   });
 
   it('coerces null/string CF API numbers to numbers', () => {
@@ -148,5 +206,54 @@ describe('aggregateLoop', () => {
     expect(messy.articles[0].quality_score).toBe(40);
     expect(messy.kpis.inbound_visits_from_social).toBe(0);
     expect(messy.kpis.articles_driving_shares).toBe(0);
+  });
+
+  // ─── Partial-failure: null buckets produce graceful degradation ──────────
+
+  it('reports partial=true and null KPI when one bucket failed', () => {
+    const out = aggregateLoop("'30' DAY", 'kiiru.fi', {
+      ...baseRaw,
+      socialInbound: null, // simulate engagement bucket CF SQL failure
+    });
+    expect(out.partial).toBe(true);
+    expect(out.status.socialInbound).toBe('failed');
+    expect(out.kpis.inbound_visits_from_social).toBeNull();
+    // secondary_share_rate also depends on socialInbound → null
+    expect(out.kpis.secondary_share_rate).toBeNull();
+    // KPIs from healthy buckets stay populated
+    expect(out.kpis.articles_driving_shares).toBe(47);
+    // Articles still render because shares + pageviews + paths + engagement
+    // all succeeded
+    expect(out.articles).toHaveLength(3);
+  });
+
+  it('null shares bucket → empty articles list, partial=true, null shares KPIs', () => {
+    const out = aggregateLoop("'30' DAY", 'kiiru.fi', {
+      ...baseRaw,
+      sharesPerArticle: null,
+      sharesTotal: null,
+    });
+    expect(out.partial).toBe(true);
+    expect(out.articles).toEqual([]);
+    expect(out.kpis.articles_driving_shares).toBeNull();
+    expect(out.kpis.secondary_share_rate).toBeNull();
+    // Quality KPI still computable from pageviews + engagement
+    expect(out.kpis.avg_distribution_quality_score).not.toBeNull();
+  });
+
+  it('quality KPI is null when pageviews OR engagement bucket failed', () => {
+    const noEng = aggregateLoop("'30' DAY", 'kiiru.fi', {
+      ...baseRaw,
+      engagementPerArticle: null,
+    });
+    expect(noEng.partial).toBe(true);
+    expect(noEng.kpis.avg_distribution_quality_score).toBeNull();
+
+    const noPv = aggregateLoop("'30' DAY", 'kiiru.fi', {
+      ...baseRaw,
+      pageviewsPerArticle: null,
+    });
+    expect(noPv.partial).toBe(true);
+    expect(noPv.kpis.avg_distribution_quality_score).toBeNull();
   });
 });

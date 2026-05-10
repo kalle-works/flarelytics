@@ -906,7 +906,9 @@ async function handleNewVsReturning(env: Env, site: string, period: string, data
 
     return Response.json(
       { data: [{ new_visitors: newVisitors, returning_visitors: returningVisitors, total: currentVids.length }] },
-      { headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' } },
+      // Private: /query is API-key-protected; the key lives in a request
+      // header so shared caches keying on URL+method could replay across keys.
+      { headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=300, must-revalidate' } },
     );
   } catch (err) {
     console.log(`[new-vs-returning] error: ${err}`);
@@ -956,8 +958,11 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     }
     try {
       const data = await V1_QUERIES[queryName].run(env, v1Period, siteParam);
+      // Private cache only — /query is API-key-protected and the key lives in
+      // a request header, not the URL. Shared caches (proxies, CDNs) keying
+      // on URL+method could otherwise replay a cached response across keys.
       return Response.json(data, {
-        headers: { ...cors, 'Cache-Control': 'public, max-age=300' },
+        headers: { ...cors, 'Cache-Control': 'private, max-age=300, must-revalidate' },
       });
     } catch (err) {
       console.log(`[v1 query] ${queryName} failed: ${err}`);
@@ -1043,7 +1048,10 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     }
 
     const data = await response.text();
-    const cacheControl = isLive ? 'no-store' : 'public, max-age=300';
+    // Private: /query is API-key-protected; the key lives in a request header
+    // so shared caches keying on URL+method could replay across keys. Live
+    // queries stay no-store.
+    const cacheControl = isLive ? 'no-store' : 'private, max-age=300, must-revalidate';
     return new Response(data, {
       headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': cacheControl },
     });
