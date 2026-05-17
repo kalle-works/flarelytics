@@ -103,6 +103,7 @@ const FILTER_BLOB: Record<string, string> = {
   page:         'blob1',
   device:       'blob11',
   browser:      'blob12',
+  os:           'blob13',
   utm_source:   'blob6',
   utm_campaign: 'blob8',
 };
@@ -111,6 +112,7 @@ const FILTER_PATTERN: Record<string, RegExp> = {
   country:      /^[A-Z]{2}$/,
   device:       /^(mobile|tablet|desktop)$/,
   browser:      /^[a-zA-Z0-9 ]{1,30}$/,
+  os:           /^[a-zA-Z0-9 ]{1,20}$/,
   referrer:     /^[a-zA-Z0-9.\-]{1,100}$/,
   page:         /^\/[a-zA-Z0-9.\-_/]*$/,
   utm_source:   /^[a-zA-Z0-9.\-_]{1,50}$/,
@@ -158,6 +160,16 @@ export function browserName(ua: string): string {
   if (/Firefox\//.test(ua)) return 'Firefox';
   if (/Mobile.*Safari/.test(ua)) return 'Safari Mobile';
   if (/Safari\//.test(ua)) return 'Safari';
+  return 'Other';
+}
+
+export function osName(ua: string): string {
+  if (/iPhone|iPad|iPod/.test(ua)) return 'iOS';
+  if (/Android/.test(ua)) return 'Android';
+  if (/CrOS/.test(ua)) return 'ChromeOS';
+  if (/Windows/.test(ua)) return 'Windows';
+  if (/Macintosh|Mac OS X/.test(ua)) return 'macOS';
+  if (/Linux/.test(ua)) return 'Linux';
   return 'Other';
 }
 
@@ -399,6 +411,7 @@ async function handleTrack(request: Request, env: Env, ctx: ExecutionContext): P
   const revenueValue = typeof body.value === 'number' && isFinite(body.value) && body.value >= 0 ? body.value : 0;
   const device = deviceType(ua);
   const browser = browserName(ua);
+  const os = osName(ua);
 
   // Legacy v0 write — wrapped so a v0 failure does not block v1 dual-emit.
   try {
@@ -416,6 +429,7 @@ async function handleTrack(request: Request, env: Env, ctx: ExecutionContext): P
         site,                                      // blob10: site hostname
         device,                                    // blob11: device type (mobile/tablet/desktop)
         browser,                                   // blob12: browser name
+        os,                                        // blob13: operating system
       ],
       doubles: [1, timingSeconds, revenueValue],  // double1: count, double2: timing seconds, double3: revenue value
       indexes: [path],
@@ -688,6 +702,15 @@ const QUERY_TEMPLATES: Record<string, {
       FROM ${ds}
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
       GROUP BY browser ORDER BY views DESC LIMIT 10
+    `,
+  },
+  'operating-systems': {
+    description: 'Pageviews by operating system',
+    sql: (ds, p, site) => `
+      SELECT blob13 AS os, SUM(_sample_interval * double1) AS views
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
+      GROUP BY os ORDER BY views DESC LIMIT 10
     `,
   },
   'top-pages-visitors': {
