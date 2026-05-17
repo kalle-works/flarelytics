@@ -1,0 +1,253 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Public Analytics — Flarelytics">
+  <div id="state-loading" style="text-align:center;padding:5rem 1rem;">
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style="margin:0 auto 1rem;">
+      <rect width="32" height="32" rx="6" fill="#1c1917"/>
+      <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+      <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+      <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+    </svg>
+    <p style="font-family:var(--mono);font-size:0.875rem;color:var(--ink-muted);">Loading stats…</p>
+  </div>
+
+  <div id="state-setup" style="display:none;max-width:560px;margin:5rem auto;">
+    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.5rem;">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+        <rect width="32" height="32" rx="6" fill="#1c1917"/>
+        <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+        <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+        <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+      </svg>
+      <h1 style="font-family:var(--mono);font-size:1rem;font-weight:500;">flarelytics / public stats</h1>
+    </div>
+    <p style="font-size:0.9375rem;color:var(--ink-secondary);margin-bottom:1.5rem;">Share a read-only view of your analytics. No account needed for viewers.</p>
+    <div class="card" style="padding:1.25rem;">
+      <p style="font-family:var(--mono);font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.75rem;">How to enable</p>
+      <ol style="font-size:0.875rem;color:var(--ink-secondary);line-height:1.8;padding-left:1.25rem;">
+        <li>Add <code style="font-family:var(--mono);background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:0.8125rem;">PUBLIC_STATS_SITES=yoursite.com</code> to your <code style="font-family:var(--mono);background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:0.8125rem;">wrangler.toml</code></li>
+        <li>Redeploy your worker</li>
+        <li>Share the URL below with the correct parameters</li>
+      </ol>
+      <div style="margin-top:1rem;padding:0.75rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);">
+        <p style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);margin-bottom:0.25rem;">Share URL format</p>
+        <p style="font-family:var(--mono);font-size:0.75rem;color:var(--ink);word-break:break-all;">/public?worker=https://your-worker.workers.dev&amp;site=yoursite.com</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="state-error" style="display:none;text-align:center;padding:5rem 1rem;">
+    <p style="font-family:var(--mono);font-size:0.875rem;color:var(--red);margin-bottom:0.5rem;" id="error-msg">Could not load stats.</p>
+    <p style="font-size:0.8125rem;color:var(--ink-muted);" id="error-hint"></p>
+  </div>
+
+  <div id="state-stats" style="display:none;">
+    <!-- Header -->
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:1.5rem;">
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="6" fill="#1c1917"/>
+          <rect x="7" y="12" width="4" height="12" rx="1" fill="#fbbf24"/>
+          <rect x="14" y="8" width="4" height="16" rx="1" fill="#fbbf24"/>
+          <rect x="21" y="16" width="4" height="8" rx="1" fill="#fbbf24"/>
+        </svg>
+        <h1 id="pub-site-title" style="font-family:var(--mono);font-size:1rem;font-weight:500;"></h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <span style="font-family:var(--mono);font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;background:var(--accent-light);border:1px solid #fde68a;border-radius:20px;padding:2px 10px;color:#92400e;">Last 30 days</span>
+        <span id="pub-generated" style="font-family:var(--mono);font-size:0.6875rem;color:var(--ink-muted);"></span>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-bottom:1.5rem;" id="kpi-grid">
+      <div class="card" style="padding:1rem 1.25rem;">
+        <p style="font-family:var(--mono);font-size:0.625rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-muted);margin-bottom:0.25rem;">Pageviews</p>
+        <p id="kpi-pageviews" style="font-family:var(--mono);font-size:1.5rem;font-weight:700;">—</p>
+      </div>
+      <div class="card" style="padding:1rem 1.25rem;">
+        <p style="font-family:var(--mono);font-size:0.625rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-muted);margin-bottom:0.25rem;">Unique Visitors</p>
+        <p id="kpi-visitors" style="font-family:var(--mono);font-size:1.5rem;font-weight:700;">—</p>
+      </div>
+      <div class="card" style="padding:1rem 1.25rem;">
+        <p style="font-family:var(--mono);font-size:0.625rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-muted);margin-bottom:0.25rem;">Bots Blocked</p>
+        <p id="kpi-bots" style="font-family:var(--mono);font-size:1.5rem;font-weight:700;">—</p>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card" style="padding:1.25rem;margin-bottom:1.5rem;overflow:hidden;">
+      <p style="font-family:var(--mono);font-size:0.625rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-muted);margin-bottom:1rem;">Daily Pageviews</p>
+      <div id="pub-chart" style="width:100%;height:120px;"></div>
+    </div>
+
+    <!-- Bottom grid: pages + referrers -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;" class="two-col">
+      <div class="card" style="padding:1.25rem;">
+        <p style="font-family:var(--mono);font-size:0.625rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-muted);margin-bottom:0.875rem;">Top Pages</p>
+        <div id="pub-pages"></div>
+      </div>
+      <div class="card" style="padding:1.25rem;">
+        <p style="font-family:var(--mono);font-size:0.625rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-muted);margin-bottom:0.875rem;">Referrers</p>
+        <div id="pub-referrers"></div>
+      </div>
+    </div>
+
+    <!-- Bottom grid: countries + devices -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:2rem;" class="two-col">
+      <div class="card" style="padding:1.25rem;">
+        <p style="font-family:var(--mono);font-size:0.625rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-muted);margin-bottom:0.875rem;">Countries</p>
+        <div id="pub-countries"></div>
+      </div>
+      <div class="card" style="padding:1.25rem;">
+        <p style="font-family:var(--mono);font-size:0.625rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-muted);margin-bottom:0.875rem;">Devices</p>
+        <div id="pub-devices"></div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center;border-top:1px solid var(--border);padding-top:1.25rem;">
+      <a href="https://flarelytics.dev" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);text-decoration:none;">
+        Analytics by <span style="color:var(--accent-text, #b45309);font-weight:600;">flarelytics</span> — privacy-first, Cloudflare-native
+      </a>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .card {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+
+  @media (max-width: 600px) {
+    .two-col { grid-template-columns: 1fr !important; }
+    #kpi-grid { grid-template-columns: 1fr 1fr !important; }
+    #kpi-grid > :last-child { grid-column: span 2; }
+  }
+</style>
+
+<script>
+  var params = new URLSearchParams(location.search);
+  var workerUrl = (params.get('worker') || '').replace(/\/$/, '');
+  var siteParam = params.get('site') || '';
+
+  function show(id) {
+    ['state-loading','state-setup','state-error','state-stats'].forEach(function(s) {
+      document.getElementById(s).style.display = s === id ? '' : 'none';
+    });
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function num(n) {
+    return Number(n).toLocaleString();
+  }
+
+  function renderBar(container, rows, keyLabel, keyValue) {
+    if (!rows || !rows.length) { container.innerHTML = '<p style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);">No data</p>'; return; }
+    var max = rows.reduce(function(a, r) { return Math.max(a, parseFloat(r[keyValue]) || 0); }, 0);
+    var html = '';
+    rows.forEach(function(row) {
+      var v = parseFloat(row[keyValue]) || 0;
+      var pct = max > 0 ? v / max * 100 : 0;
+      var label = row[keyLabel] || '—';
+      html += '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.375rem;">';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="position:relative;height:22px;background:var(--border-light);border-radius:2px;overflow:hidden;">';
+      html += '<div style="position:absolute;inset:0;right:' + (100 - pct) + '%;background:rgba(220,107,20,0.18);"></div>';
+      html += '<span style="position:absolute;left:6px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:0.75rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90%;">' + esc(label) + '</span>';
+      html += '</div></div>';
+      html += '<span style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-secondary);white-space:nowrap;min-width:40px;text-align:right;font-variant-numeric:tabular-nums;">' + num(v) + '</span>';
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  }
+
+  function renderChart(container, dailyViews) {
+    var w = container.offsetWidth || 800;
+    var h = 120;
+    var pad = { top: 8, right: 8, bottom: 24, left: 36 };
+    var innerW = w - pad.left - pad.right;
+    var innerH = h - pad.top - pad.bottom;
+
+    if (!dailyViews || !dailyViews.length) {
+      container.innerHTML = '<p style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);text-align:center;line-height:120px;">No data</p>';
+      return;
+    }
+
+    var values = dailyViews.map(function(d) { return parseFloat(d.views) || 0; });
+    var maxV = Math.max.apply(null, values) || 1;
+    var barW = Math.max(2, Math.floor(innerW / values.length) - 2);
+    var totalBarW = barW * values.length + (values.length - 1) * 2;
+    var startX = pad.left + Math.max(0, (innerW - totalBarW) / 2);
+
+    var gridLines = 3;
+    var gridHTML = '';
+    for (var i = 0; i <= gridLines; i++) {
+      var y = pad.top + innerH - (i / gridLines) * innerH;
+      var label = i === 0 ? '0' : num(Math.round(maxV * i / gridLines));
+      gridHTML += '<line x1="' + pad.left + '" y1="' + y + '" x2="' + (w - pad.right) + '" y2="' + y + '" stroke="#e7e5e4" stroke-width="1" stroke-dasharray="3 3"/>';
+      gridHTML += '<text x="' + (pad.left - 4) + '" y="' + (y + 4) + '" text-anchor="end" font-family="\'SF Mono\',\'Fira Code\',monospace" font-size="9" fill="#78716c">' + label + '</text>';
+    }
+
+    var barsHTML = '';
+    var labelStep = Math.ceil(values.length / 6);
+    values.forEach(function(v, i) {
+      var barH = Math.max(1, (v / maxV) * innerH);
+      var x = startX + i * (barW + 2);
+      var y = pad.top + innerH - barH;
+      barsHTML += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + barH + '" rx="1" fill="#dc6b14"/>';
+      if (dailyViews[i] && i % labelStep === 0) {
+        var d = dailyViews[i].date;
+        var short = d ? d.slice(5) : '';
+        barsHTML += '<text x="' + (x + barW / 2) + '" y="' + (h - 4) + '" text-anchor="middle" font-family="\'SF Mono\',\'Fira Code\',monospace" font-size="8" fill="#78716c">' + esc(short) + '</text>';
+      }
+    });
+
+    container.innerHTML = '<svg width="100%" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' + gridHTML + barsHTML + '</svg>';
+  }
+
+  function render(data) {
+    var s = data.stats;
+    document.getElementById('pub-site-title').textContent = data.site;
+    document.title = data.site + ' — Analytics';
+    var gen = data.generated ? new Date(data.generated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    document.getElementById('pub-generated').textContent = gen ? 'as of ' + gen : '';
+    document.getElementById('kpi-pageviews').textContent = num(s.pageviews);
+    document.getElementById('kpi-visitors').textContent = num(s.visitors);
+    document.getElementById('kpi-bots').textContent = num(s.botHitsTotal || 0);
+    renderChart(document.getElementById('pub-chart'), s.dailyViews);
+    renderBar(document.getElementById('pub-pages'), s.topPages, 'path', 'views');
+    renderBar(document.getElementById('pub-referrers'), s.referrers, 'referrer', 'visits');
+    renderBar(document.getElementById('pub-countries'), s.countries, 'country', 'views');
+    renderBar(document.getElementById('pub-devices'), s.devices, 'device', 'views');
+    show('state-stats');
+  }
+
+  function init() {
+    if (!workerUrl || !siteParam) { show('state-setup'); return; }
+
+    fetch(workerUrl + '/public-stats?site=' + encodeURIComponent(siteParam))
+      .then(function(r) {
+        if (!r.ok) return r.json().then(function(b) { throw b; });
+        return r.json();
+      })
+      .then(function(data) {
+        render(data);
+      })
+      .catch(function(err) {
+        document.getElementById('error-msg').textContent = err.error || 'Could not load stats.';
+        document.getElementById('error-hint').textContent = err.hint || '';
+        show('state-error');
+      });
+  }
+
+  init();
+</script>

@@ -770,3 +770,110 @@ describe('POST /track — server-side tracking', () => {
     expect(call.doubles[2]).toBe(0);
   });
 });
+
+describe('GET /public-stats', () => {
+  const cfStatsResponse = {
+    data: [{ pageviews: 1200, visitors: 340, total_bot_hits: 18, views: 100, visits: 50, path: '/', referrer: 'google.com', country: 'FI', device: 'desktop', date: '2025-05-01' }],
+  };
+
+  function makeCfMock() {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify(cfStatsResponse), { status: 200 }),
+    );
+  }
+
+  it('returns 400 when site param is missing', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/public-stats'),
+      makeEnv(),
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toMatch(/site/i);
+  });
+
+  it('returns 400 when site param contains invalid characters', async () => {
+    const res = await worker.fetch(
+      new Request("https://worker.test/public-stats?site=evil'--"),
+      makeEnv(),
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 403 when site is not in PUBLIC_STATS_SITES', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/public-stats?site=example.com'),
+      makeEnv({ PUBLIC_STATS_SITES: 'other.com' }),
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when PUBLIC_STATS_SITES is empty', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/public-stats?site=example.com'),
+      makeEnv({ PUBLIC_STATS_SITES: '' }),
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 200 with stats shape when site is allowed', async () => {
+    const fetchMock = makeCfMock();
+    const env = makeEnv({ PUBLIC_STATS_SITES: 'example.com', CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' });
+    const res = await worker.fetch(
+      new Request('https://worker.test/public-stats?site=example.com'),
+      env,
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      period: string; site: string; generated: string;
+      stats: { pageviews: number; visitors: number; topPages: unknown[]; referrers: unknown[]; countries: unknown[]; devices: unknown[]; dailyViews: unknown[]; botHitsTotal: number };
+    };
+    expect(body.period).toBe('30d');
+    expect(body.site).toBe('example.com');
+    expect(typeof body.generated).toBe('string');
+    expect(typeof body.stats.pageviews).toBe('number');
+    expect(typeof body.stats.visitors).toBe('number');
+    expect(Array.isArray(body.stats.topPages)).toBe(true);
+    expect(Array.isArray(body.stats.referrers)).toBe(true);
+    expect(Array.isArray(body.stats.countries)).toBe(true);
+    expect(Array.isArray(body.stats.devices)).toBe(true);
+    expect(Array.isArray(body.stats.dailyViews)).toBe(true);
+    expect(typeof body.stats.botHitsTotal).toBe('number');
+    fetchMock.mockRestore();
+  });
+
+  it('returns 502 when CF query fails', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response('CF down', { status: 503 }),
+    );
+    const env = makeEnv({ PUBLIC_STATS_SITES: 'example.com', CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' });
+    const res = await worker.fetch(
+      new Request('https://worker.test/public-stats?site=example.com'),
+      env,
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(502);
+    fetchMock.mockRestore();
+  });
+
+  it('reflects any origin in CORS headers (open endpoint)', async () => {
+    const fetchMock = makeCfMock();
+    const env = makeEnv({ PUBLIC_STATS_SITES: 'example.com', CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' });
+    const res = await worker.fetch(
+      new Request('https://worker.test/public-stats?site=example.com', {
+        headers: { Origin: 'https://any-site.com' },
+      }),
+      env,
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(200);
+    // corsHeaders reflects the specific origin for allowAny=true endpoints (not literal *)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://any-site.com');
+    fetchMock.mockRestore();
+  });
+});
