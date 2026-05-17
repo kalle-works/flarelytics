@@ -115,6 +115,7 @@ Each event writes one row. Always use these field names in queries:
 | `blob12` | Browser name (Chrome/Firefox/Safari/Edge/Opera/DuckDuckGo/Other) |
 | `double1` | Event count (always 1) |
 | `double2` | Time on page in seconds (only for `timing` events, use AVG) |
+| `double3` | Revenue/conversion value (0 unless `value` field sent in track payload) |
 
 All queries must include `AND blob10 = '${site}'` to scope to a single site.
 
@@ -123,6 +124,12 @@ All queries must include `AND blob10 = '${site}'` to scope to a single site.
 37 queries available via `GET /query?q=<name>&period=<period>&site=<hostname>`:
 
 **Traffic:** `top-pages`, `top-pages-visitors`, `top-pages-stories`, `daily-views`, `daily-unique-visitors`, `new-vs-returning`, `total-sessions`
+
+**Revenue:** `revenue-by-event`, `revenue-over-time` (only populated when `value` field is sent in track calls)
+
+**Query filters:** Append `&filter[key]=value` to any query to scope by dimension. Keys: `country` (2-letter code), `device` (mobile/tablet/desktop), `browser`, `referrer` (hostname), `page`, `utm_source`, `utm_campaign`.
+
+**Server-side tracking:** POST to `/track` with `X-API-Key` header (no `Origin` required) and include `"site": "yoursite.com"` in the payload.
 
 **Referrers:** `referrers`, `referrers-by-page` (?page=), `utm-campaigns`, `utm-campaign-trend`, `utm-by-page` (?page=)
 

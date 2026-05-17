@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import worker, { isBot, deviceType, browserName } from './index';
+import worker, { isBot, deviceType, browserName, parseFilters } from './index';
 import { PV_SCHEMA, ENG_SCHEMA, SHARE_SCHEMA, BOT_SCHEMA, CUSTOM_SCHEMA } from './v1/emit';
 
 function makeEnv(overrides: Record<string, unknown> = {}) {
@@ -647,7 +647,126 @@ describe('GET /config', () => {
   it('lists v1 queries alongside v0', async () => {
     const res = await worker.fetch(new Request('https://worker.test/config'), makeEnv(), {} as ExecutionContext);
     expect(res.status).toBe(200);
-    const body = await res.json() as { queries_v1: { name: string }[] };
+    const body = await res.json() as { queries_v1: { name: string }[]; filters: { keys: string[] } };
     expect(body.queries_v1.map((q) => q.name)).toContain('loop-overview');
+    expect(body.filters.keys).toContain('country');
+    expect(body.filters.keys).toContain('device');
+  });
+});
+
+describe('parseFilters', () => {
+  it('returns empty string when no filter params', () => {
+    const url = new URL('https://worker.test/query?q=top-pages&site=example.com');
+    expect(parseFilters(url)).toBe('');
+  });
+
+  it('parses a valid country filter', () => {
+    const url = new URL('https://worker.test/query?q=top-pages&site=example.com&filter[country]=FI');
+    expect(parseFilters(url)).toBe("AND blob3 = 'FI'");
+  });
+
+  it('parses multiple valid filters', () => {
+    const url = new URL('https://worker.test/query?q=top-pages&site=example.com&filter[country]=FI&filter[device]=mobile');
+    const result = parseFilters(url);
+    expect(result).toContain("AND blob3 = 'FI'");
+    expect(result).toContain("AND blob11 = 'mobile'");
+  });
+
+  it('rejects country codes with wrong format', () => {
+    const url = new URL('https://worker.test/query?q=top-pages&site=example.com&filter[country]=finland');
+    expect(parseFilters(url)).toBe('');
+  });
+
+  it('rejects unknown filter keys', () => {
+    const url = new URL('https://worker.test/query?q=top-pages&site=example.com&filter[ip]=1.2.3.4');
+    expect(parseFilters(url)).toBe('');
+  });
+
+  it('escapes single quotes in filter values', () => {
+    const url = new URL('https://worker.test/query?q=top-pages&site=example.com&filter[browser]=Safari%20Mobile');
+    const result = parseFilters(url);
+    expect(result).toBe("AND blob12 = 'Safari Mobile'");
+  });
+
+  it('rejects device values outside the allowlist', () => {
+    const url = new URL('https://worker.test/query?q=top-pages&site=example.com&filter[device]=phone');
+    expect(parseFilters(url)).toBe('');
+  });
+
+  it('parses referrer filter', () => {
+    const url = new URL('https://worker.test/query?q=top-pages&site=example.com&filter[referrer]=twitter.com');
+    expect(parseFilters(url)).toBe("AND blob2 = 'twitter.com'");
+  });
+});
+
+describe('POST /track — server-side tracking', () => {
+  it('rejects server-side request without API key', async () => {
+    const { ctx } = makeCtx();
+    const req = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': HUMAN_UA },
+      body: JSON.stringify({ event: 'purchase', path: '/checkout', site: 'example.com' }),
+    });
+    const res = await worker.fetch(req, makeEnv(), ctx);
+    expect(res.status).toBe(401);
+  });
+
+  it('accepts server-side request with valid API key and site field', async () => {
+    const { ctx, settle } = makeCtx();
+    const env = makeEnv();
+    const req = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': HUMAN_UA,
+        'X-API-Key': 'test-key',
+      },
+      body: JSON.stringify({ event: 'purchase', path: '/checkout', site: 'example.com' }),
+    });
+    const res = await worker.fetch(req, env, ctx);
+    await settle();
+    expect(res.status).toBe(204);
+    expect(env.ANALYTICS.writeDataPoint).toHaveBeenCalled();
+    const call = (env.ANALYTICS.writeDataPoint as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.blobs[9]).toBe('example.com'); // blob10 = site
+  });
+
+  it('stores revenue value in double3', async () => {
+    const { ctx, settle } = makeCtx();
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'purchase', path: '/checkout', value: 49.99 },
+      { Origin: 'https://example.com' },
+    );
+    const res = await worker.fetch(req, env, ctx);
+    await settle();
+    expect(res.status).toBe(204);
+    const call = (env.ANALYTICS.writeDataPoint as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.doubles[2]).toBeCloseTo(49.99);
+  });
+
+  it('stores 0 in double3 when no value field', async () => {
+    const { ctx, settle } = makeCtx();
+    const env = makeEnv();
+    const req = trackReq({ event: 'pageview', path: '/' }, { Origin: 'https://example.com' });
+    const res = await worker.fetch(req, env, ctx);
+    await settle();
+    expect(res.status).toBe(204);
+    const call = (env.ANALYTICS.writeDataPoint as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.doubles[2]).toBe(0);
+  });
+
+  it('ignores negative value field', async () => {
+    const { ctx, settle } = makeCtx();
+    const env = makeEnv();
+    const req = trackReq(
+      { event: 'refund', path: '/checkout', value: -10 },
+      { Origin: 'https://example.com' },
+    );
+    const res = await worker.fetch(req, env, ctx);
+    await settle();
+    expect(res.status).toBe(204);
+    const call = (env.ANALYTICS.writeDataPoint as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.doubles[2]).toBe(0);
   });
 });

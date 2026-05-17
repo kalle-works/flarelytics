@@ -16,6 +16,8 @@ let emitCanonical = false;
 interface TrackOptions {
   props?: Record<string, string>;
   path?: string;
+  /** Revenue or conversion value — passed to the worker as double3 for revenue queries */
+  value?: number;
 }
 
 export interface InitOptions {
@@ -178,6 +180,7 @@ export function track(event: string, options: TrackOptions = {}): void {
   send(event, {
     path: options.path || location.pathname,
     ...(options.props ? { props: options.props } : {}),
+    ...(typeof options.value === 'number' ? { value: options.value } : {}),
   });
 }
 
