@@ -38,6 +38,12 @@ import Layout from '../layouts/Layout.astro';
       </button>
       <p id="auth-error" style="display:none;font-size:0.875rem;color:var(--red);"></p>
     </form>
+    <!-- Site picker (shown after connect when multiple sites exist) -->
+    <div id="site-picker" style="display:none;margin-top:0.5rem;">
+      <p style="font-size:0.875rem;color:var(--ink-muted);margin-bottom:1rem;">Choose a site to view:</p>
+      <div id="site-picker-list" style="display:flex;flex-direction:column;gap:0.5rem;text-align:left;"></div>
+      <button id="site-picker-back" style="margin-top:1rem;background:none;border:none;font-family:var(--mono);font-size:0.8125rem;color:var(--ink-muted);cursor:pointer;text-decoration:underline;">← back</button>
+    </div>
   </div>
 
   <!-- Dashboard -->
@@ -86,6 +92,9 @@ import Layout from '../layouts/Layout.astro';
         <button id="sites-btn" class="icon-btn" title="Manage sites" style="font-family:var(--mono);font-size:0.75rem;font-weight:600;padding:0 10px;min-width:auto;">SITES</button>
       </div>
     </div>
+
+    <!-- Active filter bar — rendered dynamically when filters are set -->
+    <div id="filter-bar" style="display:none;align-items:center;gap:0.375rem;flex-wrap:wrap;margin-bottom:1rem;padding:0.5rem 0.75rem;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-lg);"></div>
 
     <!-- Sites Management Panel -->
     <div id="sites-panel" style="display:none;margin-bottom:1.5rem;">
@@ -287,6 +296,24 @@ import Layout from '../layouts/Layout.astro';
       <div class="card table-wrap">
         <table class="tbl" id="table-browsers">
           <thead><tr><th style="text-align:left;">Selain</th><th style="text-align:right;">Views</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Revenue (hidden when no value events exist) -->
+    <div id="section-revenue" class="section" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 class="section-title">Revenue</h2>
+        <button class="csv-btn" data-table="table-revenue">CSV</button>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:0.75rem;margin-bottom:1rem;">
+        <span id="revenue-total" style="font-family:var(--mono);font-size:1.5rem;font-weight:700;">-</span>
+        <span style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);">total revenue</span>
+      </div>
+      <div class="card table-wrap">
+        <table class="tbl" id="table-revenue">
+          <thead><tr><th style="text-align:left;">Event</th><th style="text-align:right;">Revenue</th><th style="text-align:right;">Count</th><th style="text-align:right;">Avg Value</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -523,6 +550,8 @@ import Layout from '../layouts/Layout.astro';
     font-variant-numeric: tabular-nums;
   }
   .tbl tbody tr:hover { background: var(--surface); }
+  .tbl tbody td.filterable { cursor: pointer; }
+  .tbl tbody td.filterable:hover { color: var(--accent-text); text-decoration: underline; }
   .tbl tbody tr:last-child td { border-bottom: none; }
 
   .period-btn {
@@ -611,6 +640,65 @@ import Layout from '../layouts/Layout.astro';
   var apiKey = '';
   var site = '';
   var period = '7d';
+  var activeFilters = {};
+
+  var FILTER_LABELS = {
+    country: 'Country', device: 'Device', browser: 'Browser',
+    referrer: 'Referrer', page: 'Page', utm_source: 'UTM Source', utm_campaign: 'UTM Campaign',
+  };
+
+  function filterParamString() {
+    return Object.keys(activeFilters).map(function(k) {
+      return '&filter%5B' + k + '%5D=' + encodeURIComponent(activeFilters[k]);
+    }).join('');
+  }
+
+  window.setFilter = function(key, value) {
+    activeFilters[key] = value;
+    renderFilterBar();
+    loadAll();
+  };
+
+  window.clearFilter = function(key) {
+    delete activeFilters[key];
+    renderFilterBar();
+    loadAll();
+  };
+
+  window.clearAllFilters = function() {
+    activeFilters = {};
+    renderFilterBar();
+    loadAll();
+  };
+
+  function renderFilterBar() {
+    var bar = document.getElementById('filter-bar');
+    if (!bar) return;
+    var keys = Object.keys(activeFilters);
+    if (!keys.length) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    var html = '<span style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-right:4px;">Filter:</span>';
+    keys.forEach(function(k) {
+      var v = activeFilters[k];
+      html += '<span style="display:inline-flex;align-items:center;gap:3px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;padding:1px 10px 1px 10px;font-family:var(--mono);font-size:11px;color:#92400e;">';
+      html += esc(FILTER_LABELS[k] || k) + ': <strong>' + esc(v) + '</strong>';
+      html += '<button onclick="clearFilter(\'' + k + '\')" style="background:none;border:none;cursor:pointer;color:#92400e;font-size:14px;line-height:1;padding:0 0 0 4px;margin-left:2px;">×</button>';
+      html += '</span>';
+    });
+    if (keys.length > 1) {
+      html += '<button onclick="clearAllFilters()" style="font-family:var(--mono);font-size:10px;color:var(--ink-muted);background:none;border:1px solid var(--border);border-radius:20px;padding:2px 10px;cursor:pointer;margin-left:4px;">Clear all</button>';
+    }
+    bar.innerHTML = html;
+  }
+
+  // Delegate click handling for filterable table cells
+  document.addEventListener('click', function(e) {
+    var td = e.target.closest ? e.target.closest('td.filterable') : null;
+    if (!td) return;
+    var key = td.dataset.filterKey;
+    var val = td.dataset.filterVal;
+    if (key && val) window.setFilter(key, val);
+  });
 
   // Session: { sites: [{url, key, site, label}], current: 0 }
   var session = { sites: [], current: 0 };
@@ -642,6 +730,8 @@ import Layout from '../layouts/Layout.astro';
     saveSession();
     applySession();
     siteSwitcherMenu.style.display = 'none';
+    activeFilters = {};
+    renderFilterBar();
     loadAll();
   }
 
@@ -775,18 +865,47 @@ import Layout from '../layouts/Layout.astro';
       .then(function(data) {
         var origins = data.sites || [];
         if (!origins.length) throw new Error('nosites');
+        var newSites = [];
         origins.forEach(function(origin) {
           var hostname = origin.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
           var exists = session.sites.findIndex(function(s) { return s.url === url && s.site === hostname; });
-          if (exists < 0) session.sites.push({ url: url, key: key, site: hostname, label: hostname });
+          if (exists < 0) {
+            session.sites.push({ url: url, key: key, site: hostname, label: hostname });
+            newSites.push(session.sites.length - 1);
+          } else {
+            newSites.push(exists);
+          }
         });
-        session.current = 0;
         try { localStorage.setItem('flarelytics_session_hint', JSON.stringify({ url: url })); } catch(e) {}
-        saveSession();
-        applySession();
-        authGate.style.display = 'none';
-        dashboard.style.display = 'block';
-        loadAll();
+
+        function openSite(idx) {
+          session.current = idx;
+          saveSession();
+          applySession();
+          authGate.style.display = 'none';
+          dashboard.style.display = 'block';
+          loadAll();
+        }
+
+        if (newSites.length === 1) {
+          openSite(newSites[0]);
+        } else {
+          // Show site picker
+          var pickerList = document.getElementById('site-picker-list');
+          pickerList.innerHTML = '';
+          newSites.forEach(function(idx) {
+            var s = session.sites[idx];
+            var btn = document.createElement('button');
+            btn.textContent = s.label || s.site;
+            btn.style.cssText = 'width:100%;min-height:44px;text-align:left;padding:0 1rem;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface-raised);font-family:var(--mono);font-size:0.8125rem;color:var(--ink);cursor:pointer;';
+            btn.onmouseover = function() { btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; };
+            btn.onmouseout = function() { btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--ink)'; };
+            btn.addEventListener('click', function() { openSite(idx); });
+            pickerList.appendChild(btn);
+          });
+          document.getElementById('auth-form').style.display = 'none';
+          document.getElementById('site-picker').style.display = '';
+        }
       })
       .catch(function(err) {
         authError.textContent = err.message === 'auth' ? 'Invalid API key.' :
@@ -794,6 +913,11 @@ import Layout from '../layouts/Layout.astro';
           'Could not connect. Check the worker URL.';
         authError.style.display = 'block';
       });
+  });
+
+  document.getElementById('site-picker-back').addEventListener('click', function() {
+    document.getElementById('site-picker').style.display = 'none';
+    document.getElementById('auth-form').style.display = 'flex';
   });
 
   // Period buttons
@@ -839,7 +963,7 @@ import Layout from '../layouts/Layout.astro';
   });
 
   function query(q) {
-    return fetch(WORKER + '/query?q=' + q + '&period=' + period + '&site=' + encodeURIComponent(site), { headers: { 'X-API-Key': apiKey } })
+    return fetch(WORKER + '/query?q=' + q + '&period=' + period + '&site=' + encodeURIComponent(site) + filterParamString(), { headers: { 'X-API-Key': apiKey } })
       .then(function(r) { return r.json(); })
       .catch(function() { return null; });
   }
@@ -936,6 +1060,11 @@ import Layout from '../layouts/Layout.astro';
     el.style.fontSize = '0.75rem';
   }
 
+  function fmtCurrency(n) {
+    if (n === 0) return '0.00';
+    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   function fmtSeconds(s) {
     var n = Math.round(s);
     if (n < 60) return n + 's';
@@ -961,11 +1090,13 @@ import Layout from '../layouts/Layout.astro';
     if (!el) return;
     var r = rows(data);
     if (!r.length) { el.innerHTML = ''; return; }
-    var icons = { mobile: '📱', tablet: '⬜', desktop: '💻' };
     var total = r.reduce(function(a, row) { return a + (parseFloat(row.views) || 0); }, 0);
+    var isFiltered = !!activeFilters.device;
     el.innerHTML = r.map(function(row) {
       var pct = total > 0 ? Math.round((parseFloat(row.views) || 0) / total * 100) : 0;
-      return '<span style="font-family:var(--mono);font-size:0.75rem;color:var(--ink-secondary);white-space:nowrap;">' + (icons[row.device] || '?') + ' ' + row.device + ' ' + pct + '%</span>';
+      var active = activeFilters.device === row.device;
+      var style = 'font-family:var(--mono);font-size:0.75rem;color:' + (active ? 'var(--accent-text)' : 'var(--ink-secondary)') + ';white-space:nowrap;cursor:pointer;border-bottom:1px solid ' + (active ? 'var(--accent)' : 'transparent') + ';';
+      return '<span style="' + style + '" data-filter-key="device" data-filter-val="' + esc(row.device) + '" class="filterable">' + row.device + ' ' + pct + '%</span>';
     }).join('');
   }
 
@@ -988,10 +1119,12 @@ import Layout from '../layouts/Layout.astro';
         var align = c.align || 'left';
         var styleAttr = 'text-align:' + align;
 
+        var filterAttrs = c.filter ? ' class="filterable" data-filter-key="' + esc(c.filter) + '" data-filter-val="' + esc(String(v == null ? '' : v)) + '"' : '';
+
         if (c.favicon) {
           var rawVal = v == null ? '' : String(v);
           var faviconUrl = 'https://www.google.com/s2/favicons?sz=16&domain=' + esc(rawVal);
-          html += '<td style="font-family:var(--mono);font-size:0.8125rem;">' +
+          html += '<td' + filterAttrs + ' style="font-family:var(--mono);font-size:0.8125rem;">' +
             '<span style="display:flex;align-items:center;gap:0.375rem;">' +
             '<img src="' + faviconUrl + '" width="16" height="16" style="border-radius:2px;flex-shrink:0;" onerror="this.style.display=\'none\'">' +
             esc(rawVal) + '</span></td>';
@@ -999,9 +1132,11 @@ import Layout from '../layouts/Layout.astro';
           var rawNum = parseFloat(row[c.key]) || 0;
           var pct = (maxVals && maxVals[c.key] > 0) ? rawNum / maxVals[c.key] * 100 : 0;
           var bg = 'background:linear-gradient(to right,rgba(217,119,6,0.15) ' + pct + '%,transparent ' + pct + '%)';
-          html += '<td style="' + styleAttr + ';' + bg + '">' + num(v) + '</td>';
+          html += '<td' + filterAttrs + ' style="' + styleAttr + ';' + bg + '">' + num(v) + '</td>';
+        } else if (c.fmt === 'currency') {
+          html += '<td' + filterAttrs + ' style="' + styleAttr + ';font-family:var(--mono);font-variant-numeric:tabular-nums;">' + fmtCurrency(parseFloat(v) || 0) + '</td>';
         } else if (c.fmt === 'pct') {
-          html += '<td style="' + styleAttr + '">' + (parseFloat(v) || 0).toFixed(1) + '%</td>';
+          html += '<td' + filterAttrs + ' style="' + styleAttr + '">' + (parseFloat(v) || 0).toFixed(1) + '%</td>';
         } else if (c.fmt === 'props') {
           var rawStr = v == null ? '' : String(v).trim();
           if (!rawStr) {
@@ -1014,7 +1149,7 @@ import Layout from '../layouts/Layout.astro';
             html += '<td style="' + styleAttr + '">' + tags + '</td>';
           }
         } else {
-          html += '<td style="' + styleAttr + '">' + (esc(v) || '-') + '</td>';
+          html += '<td' + filterAttrs + ' style="' + styleAttr + '">' + (esc(v) || '-') + '</td>';
         }
       });
       html += '</tr>';
@@ -1115,6 +1250,23 @@ import Layout from '../layouts/Layout.astro';
     renderPagination('table-pages', page, total);
   }
 
+  function renderRevenue(data) {
+    var section = document.getElementById('section-revenue');
+    if (!section) return;
+    var r = rows(data).filter(function(row) { return parseFloat(row.revenue) > 0; });
+    if (!r.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    var total = r.reduce(function(a, row) { return a + (parseFloat(row.revenue) || 0); }, 0);
+    document.getElementById('revenue-total').textContent = fmtCurrency(total);
+    tablePages['table-revenue'] = 0;
+    fillTable('table-revenue', { data: r }, [
+      { key: 'event' },
+      { key: 'revenue', align: 'right', fmt: 'currency' },
+      { key: 'count', align: 'right', fmt: 'num' },
+      { key: 'avg_value', align: 'right', fmt: 'currency' },
+    ], true);
+  }
+
   var INTERNAL_EVENTS = { scroll_depth: true, timing: true };
 
   function fillTopStories(storiesData) {
@@ -1181,7 +1333,7 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','top-pages-stories','total-sessions','bot-hits','bot-hits-total','bot-pages','bot-daily','bot-countries'];
+    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','top-pages-stories','total-sessions','bot-hits','bot-hits-total','bot-pages','bot-daily','bot-countries','revenue-by-event'];
 
     var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
@@ -1228,9 +1380,9 @@ import Layout from '../layouts/Layout.astro';
 
       // Other tables
       tablePages['table-referrers'] = 0;
-      fillTable('table-referrers', m['referrers'], [{ key: 'referrer', favicon: true }, { key: 'visits', align: 'right', fmt: 'num' }], true);
+      fillTable('table-referrers', m['referrers'], [{ key: 'referrer', favicon: true, filter: 'referrer' }, { key: 'visits', align: 'right', fmt: 'num' }], true);
       tablePages['table-countries'] = 0;
-      fillTable('table-countries', m['countries'], [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }], true);
+      fillTable('table-countries', m['countries'], [{ key: 'country', filter: 'country' }, { key: 'views', align: 'right', fmt: 'num' }], true);
       renderDeviceBadges(m['devices']);
       tablePages['table-events'] = 0;
       var filteredEvents = { data: rows(m['custom-events']).filter(function(r) { return !INTERNAL_EVENTS[r.event]; }) };
@@ -1241,11 +1393,14 @@ import Layout from '../layouts/Layout.astro';
       // Time on page
       fillTimingTable(m['page-timing']);
 
-      // Browsers
+      // Browsers (clickable to filter)
       fillTable('table-browsers', m['browsers'], [
-        { key: 'browser' },
+        { key: 'browser', filter: 'browser' },
         { key: 'views', align: 'right', fmt: 'num' }
       ]);
+
+      // Revenue (only shown if value events exist)
+      renderRevenue(m['revenue-by-event']);
 
       // Top Articles (only shown if data exists)
       fillTopStories(m['top-pages-stories']);

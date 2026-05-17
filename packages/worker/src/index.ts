@@ -74,6 +74,10 @@ interface TrackPayload {
   utm_campaign?: string;
   /** Tracker-resolved canonical URL (Phase 0.5 opt-in via data-emit-canonical) */
   canonical_url?: string;
+  /** Revenue / conversion value — stored in double3, used by revenue-by-event query */
+  value?: number;
+  /** Site hostname for server-side tracking (no Origin header) — required when X-API-Key is used */
+  site?: string;
 }
 
 // Legacy short-form payload (backwards compatible with mailtoolfinder format)
@@ -89,6 +93,48 @@ interface LegacyPayload {
 }
 
 const VERSION = '0.2.0';
+
+// Query filter support — maps ?filter[key]=value params to SQL WHERE clauses.
+// Values are validated against strict patterns before use; single quotes are
+// also escaped as a second layer of defence against SQL injection.
+const FILTER_BLOB: Record<string, string> = {
+  country:      'blob3',
+  referrer:     'blob2',
+  page:         'blob1',
+  device:       'blob11',
+  browser:      'blob12',
+  utm_source:   'blob6',
+  utm_campaign: 'blob8',
+};
+
+const FILTER_PATTERN: Record<string, RegExp> = {
+  country:      /^[A-Z]{2}$/,
+  device:       /^(mobile|tablet|desktop)$/,
+  browser:      /^[a-zA-Z0-9 ]{1,30}$/,
+  referrer:     /^[a-zA-Z0-9.\-]{1,100}$/,
+  page:         /^\/[a-zA-Z0-9.\-_/]*$/,
+  utm_source:   /^[a-zA-Z0-9.\-_]{1,50}$/,
+  utm_campaign: /^[a-zA-Z0-9.\-_ ]{1,100}$/,
+};
+
+export function parseFilters(url: URL): string {
+  const clauses: string[] = [];
+  for (const [key, value] of url.searchParams.entries()) {
+    const m = key.match(/^filter\[([a-z_]+)\]$/);
+    if (!m) continue;
+    const k = m[1];
+    if (!FILTER_BLOB[k] || !FILTER_PATTERN[k]) continue;
+    if (!FILTER_PATTERN[k].test(value)) continue;
+    const safe = value.replace(/'/g, "''");
+    clauses.push(`AND ${FILTER_BLOB[k]} = '${safe}'`);
+  }
+  return clauses.join(' ');
+}
+
+function injectFilters(sql: string, filterClauses: string): string {
+  if (!filterClauses) return sql;
+  return sql.replace(/AND blob10 = '[^']+'/g, m => `${m} ${filterClauses}`);
+}
 
 const DEFAULT_BOT_PATTERNS = [
   'bot', 'crawl', 'spider', 'slurp', 'baidu', 'yandex',
@@ -215,6 +261,19 @@ async function resolveCanonical(
 
 async function handleTrack(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const origin = request.headers.get('Origin');
+
+  // Server-side tracking: no Origin header → require X-API-Key for auth.
+  // This prevents unauthenticated server-to-server event injection.
+  if (!origin) {
+    const incomingKey = request.headers.get('X-API-Key');
+    if (!incomingKey || incomingKey !== env.QUERY_API_KEY) {
+      return Response.json(
+        { error: 'Unauthorized', hint: 'Server-side tracking requires X-API-Key header with your QUERY_API_KEY. Include a "site" field in the payload to identify the site.' },
+        { status: 401 },
+      );
+    }
+  }
+
   const allowed = await fetchAllowedOrigins(env);
   const cors = corsHeaders(origin, allowed);
 
@@ -303,7 +362,13 @@ async function handleTrack(request: Request, env: Env, ctx: ExecutionContext): P
   const propValue = body.props ? Object.values(body.props).join('|').slice(0, 200) : '';
 
   // Derive site early so we can preflight v1-only constraints.
-  const site = origin ? (() => { try { return new URL(origin).hostname.replace(/^www\./, ''); } catch { return origin; } })() : '';
+  // For server-side requests (no Origin), use body.site with hostname validation.
+  const site = origin
+    ? (() => { try { return new URL(origin).hostname.replace(/^www\./, ''); } catch { return origin; } })()
+    : (() => {
+        const s = typeof body.site === 'string' ? body.site.trim().replace(/^www\./, '') : '';
+        return /^[a-zA-Z0-9.\-]+$/.test(s) ? s : '';
+      })();
 
   // Custom event preflight (§3 / §11 contract): for sites in V1_EMIT_SITES,
   // reject oversize event_props_json with 400 rather than silently truncating
@@ -330,6 +395,8 @@ async function handleTrack(request: Request, env: Env, ctx: ExecutionContext): P
 
   // For timing events, extract seconds into double2 for AVG queries
   const timingSeconds = eventName === 'timing' ? (parseFloat(body.props?.seconds || '0') || 0) : 0;
+  // Revenue value (double3) — only for custom events with a numeric value field
+  const revenueValue = typeof body.value === 'number' && isFinite(body.value) && body.value >= 0 ? body.value : 0;
   const device = deviceType(ua);
   const browser = browserName(ua);
 
@@ -350,7 +417,7 @@ async function handleTrack(request: Request, env: Env, ctx: ExecutionContext): P
         device,                                    // blob11: device type (mobile/tablet/desktop)
         browser,                                   // blob12: browser name
       ],
-      doubles: [1, timingSeconds],               // double1: event count, double2: timing seconds
+      doubles: [1, timingSeconds, revenueValue],  // double1: count, double2: timing seconds, double3: revenue value
       indexes: [path],
     });
   } catch (err) {
@@ -857,6 +924,29 @@ const QUERY_TEMPLATES: Record<string, {
       GROUP BY country ORDER BY hits DESC LIMIT 15
     `,
   },
+  'revenue-by-event': {
+    description: 'Events with revenue value — total, count, and average (requires value field in track calls)',
+    sql: (ds, p, site) => `
+      SELECT blob4 AS event,
+        ROUND(SUM(_sample_interval * double3), 2) AS revenue,
+        SUM(_sample_interval * double1) AS count,
+        ROUND(AVG(_sample_interval * double3), 2) AS avg_value
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND double3 > 0 AND blob10 = '${site}'
+      GROUP BY event ORDER BY revenue DESC LIMIT 20
+    `,
+  },
+  'revenue-over-time': {
+    description: 'Daily revenue totals and conversion counts',
+    sql: (ds, p, site) => `
+      SELECT toDate(timestamp) AS date,
+        ROUND(SUM(_sample_interval * double3), 2) AS revenue,
+        SUM(_sample_interval * double1) AS conversions
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND double3 > 0 AND blob10 = '${site}'
+      GROUP BY date ORDER BY date ASC
+    `,
+  },
 };
 
 const PERIOD_MAP: Record<string, string> = {
@@ -885,9 +975,9 @@ async function runCFQuery(sql: string, env: Env): Promise<any> {
   return response.json();
 }
 
-async function handleNewVsReturning(env: Env, site: string, period: string, dataset: string, cors: Record<string, string>): Promise<Response> {
-  const currentSql = `SELECT blob9 AS vid FROM ${dataset} WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}' GROUP BY blob9`;
-  const priorSql   = `SELECT blob9 AS vid FROM ${dataset} WHERE timestamp <= NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}' GROUP BY blob9`;
+async function handleNewVsReturning(env: Env, site: string, period: string, dataset: string, cors: Record<string, string>, filterClauses: string): Promise<Response> {
+  const currentSql = `SELECT blob9 AS vid FROM ${dataset} WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}' ${filterClauses} GROUP BY blob9`;
+  const priorSql   = `SELECT blob9 AS vid FROM ${dataset} WHERE timestamp <= NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}' ${filterClauses} GROUP BY blob9`;
 
   try {
     const [currentData, priorData] = await Promise.all([
@@ -932,6 +1022,7 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   const eventNameParam = url.searchParams.get('event_name') || '';
   const pageParam = url.searchParams.get('page') || '';
   const isV1 = url.searchParams.get('v') === '1';
+  const filterClauses = parseFilters(url);
 
   // v1 path — Phase 0.5 Distribution Loop view. Reuses the same auth + site/period
   // validators as v0 but dispatches to the v1 query registry, which reads from
@@ -1011,7 +1102,7 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
 
   // new-vs-returning requires two CF API calls — handled separately
   if (queryName === 'new-vs-returning') {
-    return handleNewVsReturning(env, siteParam, period, dataset, cors);
+    return handleNewVsReturning(env, siteParam, period, dataset, cors, filterClauses);
   }
 
   // funnel-by-event requires a valid event_name param
@@ -1028,7 +1119,7 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  const sql = template.sql(dataset, period, siteParam, eventNameParam, pageParam);
+  const sql = injectFilters(template.sql(dataset, period, siteParam, eventNameParam, pageParam), filterClauses);
 
   try {
     const response = await fetch(
@@ -1140,6 +1231,13 @@ function handleConfig(env: Env): Response {
       endpoint: '/track',
       method: 'POST',
       events: ['pageview', 'outbound', '(any custom event name)'],
+      server_side: 'POST /track with X-API-Key header and "site" field in body — no Origin required',
+      revenue: 'Add "value": <number> to any custom event payload to track revenue (stored in double3)',
+    },
+    filters: {
+      description: 'Scope any query to a dimension via ?filter[key]=value',
+      keys: Object.keys(FILTER_BLOB),
+      example: '?q=top-pages&period=30d&site=yoursite.com&filter[country]=FI&filter[device]=mobile',
     },
   }, {
     headers: { 'Cache-Control': 'public, max-age=3600' },
