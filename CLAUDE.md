@@ -113,6 +113,7 @@ Each event writes one row. Always use these field names in queries:
 | `blob10` | Site hostname — REQUIRED in all WHERE clauses for multi-site support |
 | `blob11` | Device type (`mobile`/`tablet`/`desktop`) |
 | `blob12` | Browser name (Chrome/Firefox/Safari/Edge/Opera/DuckDuckGo/Other) |
+| `blob13` | Operating system (Windows/macOS/iOS/Android/Linux/ChromeOS/Other) |
 | `double1` | Event count (always 1) |
 | `double2` | Time on page in seconds (only for `timing` events, use AVG) |
 | `double3` | Revenue/conversion value (0 unless `value` field sent in track payload) |
@@ -127,7 +128,7 @@ All queries must include `AND blob10 = '${site}'` to scope to a single site.
 
 **Revenue:** `revenue-by-event`, `revenue-over-time` (only populated when `value` field is sent in track calls)
 
-**Query filters:** Append `&filter[key]=value` to any query to scope by dimension. Keys: `country` (2-letter code), `device` (mobile/tablet/desktop), `browser`, `referrer` (hostname), `page`, `utm_source`, `utm_campaign`.
+**Query filters:** Append `&filter[key]=value` to any query to scope by dimension. Keys: `country` (2-letter code), `device` (mobile/tablet/desktop), `browser`, `os` (Windows/macOS/iOS/Android/Linux/ChromeOS), `referrer` (hostname), `page`, `utm_source`, `utm_campaign`.
 
 **Server-side tracking:** POST to `/track` with `X-API-Key` header (no `Origin` required) and include `"site": "yoursite.com"` in the payload.
 

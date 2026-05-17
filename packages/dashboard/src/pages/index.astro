@@ -287,17 +287,31 @@ import Layout from '../layouts/Layout.astro';
       </div>
     </div>
 
-    <!-- Selaimet -->
-    <div class="section" style="margin-bottom:1.5rem;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 class="section-title">Selaimet</h2>
-        <button class="csv-btn" data-table="table-browsers">CSV</button>
+    <!-- Selaimet + Käyttöjärjestelmät -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;" class="browsers-os-grid">
+      <div class="section" style="margin-bottom:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h2 class="section-title">Selaimet</h2>
+          <button class="csv-btn" data-table="table-browsers">CSV</button>
+        </div>
+        <div class="card table-wrap">
+          <table class="tbl" id="table-browsers">
+            <thead><tr><th style="text-align:left;">Selain</th><th style="text-align:right;">Views</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
-      <div class="card table-wrap">
-        <table class="tbl" id="table-browsers">
-          <thead><tr><th style="text-align:left;">Selain</th><th style="text-align:right;">Views</th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <div class="section" style="margin-bottom:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h2 class="section-title">Käyttöjärjestelmät</h2>
+          <button class="csv-btn" data-table="table-os">CSV</button>
+        </div>
+        <div class="card table-wrap">
+          <table class="tbl" id="table-os">
+            <thead><tr><th style="text-align:left;">OS</th><th style="text-align:right;">Views</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -552,6 +566,7 @@ import Layout from '../layouts/Layout.astro';
   .tbl tbody tr:hover { background: var(--surface); }
   .tbl tbody td.filterable { cursor: pointer; }
   .tbl tbody td.filterable:hover { color: var(--accent-text); text-decoration: underline; }
+  @media (max-width: 640px) { .browsers-os-grid { grid-template-columns: 1fr !important; } }
   .tbl tbody tr:last-child td { border-bottom: none; }
 
   .period-btn {
@@ -643,7 +658,7 @@ import Layout from '../layouts/Layout.astro';
   var activeFilters = {};
 
   var FILTER_LABELS = {
-    country: 'Country', device: 'Device', browser: 'Browser',
+    country: 'Country', device: 'Device', browser: 'Browser', os: 'OS',
     referrer: 'Referrer', page: 'Page', utm_source: 'UTM Source', utm_campaign: 'UTM Campaign',
   };
 
@@ -1333,7 +1348,7 @@ import Layout from '../layouts/Layout.astro';
     document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
     document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','top-pages-stories','total-sessions','bot-hits','bot-hits-total','bot-pages','bot-daily','bot-countries','revenue-by-event'];
+    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','operating-systems','top-pages-stories','total-sessions','bot-hits','bot-hits-total','bot-pages','bot-daily','bot-countries','revenue-by-event'];
 
     var mainPromise = Promise.all(qs.map(function(q) {
       return query(q).then(function(d) { return { q: q, d: d }; });
@@ -1396,6 +1411,13 @@ import Layout from '../layouts/Layout.astro';
       // Browsers (clickable to filter)
       fillTable('table-browsers', m['browsers'], [
         { key: 'browser', filter: 'browser' },
+        { key: 'views', align: 'right', fmt: 'num' }
+      ]);
+
+      // Operating systems (clickable to filter)
+      tablePages['table-os'] = 0;
+      fillTable('table-os', m['operating-systems'], [
+        { key: 'os', filter: 'os' },
         { key: 'views', align: 'right', fmt: 'num' }
       ]);
 
