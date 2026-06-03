@@ -20,6 +20,13 @@ import {
   emitCustomV1,
 } from './v1/emit';
 import { isV1Query, V1_QUERIES } from './queries/v1/index';
+import { readSession } from './auth/session';
+import { isAdminEmail, assertSiteAccess, canManage, activeOrgId, isSameOrigin } from './auth/middleware';
+import { listSites, addSite, removeSite } from './auth/sites-store';
+import {
+  dashboardOrigins, authCorsHeaders,
+  handleLogin, handleCallback, handleLogout, handleMe, handleSwitchOrg,
+} from './auth/routes';
 
 // Phase 0.5 dual-emit allowlist. Hardcoded to Kiiru per MIGRATION_PLAN.md §4
 // "Phase 0.5 (Day 0 — Day 21) — Pilot validation on Kiiru only (T2A)".
@@ -57,6 +64,20 @@ interface Env {
   PV_DATASET?: string;
   ENG_DATASET?: string;
   SHARE_DATASET?: string;
+
+  // Multi-organization SSO (palvelureppu OIDC). When unset, the auth endpoints
+  // return 503 and the worker keeps working with the legacy X-API-Key only.
+  OIDC_ISSUER?: string;
+  OIDC_CLIENT_ID?: string;
+  OIDC_CLIENT_SECRET?: string;
+  OIDC_REDIRECT_URI?: string;
+  SESSION_SECRET?: string;
+  /** Dashboard base URL used for post-login redirects + credentialed CORS. */
+  DASHBOARD_URL?: string;
+  /** Registrable domain for the session cookie (e.g. flarelytics.dev). Empty → SameSite=None. */
+  COOKIE_DOMAIN?: string;
+  /** Comma-separated superadmin emails that may query any site regardless of org. */
+  ADMIN_EMAILS?: string;
 }
 
 interface TrackPayload {
@@ -205,6 +226,66 @@ function corsHeaders(origin: string | null, allowedOrigins: string[], allowAny =
     headers['Access-Control-Allow-Credentials'] = 'true';
   }
   return headers;
+}
+
+/**
+ * CORS for the authenticated data endpoints (/query, /admin/sites). Dashboard
+ * origins get credentialed CORS (exact origin echo + credentials) so the
+ * session cookie flows; other origins get a plain echo for legacy X-API-Key
+ * programmatic use (no credentials). Never `*` on a credentialed response.
+ */
+function dataCorsHeaders(request: Request, env: Env): Record<string, string> {
+  const origin = request.headers.get('Origin') || '';
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-API-Key',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
+  };
+  if (origin && dashboardOrigins(env).includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  } else if (origin) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+  return headers;
+}
+
+/**
+ * Authorize a /query request. Returns null when allowed, or an error Response.
+ *  1. Valid X-API-Key → full access (back-compat, programmatic).
+ *  2. Else a valid session cookie scoped to the requested site (ADMIN_EMAILS
+ *     bypass any site). No session → 401; foreign/missing site → 403/400.
+ */
+async function authorizeQuery(
+  request: Request, env: Env, site: string | null, cors: Record<string, string>,
+): Promise<Response | null> {
+  const apiKey = request.headers.get('X-API-Key');
+  if (apiKey && env.QUERY_API_KEY && apiKey === env.QUERY_API_KEY) return null;
+
+  const session = await readSession(request, env.SESSION_SECRET || '');
+  if (!session) {
+    return Response.json(
+      { error: 'Unauthorized', hint: 'Sign in via /api/auth/login (cookie) or include X-API-Key.' },
+      { status: 401, headers: cors },
+    );
+  }
+  if (isAdminEmail(env.ADMIN_EMAILS, session.email)) return null;
+  if (!site) {
+    return Response.json(
+      { error: 'Missing required param: site', hint: 'Add ?site=yoursite.com to scope the query.' },
+      { status: 400, headers: cors },
+    );
+  }
+  try {
+    await assertSiteAccess(env.SITE_CONFIG, session, site, env.ADMIN_EMAILS);
+  } catch {
+    return Response.json(
+      { error: 'Forbidden', hint: 'This site is not in your active organization.' },
+      { status: 403, headers: cors },
+    );
+  }
+  return null;
 }
 
 /** Daily-rotating visitor hash. GDPR-friendly: no raw IP stored. */
@@ -1030,18 +1111,15 @@ async function handleNewVsReturning(env: Env, site: string, period: string, data
 }
 
 async function handleQuery(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get('Origin');
-  const cors = corsHeaders(origin, [], true);
-
-  const apiKey = request.headers.get('X-API-Key');
-  if (!apiKey || apiKey !== env.QUERY_API_KEY) {
-    return Response.json({ error: 'Unauthorized', hint: 'Include X-API-Key header with your QUERY_API_KEY.' }, { status: 401, headers: cors });
-  }
+  const cors = dataCorsHeaders(request, env);
 
   const url = new URL(request.url);
   const queryName = url.searchParams.get('q');
   const periodParam = url.searchParams.get('period') || '30d';
   const siteParam = url.searchParams.get('site');
+
+  const authError = await authorizeQuery(request, env, siteParam, cors);
+  if (authError) return authError;
   const eventNameParam = url.searchParams.get('event_name') || '';
   const pageParam = url.searchParams.get('page') || '';
   const isV1 = url.searchParams.get('v') === '1';
@@ -1188,23 +1266,75 @@ function handleTrackerJs(request: Request): Response {
 }
 
 async function handleAdminSites(request: Request, env: Env): Promise<Response> {
-  const cors = corsHeaders(request.headers.get('Origin'), [], true);
-
-  const apiKey = request.headers.get('X-API-Key');
-  if (!apiKey || apiKey !== env.QUERY_API_KEY) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401, headers: cors });
-  }
+  const cors = dataCorsHeaders(request, env);
 
   if (!env.SITE_CONFIG) {
     return Response.json({ error: 'KV not configured', hint: 'Add a [[kv_namespaces]] binding named SITE_CONFIG to wrangler.toml and deploy.' }, { status: 503, headers: cors });
   }
 
+  // Legacy mode: a valid X-API-Key manages the GLOBAL allowed_origins list
+  // (programmatic/admin), unchanged for back-compat.
+  const apiKey = request.headers.get('X-API-Key');
+  if (apiKey && env.QUERY_API_KEY && apiKey === env.QUERY_API_KEY) {
+    return handleAdminSitesLegacy(request, env, cors);
+  }
+
+  // Session mode: org-scoped management of the active organization's sites.
+  const session = await readSession(request, env.SESSION_SECRET || '');
+  if (!session) {
+    return Response.json({ error: 'Unauthorized', hint: 'Sign in via /api/auth/login or include X-API-Key.' }, { status: 401, headers: cors });
+  }
+  const orgId = activeOrgId(session);
+  if (!orgId) return Response.json({ error: 'No active organization' }, { status: 403, headers: cors });
+
+  if (request.method === 'GET') {
+    const sites = await listSites(env.SITE_CONFIG, orgId);
+    return Response.json({ sites }, { headers: cors });
+  }
+
+  // Mutations require owner/admin role + a same-origin request (CSRF defense).
+  if (request.method === 'POST' || request.method === 'DELETE') {
+    if (!isSameOrigin(request, dashboardOrigins(env))) {
+      return Response.json({ error: 'Forbidden' }, { status: 403, headers: cors });
+    }
+    if (!canManage(session)) {
+      return Response.json({ error: 'Rooli ei riitä tähän toimintoon' }, { status: 403, headers: cors });
+    }
+    const body = await request.json().catch(() => ({})) as { hostname?: string; origin?: string; label?: string };
+    const hostname = normalizeHostname(body.hostname || body.origin);
+    if (!hostname) return Response.json({ error: 'hostname required', hint: 'Pass a plain hostname, e.g. example.com' }, { status: 400, headers: cors });
+
+    if (request.method === 'POST') {
+      const sites = await addSite(env.SITE_CONFIG, orgId, hostname, body.label);
+      return Response.json({ sites }, { headers: cors });
+    }
+    const sites = await removeSite(env.SITE_CONFIG, orgId, hostname);
+    return Response.json({ sites }, { headers: cors });
+  }
+
+  return Response.json({ error: 'Method not allowed' }, { status: 405, headers: cors });
+}
+
+/** Accepts a bare hostname or an origin URL and returns a plain hostname, or null if invalid. */
+function normalizeHostname(input: string | undefined): string | null {
+  const raw = (input || '').trim();
+  if (!raw) return null;
+  let host = raw;
+  if (raw.includes('://')) {
+    try { host = new URL(raw).hostname; } catch { return null; }
+  } else if (raw.includes('/')) {
+    host = raw.split('/')[0];
+  }
+  return /^[a-zA-Z0-9.\-]+$/.test(host) ? host : null;
+}
+
+/** Legacy X-API-Key path: CRUD over the global allowed_origins CORS list. */
+async function handleAdminSitesLegacy(request: Request, env: Env, cors: Record<string, string>): Promise<Response> {
   const KV_KEY = 'allowed_origins';
 
   async function readSites(): Promise<string[]> {
     const raw = await env.SITE_CONFIG.get(KV_KEY);
     if (raw) return JSON.parse(raw);
-    // First access: migrate from env var
     return getAllowedOrigins(env);
   }
 
@@ -1443,10 +1573,22 @@ export default {
     const { pathname } = url;
 
     if (request.method === 'OPTIONS') {
+      const origin = request.headers.get('Origin');
+      // Credentialed preflight for dashboard-origin requests (cookie auth).
+      if (origin && dashboardOrigins(env).includes(origin)) {
+        return new Response(null, { status: 204, headers: authCorsHeaders(request, env) });
+      }
       const allowAny = request.headers.get('Access-Control-Request-Headers')?.includes('x-api-key') ?? false;
       const preflightOrigins = allowAny ? [] : await fetchAllowedOrigins(env);
-      return new Response(null, { status: 204, headers: corsHeaders(request.headers.get('Origin'), preflightOrigins, allowAny) });
+      return new Response(null, { status: 204, headers: corsHeaders(origin, preflightOrigins, allowAny) });
     }
+
+    // Multi-org SSO endpoints.
+    if (pathname === '/api/auth/login' && request.method === 'GET') return handleLogin(request, env);
+    if (pathname === '/api/auth/oidc/callback' && request.method === 'GET') return handleCallback(request, env);
+    if (pathname === '/api/auth/logout') return handleLogout(request, env);
+    if (pathname === '/api/auth/me' && request.method === 'GET') return handleMe(request, env);
+    if (pathname === '/api/auth/switch-org' && request.method === 'POST') return handleSwitchOrg(request, env);
 
     if (pathname === '/track' && request.method === 'POST') return handleTrack(request, env, ctx);
     if (pathname === '/tracker.js' && request.method === 'GET') return handleTrackerJs(request);
@@ -1456,6 +1598,6 @@ export default {
     if (pathname === '/query' && request.method === 'GET') return handleQuery(request, env);
     if (pathname === '/admin/sites') return handleAdminSites(request, env);
 
-    return Response.json({ error: 'Not Found', hint: 'Available endpoints: POST /track, GET /query, GET /public-stats, GET /tracker.js, GET /health, GET /config, GET|POST|DELETE /admin/sites' }, { status: 404 });
+    return Response.json({ error: 'Not Found', hint: 'Available endpoints: POST /track, GET /query, GET /public-stats, GET /tracker.js, GET /health, GET /config, GET|POST|DELETE /admin/sites, /api/auth/{login,oidc/callback,logout,me,switch-org}' }, { status: 404 });
   },
 };

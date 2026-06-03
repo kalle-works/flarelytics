@@ -30,11 +30,17 @@ packages/
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | POST | `/track` | CORS origin check | Record events |
-| GET | `/query` | X-API-Key header | Run predefined analytics queries |
+| GET | `/query` | Session cookie (org-scoped) OR X-API-Key (full) | Run predefined analytics queries |
 | GET | `/public-stats` | CORS origin check | Public analytics summary (no API key) |
 | GET | `/tracker.js` | None | Serve auto-configured tracking script |
 | GET | `/health` | None | Health check |
 | GET | `/config` | None | Available queries and event types |
+| GET/POST/DELETE | `/admin/sites` | Session (owner/admin, org-scoped) OR X-API-Key (legacy global) | Manage the org's sites |
+| GET | `/api/auth/login` | None → redirects to OIDC | Start SSO login (PKCE) |
+| GET | `/api/auth/oidc/callback` | OIDC flow cookie | Finish login, set session cookie |
+| GET | `/api/auth/me` | Session cookie | Current user: orgs, active_org, role, sites |
+| POST | `/api/auth/switch-org` | Session cookie + same-origin | Change active organization |
+| GET | `/api/auth/logout` | Session cookie | Clear session + OIDC end-session |
 
 ## Event Types
 
@@ -189,6 +195,39 @@ Key rules:
 ## Multi-Site Support
 
 One worker can serve multiple sites. The site hostname is derived from the `Origin` header on each `/track` request and stored in `blob10`. All queries accept `?site=hostname.com` and filter by `blob10`. The dashboard has a site switcher for switching between configured sites.
+
+## Multi-Organization Support (SSO)
+
+Dashboard users authenticate via the palvelureppu OIDC provider
+(`id.palvelureppu.fi`) and only see the sites their **active organization** owns.
+Modeled on helpparibotti's multi-org auth.
+
+- **Session:** a signed (HMAC-SHA256) cookie `__Secure-fl_session` carrying
+  `sub`, `orgs[{id,name,role}]`, and `active_org`. Stateless — no server session
+  store. Code lives in `packages/worker/src/auth/` (`crypto`, `oidc`, `session`,
+  `session-refresh`, `middleware`, `routes`, `sites-store`).
+- **Cookie scope:** with `COOKIE_DOMAIN=flarelytics.dev` the cookie is
+  first-party same-site across `app.flarelytics.dev` (dashboard) and
+  `api.flarelytics.dev` (worker) — `SameSite=Lax`, survives Safari/Chrome
+  third-party-cookie blocking. Empty `COOKIE_DOMAIN` → degraded `SameSite=None`.
+- **Org→site ownership:** KV `org:<orgId>:sites = [{hostname,label}]`, accessed
+  only via `auth/sites-store.ts`. This is the authz layer above AE; `blob10` is
+  unchanged. `org_id` is never written to Analytics Engine.
+- **Authorization:** `/query` requires the requested `?site=` to be in the active
+  org's site list (`ADMIN_EMAILS` bypass any site). `/admin/sites` mutations need
+  owner/admin role + a same-origin request (CSRF guard). `/switch-org` is
+  IDOR-checked against the signed session's org list.
+- **Roles:** `owner`/`admin` manage sites; `member` is read-only.
+- **Back-compat:** `X-API-Key` remains a full-access programmatic key for
+  `/query`, `/admin/sites` (legacy global `allowed_origins`), and server-side
+  `/track`. SSO is additive; unset OIDC vars → auth endpoints return 503 and the
+  worker runs on `X-API-Key` only.
+- **Config:** `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_REDIRECT_URI`,
+  `DASHBOARD_URL`, `COOKIE_DOMAIN`, `ADMIN_EMAILS` in `wrangler.toml`; secrets
+  `SESSION_SECRET`, `OIDC_CLIENT_SECRET` via `wrangler secret put`.
+- **Backfill:** existing `allowed_origins` sites belong to no org. Superadmins
+  (`ADMIN_EMAILS`) see all sites immediately; otherwise add each hostname to the
+  target org via `POST /admin/sites` (signed in) or seed `org:<sub>:sites` in KV.
 
 ## Skill routing
 

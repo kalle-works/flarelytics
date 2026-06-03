@@ -72,14 +72,30 @@ DATASET_NAME = "flarelytics"
 # ENG_DATASET = "flarelytics_engagement_v1"
 # SHARE_DATASET = "flarelytics_share_v1"
 
+# ── Multi-organization SSO (optional) ────────────────────────────────────────
+# Authenticate dashboard users via an OIDC provider and scope each user to the
+# sites their active organization owns. Leave unset to run on X-API-Key only.
+# OIDC_ISSUER = "https://id.palvelureppu.fi"
+# OIDC_CLIENT_ID = "flarelytics"
+# OIDC_REDIRECT_URI = "https://api.yoursite.com/api/auth/oidc/callback"
+# DASHBOARD_URL = "https://app.yoursite.com"
+# Registrable domain for the session cookie. Put the dashboard and worker on
+# subdomains of it (app./api.) so the cookie is first-party same-site and
+# survives Safari/Chrome third-party-cookie blocking. Empty → SameSite=None.
+# COOKIE_DOMAIN = "yoursite.com"
+# Superadmins that may query any site regardless of org mapping.
+# ADMIN_EMAILS = "you@yoursite.com"
+
 # Secrets (set via `wrangler secret put`):
-#   QUERY_API_KEY  — random string for dashboard authentication
-#   CF_API_TOKEN   — Cloudflare API token with these permissions:
-#                    Account > Account Analytics > Read
-#                    Zone resources: All zones (or specific zones)
-#                    Create at: https://dash.cloudflare.com/profile/api-tokens
-#   CF_ACCOUNT_ID  — your Cloudflare account ID
-#                    Find at: https://dash.cloudflare.com → any zone → Overview sidebar
+#   QUERY_API_KEY      — random string for programmatic/server-side auth
+#   CF_API_TOKEN       — Cloudflare API token with these permissions:
+#                        Account > Account Analytics > Read
+#                        Zone resources: All zones (or specific zones)
+#                        Create at: https://dash.cloudflare.com/profile/api-tokens
+#   CF_ACCOUNT_ID      — your Cloudflare account ID
+#                        Find at: https://dash.cloudflare.com → any zone → Overview sidebar
+#   SESSION_SECRET     — random 32+ byte string; signs the session cookie (SSO)
+#   OIDC_CLIENT_SECRET — OIDC client secret from your provider (SSO)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Staging environment — used by MIGRATION_PLAN.md §9 Task B (baseline p99)
@@ -99,3 +115,10 @@ dataset = "flarelytics_staging"
 [env.staging.vars]
 ALLOWED_ORIGINS = "https://staging-loadtest.flarelytics.test"
 DATASET_NAME = "flarelytics_staging"
+# Staging SSO (optional) — point at your staging identity provider + hostnames.
+# OIDC_ISSUER = "https://id-staging.yourprovider.com"
+# OIDC_CLIENT_ID = "flarelytics"
+# OIDC_REDIRECT_URI = "https://api-staging.yoursite.com/api/auth/oidc/callback"
+# DASHBOARD_URL = "https://app-staging.yoursite.com"
+# COOKIE_DOMAIN = "yoursite.com"
+# ADMIN_EMAILS = "you@yoursite.com"
