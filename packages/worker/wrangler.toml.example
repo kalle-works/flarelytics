@@ -3,6 +3,14 @@ main = "src/index.ts"
 compatibility_date = "2025-03-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Optional: serve the worker on a custom domain (SSO API origin). Cloudflare
+# auto-creates the DNS record + cert on `wrangler deploy` when the apex is a zone
+# on this account. Put the dashboard on a sibling subdomain (app.<domain>) so the
+# session cookie (COOKIE_DOMAIN=<domain>) is first-party same-site.
+# [[routes]]
+# pattern = "api.yoursite.com"
+# custom_domain = true
+
 # Legacy v0 dataset — still bound, dual-emitted to during the v0 → v1 migration.
 [[analytics_engine_datasets]]
 binding = "ANALYTICS"
