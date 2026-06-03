@@ -3,7 +3,6 @@ import {
   activeOrgId, activeRole, canManage, canView, requireOrgRole,
   isAdminEmail, isSameOrigin, assertSiteAccess,
 } from './middleware';
-import { addSite } from './sites-store';
 import type { SessionPayload } from './session';
 
 function session(over: Partial<SessionPayload> = {}): SessionPayload {
@@ -25,6 +24,11 @@ function mockKV() {
     put: async (k: string, v: string) => { store.set(k, v); },
     delete: async (k: string) => { store.delete(k); },
   } as unknown as KVNamespace;
+}
+
+/** Seed an org's verified site list directly (bypasses the DNS-verification flow). */
+async function seedSite(kv: KVNamespace, orgId: string, hostname: string) {
+  await kv.put(`org:${orgId}:sites`, JSON.stringify([{ hostname, label: hostname }]));
 }
 
 describe('org scoping', () => {
@@ -86,13 +90,13 @@ describe('isSameOrigin (CSRF guard)', () => {
 describe('assertSiteAccess', () => {
   it('allows a site owned by the active org', async () => {
     const kv = mockKV();
-    await addSite(kv, 'org-a', 'acme.com');
+    await seedSite(kv, 'org-a', 'acme.com');
     await expect(assertSiteAccess(kv, session({ active_org: 'org-a' }), 'acme.com')).resolves.toBe('org-a');
   });
 
   it('rejects a foreign site with a 403 Response', async () => {
     const kv = mockKV();
-    await addSite(kv, 'org-a', 'acme.com');
+    await seedSite(kv, 'org-a', 'acme.com');
     await expect(assertSiteAccess(kv, session({ active_org: 'org-a' }), 'other.com')).rejects.toBeInstanceOf(Response);
   });
 

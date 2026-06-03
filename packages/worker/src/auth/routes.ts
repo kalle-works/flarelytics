@@ -43,7 +43,12 @@ export function dashboardOrigins(env: AuthEnv): string[] {
   if (env.DASHBOARD_URL) {
     try { origins.push(new URL(env.DASHBOARD_URL).origin); } catch { /* ignore */ }
   }
-  origins.push('http://localhost:4321');
+  // Only trust the local dev origin when no production dashboard is configured
+  // (or it is itself local). Otherwise production would grant credentialed CORS
+  // + pass the CSRF same-origin guard for http://localhost:4321.
+  if (!env.DASHBOARD_URL || env.DASHBOARD_URL.includes('localhost')) {
+    origins.push('http://localhost:4321');
+  }
   return origins;
 }
 
@@ -183,7 +188,13 @@ export async function handleCallback(request: Request, env: AuthEnv): Promise<Re
 export async function handleLogout(request: Request, env: AuthEnv): Promise<Response> {
   const { OIDC_ISSUER: issuer } = env;
   const session = await readSession(request, env.SESSION_SECRET || '').catch(() => null);
-  if (session && session.sid) await deleteRefreshToken(env, session.sid);
+  // Only delete the stored refresh token on a same-origin request — prevents a
+  // cross-site `<img src=.../logout>` from killing a victim's refresh token
+  // (denial-of-session CSRF). The cookie is cleared unconditionally below, which
+  // is harmless on its own.
+  if (session && session.sid && isSameOrigin(request, dashboardOrigins(env))) {
+    await deleteRefreshToken(env, session.sid);
+  }
   const clearSession = clearSessionCookieHeader(env.COOKIE_DOMAIN);
   const clearFlow = clearOidcFlowCookieHeader();
   let redirectUrl = homeUrl(env);

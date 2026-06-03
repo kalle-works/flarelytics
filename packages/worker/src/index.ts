@@ -22,7 +22,10 @@ import {
 import { isV1Query, V1_QUERIES } from './queries/v1/index';
 import { readSession } from './auth/session';
 import { isAdminEmail, assertSiteAccess, canManage, activeOrgId, isSameOrigin } from './auth/middleware';
-import { listSites, addSite, removeSite } from './auth/sites-store';
+import {
+  listSites, claimSite, verifySite, removeSite,
+  SiteConflictError, NoClaimError, VerificationError,
+} from './auth/sites-store';
 import {
   dashboardOrigins, authCorsHeaders,
   handleLogin, handleCallback, handleLogout, handleMe, handleSwitchOrg,
@@ -1304,12 +1307,42 @@ async function handleAdminSites(request: Request, env: Env): Promise<Response> {
     const hostname = normalizeHostname(body.hostname || body.origin);
     if (!hostname) return Response.json({ error: 'hostname required', hint: 'Pass a plain hostname, e.g. example.com' }, { status: 400, headers: cors });
 
-    if (request.method === 'POST') {
-      const sites = await addSite(env.SITE_CONFIG, orgId, hostname, body.label);
+    const isVerify = new URL(request.url).pathname.endsWith('/verify');
+
+    if (request.method === 'DELETE') {
+      const sites = await removeSite(env.SITE_CONFIG, orgId, hostname);
       return Response.json({ sites }, { headers: cors });
     }
-    const sites = await removeSite(env.SITE_CONFIG, orgId, hostname);
-    return Response.json({ sites }, { headers: cors });
+
+    // POST: either start/resume a claim, or verify a pending claim. A hostname
+    // is only added to the org (and granted query access) once DNS-verified, so
+    // an org can't read a site it doesn't provably control.
+    try {
+      if (isVerify) {
+        const sites = await verifySite(env.SITE_CONFIG, orgId, hostname, body.label);
+        return Response.json({ verified: true, sites }, { headers: cors });
+      }
+      const result = await claimSite(env.SITE_CONFIG, orgId, hostname, body.label);
+      if ('pending' in result) {
+        return Response.json(result, { status: 202, headers: cors });
+      }
+      return Response.json({ sites: result }, { headers: cors });
+    } catch (err) {
+      if (err instanceof SiteConflictError) {
+        return Response.json({ error: 'conflict', hint: 'This hostname is already verified by another organization.' }, { status: 409, headers: cors });
+      }
+      if (err instanceof NoClaimError) {
+        return Response.json({ error: 'no_claim', hint: 'Start a claim with POST /admin/sites before verifying.' }, { status: 400, headers: cors });
+      }
+      if (err instanceof VerificationError) {
+        return Response.json({
+          error: 'verification_failed',
+          hint: `Add a DNS TXT record at ${err.recordName} with value "${err.recordValue}", then verify again. DNS changes can take a few minutes.`,
+          verification: { type: 'dns-txt', name: err.recordName, value: err.recordValue },
+        }, { status: 422, headers: cors });
+      }
+      throw err;
+    }
   }
 
   return Response.json({ error: 'Method not allowed' }, { status: 405, headers: cors });
@@ -1325,7 +1358,11 @@ function normalizeHostname(input: string | undefined): string | null {
   } else if (raw.includes('/')) {
     host = raw.split('/')[0];
   }
-  return /^[a-zA-Z0-9.\-]+$/.test(host) ? host : null;
+  host = host.toLowerCase();
+  // Require a real dotted hostname: labels of [a-z0-9-] (no leading/trailing
+  // hyphen), at least two labels, no leading/trailing/double dots.
+  const HOSTNAME = /^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$/;
+  return HOSTNAME.test(host) ? host : null;
 }
 
 /** Legacy X-API-Key path: CRUD over the global allowed_origins CORS list. */
@@ -1596,7 +1633,7 @@ export default {
     if (pathname === '/health' && request.method === 'GET') return handleHealth(env);
     if (pathname === '/public-stats' && request.method === 'GET') return handlePublicStats(request, env);
     if (pathname === '/query' && request.method === 'GET') return handleQuery(request, env);
-    if (pathname === '/admin/sites') return handleAdminSites(request, env);
+    if (pathname === '/admin/sites' || pathname === '/admin/sites/verify') return handleAdminSites(request, env);
 
     return Response.json({ error: 'Not Found', hint: 'Available endpoints: POST /track, GET /query, GET /public-stats, GET /tracker.js, GET /health, GET /config, GET|POST|DELETE /admin/sites, /api/auth/{login,oidc/callback,logout,me,switch-org}' }, { status: 404 });
   },

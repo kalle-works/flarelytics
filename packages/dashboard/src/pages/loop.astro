@@ -465,15 +465,16 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
       return d + ' days ago';
     }
 
-
+    // Returns true when ?site= matched a site (so the caller skips the
+    // localStorage fallback even if the match is at index 0).
     function applyParamSite() {
-      // ?site=hostname → switch session.current to matching site if present.
       var qs = new URLSearchParams(location.search);
       var want = qs.get('site');
-      if (!want || !session) return;
+      if (!want || !session) return false;
       for (var i = 0; i < session.sites.length; i++) {
-        if (session.sites[i].site === want) { current = i; return; }
+        if (session.sites[i].site === want) { current = i; return true; }
       }
+      return false;
     }
 
     function setMenuOpen(open) {
@@ -645,8 +646,8 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
         if (!sites.length) { noSession.style.display = ''; return; }
         session = { sites: sites, current: 0 };
         current = 0;
-        applyParamSite();
-        if (current === 0) {
+        var matchedParam = applyParamSite();
+        if (!matchedParam) {
           var want = localStorage.getItem('flarelytics_active_site');
           if (want) {
             for (var i = 0; i < session.sites.length; i++) {

@@ -761,7 +761,12 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ hostname: s.site }),
-    }).then(function() { bootstrap(); });
+    })
+      .then(function(r) { if (!r.ok) throw new Error(); bootstrap(); })
+      .catch(function() {
+        var errEl = document.getElementById('add-site-error');
+        if (errEl) { errEl.textContent = 'Could not remove site.'; errEl.style.display = ''; }
+      });
   }
 
   function renderSiteSwitcher() {
@@ -848,28 +853,67 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
     if (!orgSwitcher.contains(e.target)) orgSwitcherMenu.style.display = 'none';
   });
 
-  // Add a site to the active organization.
+  // Claim + DNS-verify a site. statusEl shows the TXT record + a Verify button
+  // while the claim is pending; onDone(hostname) runs once verified.
+  function claimSiteFlow(hostname, label, statusEl, onDone) {
+    statusEl.style.display = '';
+    statusEl.textContent = 'Submitting…';
+    fetch(WORKER + '/admin/sites', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostname: hostname, label: label || hostname }),
+    })
+      .then(function(r) { return r.json().then(function(d) { return { status: r.status, body: d }; }); })
+      .then(function(res) {
+        if (res.status === 200) { onDone(hostname); return; } // already owned
+        if (res.status === 202 && res.body.pending) {
+          renderVerify(res.body.verification, hostname, label, statusEl, onDone);
+          return;
+        }
+        if (res.status === 409) { statusEl.textContent = 'That hostname is verified by another organization.'; return; }
+        statusEl.textContent = (res.body && res.body.hint) || 'Could not add site.';
+      })
+      .catch(function() { statusEl.textContent = 'Could not reach the worker.'; });
+  }
+
+  function renderVerify(v, hostname, label, statusEl, onDone) {
+    statusEl.style.display = '';
+    statusEl.style.color = 'var(--ink)';
+    statusEl.innerHTML =
+      'Add this DNS TXT record, then verify:<br>' +
+      '<code style="display:block;margin:4px 0;word-break:break-all;font-size:0.7rem;">' + esc(v.name) + ' TXT ' + esc(v.value) + '</code>' +
+      '<button type="button" id="verify-' + esc(hostname) + '" style="min-height:28px;border-radius:var(--radius-md);background:#1c1917;color:#fff;font-family:var(--mono);font-size:0.7rem;font-weight:600;border:none;cursor:pointer;padding:0 10px;">Verify now</button> ' +
+      '<span class="verify-msg" style="font-size:0.7rem;color:var(--ink-muted);"></span>';
+    var btn = document.getElementById('verify-' + hostname);
+    var msg = statusEl.querySelector('.verify-msg');
+    btn.addEventListener('click', function() {
+      msg.textContent = 'Checking DNS…';
+      fetch(WORKER + '/admin/sites/verify', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: hostname, label: label || hostname }),
+      })
+        .then(function(r) { return r.json().then(function(d) { return { status: r.status, body: d }; }); })
+        .then(function(res) {
+          if (res.status === 200 && res.body.verified) { onDone(hostname); return; }
+          msg.textContent = (res.body && res.body.hint) || 'Verification failed.';
+        })
+        .catch(function() { msg.textContent = 'Could not reach the worker.'; });
+    });
+  }
+
+  // Add a site to the active organization (claim → DNS verify).
   document.getElementById('add-site-inline-form').addEventListener('submit', function(e) {
     e.preventDefault();
     var hostname = document.getElementById('add-site-hostname').value.trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
     var label = document.getElementById('add-site-label').value.trim();
     var errEl = document.getElementById('add-site-error');
     if (!hostname) return;
-    errEl.style.display = 'none';
-    fetch(WORKER + '/admin/sites', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hostname: hostname, label: label || hostname }),
-    })
-      .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
-      .then(function() {
-        document.getElementById('add-site-hostname').value = '';
-        document.getElementById('add-site-label').value = '';
-        siteSwitcherMenu.style.display = 'none';
-        bootstrap(hostname);
-      })
-      .catch(function() { errEl.textContent = 'Could not add site.'; errEl.style.display = ''; });
+    claimSiteFlow(hostname, label, errEl, function(host) {
+      document.getElementById('add-site-hostname').value = '';
+      document.getElementById('add-site-label').value = '';
+      bootstrap(host);
+    });
   });
 
   // ── Auth bootstrap ─────────────────────────────────────────────────────────
@@ -2035,20 +2079,14 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
   document.getElementById('add-site-form').addEventListener('submit', function(e) {
     e.preventDefault();
     var hostname = document.getElementById('new-origin').value.trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+    sitesError.style.color = 'var(--red)';
     sitesError.style.display = 'none';
     if (!hostname) return;
-    fetch(WORKER + '/admin/sites', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hostname: hostname }),
-    })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (d.sites) { renderSitesList(d.sites); document.getElementById('new-origin').value = ''; bootstrap(); }
-        else { sitesError.textContent = d.error || 'Failed to add site.'; sitesError.style.display = ''; }
-      })
-      .catch(function() { sitesError.textContent = 'Could not reach worker.'; sitesError.style.display = ''; });
+    claimSiteFlow(hostname, '', sitesError, function() {
+      document.getElementById('new-origin').value = '';
+      loadSites();
+      bootstrap();
+    });
   });
   // ---- end sites panel ----
 

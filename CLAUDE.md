@@ -35,7 +35,8 @@ packages/
 | GET | `/tracker.js` | None | Serve auto-configured tracking script |
 | GET | `/health` | None | Health check |
 | GET | `/config` | None | Available queries and event types |
-| GET/POST/DELETE | `/admin/sites` | Session (owner/admin, org-scoped) OR X-API-Key (legacy global) | Manage the org's sites |
+| GET/POST/DELETE | `/admin/sites` | Session (owner/admin, org-scoped) OR X-API-Key (legacy global) | List / claim / remove the org's sites |
+| POST | `/admin/sites/verify` | Session (owner/admin) + same-origin | Verify a pending site claim via DNS TXT |
 | GET | `/api/auth/login` | None → redirects to OIDC | Start SSO login (PKCE) |
 | GET | `/api/auth/oidc/callback` | OIDC flow cookie | Finish login, set session cookie |
 | GET | `/api/auth/me` | Session cookie | Current user: orgs, active_org, role, sites |
@@ -210,13 +211,19 @@ Modeled on helpparibotti's multi-org auth.
   first-party same-site across `app.flarelytics.dev` (dashboard) and
   `api.flarelytics.dev` (worker) — `SameSite=Lax`, survives Safari/Chrome
   third-party-cookie blocking. Empty `COOKIE_DOMAIN` → degraded `SameSite=None`.
-- **Org→site ownership:** KV `org:<orgId>:sites = [{hostname,label}]`, accessed
-  only via `auth/sites-store.ts`. This is the authz layer above AE; `blob10` is
-  unchanged. `org_id` is never written to Analytics Engine.
+- **Org→site ownership (DNS-verified):** an org may only add a hostname it
+  proves it controls. `POST /admin/sites` returns a pending claim with a DNS TXT
+  record (`_flarelytics.<host>` = `flarelytics-site-verification=<token>`);
+  `POST /admin/sites/verify` confirms it via DNS-over-HTTPS and grants exclusive
+  ownership. KV layout (all via `auth/sites-store.ts`): `org:<orgId>:sites`
+  (verified, queryable), `site_owner:<hostname>` (global exclusive owner —
+  blocks cross-tenant claims with 409), `site_claim:<orgId>:<host>` (pending
+  token). This is the authz layer above AE; `blob10` is unchanged and `org_id`
+  is never written to Analytics Engine.
 - **Authorization:** `/query` requires the requested `?site=` to be in the active
-  org's site list (`ADMIN_EMAILS` bypass any site). `/admin/sites` mutations need
-  owner/admin role + a same-origin request (CSRF guard). `/switch-org` is
-  IDOR-checked against the signed session's org list.
+  org's verified site list (`ADMIN_EMAILS` bypass any site). `/admin/sites`
+  mutations need owner/admin role + a same-origin request (CSRF guard).
+  `/switch-org` is IDOR-checked against the signed session's org list.
 - **Roles:** `owner`/`admin` manage sites; `member` is read-only.
 - **Back-compat:** `X-API-Key` remains a full-access programmatic key for
   `/query`, `/admin/sites` (legacy global `allowed_origins`), and server-side
@@ -226,8 +233,10 @@ Modeled on helpparibotti's multi-org auth.
   `DASHBOARD_URL`, `COOKIE_DOMAIN`, `ADMIN_EMAILS` in `wrangler.toml`; secrets
   `SESSION_SECRET`, `OIDC_CLIENT_SECRET` via `wrangler secret put`.
 - **Backfill:** existing `allowed_origins` sites belong to no org. Superadmins
-  (`ADMIN_EMAILS`) see all sites immediately; otherwise add each hostname to the
-  target org via `POST /admin/sites` (signed in) or seed `org:<sub>:sites` in KV.
+  (`ADMIN_EMAILS`) see all sites immediately. At rollout, **seed ownership** for
+  each currently-tracked hostname so nobody can first-claim it: set
+  `site_owner:<hostname>` and `org:<ownerOrgId>:sites` in KV (e.g. via
+  `wrangler kv key put`). New sites go through the DNS-verified claim flow.
 
 ## Skill routing
 

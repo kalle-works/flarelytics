@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { safeReturnTo, dashboardOrigins, authCorsHeaders, handleMe, handleSwitchOrg, handleLogin } from './routes';
 import type { AuthEnv } from './routes';
 import { createSessionCookie, buildOrgList } from './session';
-import { addSite } from './sites-store';
 
 const SECRET = 'test-session-secret-at-least-32-chars-long';
 
@@ -48,10 +47,14 @@ describe('safeReturnTo', () => {
 });
 
 describe('dashboardOrigins / authCorsHeaders', () => {
-  it('includes the configured dashboard origin + localhost', () => {
+  it('includes the configured dashboard origin and excludes localhost in production', () => {
     const origins = dashboardOrigins(makeEnv());
     expect(origins).toContain('https://app.flarelytics.dev');
-    expect(origins).toContain('http://localhost:4321');
+    expect(origins).not.toContain('http://localhost:4321');
+  });
+
+  it('includes localhost only when no production dashboard is configured', () => {
+    expect(dashboardOrigins(makeEnv({ DASHBOARD_URL: undefined }))).toContain('http://localhost:4321');
   });
   it('echoes an allowed origin with credentials', () => {
     const req = new Request('https://api/x', { headers: { Origin: 'https://app.flarelytics.dev' } });
@@ -82,7 +85,7 @@ describe('handleMe', () => {
 
   it('returns orgs, active_org, role and the org site list when authenticated', async () => {
     const env = makeEnv();
-    await addSite(env.SITE_CONFIG, 'org-a', 'acme.com', 'Acme');
+    await env.SITE_CONFIG.put('org:org-a:sites', JSON.stringify([{ hostname: 'acme.com', label: 'Acme' }]));
     const cookie = await signedCookiePair(env, {
       email: 'm@b.c', sub: 'u1',
       orgs: buildOrgList('u1', [{ id: 'org-a', name: 'Acme', role: 'admin' }]),
