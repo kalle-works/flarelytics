@@ -77,7 +77,13 @@ curl -H "X-API-Key: your-api-key" \
 
 ### 4. View your dashboard
 
-Visit `https://flarelytics-dashboard.pages.dev` and enter your API key, worker URL, and site hostname.
+Visit the dashboard and **sign in with SSO** — you'll see the sites your
+organization owns, with an org switcher when you belong to more than one.
+
+The dashboard talks to a single worker (set `PUBLIC_API_BASE` at build time, or
+append `?worker=https://your-worker.workers.dev` for local/self-hosted use).
+Programmatic access still uses the `X-API-Key` header (see the API examples
+below); the browser dashboard no longer stores any key.
 
 ## Architecture
 

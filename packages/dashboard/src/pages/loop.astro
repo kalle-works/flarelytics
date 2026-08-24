@@ -1,8 +1,13 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev';
 ---
 
 <Layout title="Distribution Loop — Flarelytics">
+  <script define:vars={{ apiBase }} is:inline>
+    window.FLARELYTICS_API_BASE = apiBase;
+  </script>
   <!-- No-session gate: matches index.astro behavior so users who land directly here are told what to do. -->
   <div id="no-session" style="display:none;max-width:520px;margin:5rem auto;text-align:center;">
     <svg width="40" height="40" viewBox="0 0 32 32" fill="none" style="margin:0 auto 1rem;">
@@ -421,6 +426,7 @@ import Layout from '../layouts/Layout.astro';
     var siteSwitcherMenu = document.getElementById('site-switcher-menu');
     var siteSwitcherLabel = document.getElementById('site-switcher-label');
 
+    var WORKER = (new URLSearchParams(location.search).get('worker') || window.FLARELYTICS_API_BASE || '').replace(/\/$/, '');
     var session = null;
     var current = 0;
     var period = '30d';
@@ -459,24 +465,16 @@ import Layout from '../layouts/Layout.astro';
       return d + ' days ago';
     }
 
-    function loadSession() {
-      var raw = localStorage.getItem('flarelytics_session') || sessionStorage.getItem('flarelytics_session');
-      if (!raw) return null;
-      try {
-        var s = JSON.parse(raw);
-        if (!s || !s.sites || !s.sites.length) return null;
-        return s;
-      } catch (e) { return null; }
-    }
-
+    // Returns true when ?site= matched a site (so the caller skips the
+    // localStorage fallback even if the match is at index 0).
     function applyParamSite() {
-      // ?site=hostname → switch session.current to matching site if present.
       var qs = new URLSearchParams(location.search);
       var want = qs.get('site');
-      if (!want || !session) return;
+      if (!want || !session) return false;
       for (var i = 0; i < session.sites.length; i++) {
-        if (session.sites[i].site === want) { current = i; return; }
+        if (session.sites[i].site === want) { current = i; return true; }
       }
+      return false;
     }
 
     function setMenuOpen(open) {
@@ -503,7 +501,7 @@ import Layout from '../layouts/Layout.astro';
           var idx = parseInt(el.dataset.idx, 10) || 0;
           current = idx;
           session.current = idx;
-          try { localStorage.setItem('flarelytics_session', JSON.stringify(session)); } catch(e) {}
+          try { localStorage.setItem('flarelytics_active_site', session.sites[idx].site); } catch(e) {}
           setMenuOpen(false);
           renderSwitcher();
           load();
@@ -607,15 +605,12 @@ import Layout from '../layouts/Layout.astro';
 
       errBox.setAttribute('hidden', '');
       var s = session.sites[current];
-      // Strip trailing slash on the worker URL — legacy sessions migrated
-      // before the auth-form normalization may carry one and produce //query.
-      var base = String(s.url || '').replace(/\/+$/, '');
-      var url = base + '/query?v=1&q=loop-overview&site=' + encodeURIComponent(s.site) + '&period=' + encodeURIComponent(period);
+      var url = WORKER + '/query?v=1&q=loop-overview&site=' + encodeURIComponent(s.site) + '&period=' + encodeURIComponent(period);
       tbody.innerHTML = '<tr><td colspan="5" class="state-cell">Loading…</td></tr>';
       emptyMsg.setAttribute('hidden', '');
       setPartialBanner(false);
 
-      fetch(url, { headers: { 'X-API-Key': s.key }, signal: ctrl.signal })
+      fetch(url, { credentials: 'include', signal: ctrl.signal })
         .then(function(r) {
           if (r.status === 401) throw new Error('auth');
           if (!r.ok) throw new Error('http_' + r.status);
@@ -631,23 +626,39 @@ import Layout from '../layouts/Layout.astro';
         .catch(function(err) {
           if (err && err.name === 'AbortError') return; // superseded; ignore
           if (ctrl !== inflight) return;
-          var msg = err && err.message === 'auth' ? 'Invalid API key for this site. Reconnect on the main dashboard.' :
+          var msg = err && err.message === 'auth' ? 'Your session has expired. Open the main dashboard to sign in again.' :
                     err && err.message && err.message.indexOf('http_') === 0 ? 'Worker returned ' + err.message.replace('http_', '') + '. Check that v1 datasets exist and CF credentials are set.' :
-                    'Could not reach the worker. Is your URL correct?';
+                    'Could not reach the worker.';
           showError(msg);
         });
     }
 
-    // Boot
-    session = loadSession();
-    if (!session) {
-      noSession.style.display = '';
-      return;
-    }
-    current = (typeof session.current === 'number' && session.current >= 0 && session.current < session.sites.length) ? session.current : 0;
-    applyParamSite();
-    loopView.style.display = '';
-    renderSwitcher();
-    load();
+    // Boot — load the signed-in user + their active org's sites from the worker.
+    if (!WORKER) { noSession.style.display = ''; return; }
+    fetch(WORKER + '/api/auth/me', { credentials: 'include' })
+      .then(function(r) {
+        if (r.status === 401) throw new Error('unauth');
+        if (!r.ok) throw new Error('connect');
+        return r.json();
+      })
+      .then(function(me) {
+        var sites = (me.sites || []).map(function(s) { return { site: s.hostname, label: s.label || s.hostname }; });
+        if (!sites.length) { noSession.style.display = ''; return; }
+        session = { sites: sites, current: 0 };
+        current = 0;
+        var matchedParam = applyParamSite();
+        if (!matchedParam) {
+          var want = localStorage.getItem('flarelytics_active_site');
+          if (want) {
+            for (var i = 0; i < session.sites.length; i++) {
+              if (session.sites[i].site === want) { current = i; break; }
+            }
+          }
+        }
+        loopView.style.display = '';
+        renderSwitcher();
+        load();
+      })
+      .catch(function() { noSession.style.display = ''; });
   })();
 </script>

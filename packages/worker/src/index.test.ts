@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import worker, { isBot, deviceType, browserName, osName, parseFilters } from './index';
 import { PV_SCHEMA, ENG_SCHEMA, SHARE_SCHEMA, BOT_SCHEMA, CUSTOM_SCHEMA } from './v1/emit';
+import { createSessionCookie, buildOrgList } from './auth/session';
 
 function makeEnv(overrides: Record<string, unknown> = {}) {
   const store = new Map<string, string>();
@@ -20,6 +21,7 @@ function makeEnv(overrides: Record<string, unknown> = {}) {
     SITE_CONFIG: {
       get: vi.fn(async (k: string) => store.get(k) ?? null),
       put: vi.fn(async (k: string, v: string) => { store.set(k, v); }),
+      delete: vi.fn(async (k: string) => { store.delete(k); }),
     } as unknown as KVNamespace,
     ALLOWED_ORIGINS: 'https://example.com,https://kiiru.fi',
     QUERY_API_KEY: 'test-key',
@@ -909,5 +911,227 @@ describe('GET /public-stats', () => {
     // corsHeaders reflects the specific origin for allowAny=true endpoints (not literal *)
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://any-site.com');
     fetchMock.mockRestore();
+  });
+});
+
+// ── Multi-organization auth gate ──────────────────────────────────────────────
+describe('multi-org auth — /query', () => {
+  const SECRET = 'test-session-secret-at-least-32-chars-long';
+  const ORIGIN = 'https://app.flarelytics.dev';
+
+  function authEnv(over: Record<string, unknown> = {}) {
+    return makeEnv({ SESSION_SECRET: SECRET, DASHBOARD_URL: ORIGIN, ADMIN_EMAILS: 'kalle@kalle.works', CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok', ...over });
+  }
+
+  async function cookieFor(opts: Parameters<typeof createSessionCookie>[0]): Promise<string> {
+    const { cookieHeader } = await createSessionCookie(opts);
+    return cookieHeader.split(';')[0];
+  }
+
+  function cfMock() {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ data: [], meta: [] }), { status: 200 }),
+    );
+  }
+
+  it('401 when neither X-API-Key nor session present', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/query?q=top-pages&site=example.com'),
+      authEnv(), {} as ExecutionContext,
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('X-API-Key still grants full access (back-compat)', async () => {
+    const fetchMock = cfMock();
+    const res = await worker.fetch(
+      new Request('https://worker.test/query?q=top-pages&site=anything.com', { headers: { 'X-API-Key': 'test-key' } }),
+      authEnv(), {} as ExecutionContext,
+    );
+    expect(res.status).toBe(200);
+    fetchMock.mockRestore();
+  });
+
+  it('session is allowed for a site its active org owns', async () => {
+    const fetchMock = cfMock();
+    const env = authEnv();
+    await env.SITE_CONFIG.put('org:u1:sites', JSON.stringify([{ hostname: 'example.com', label: 'example.com' }]));
+    const cookie = await cookieFor({ email: 'a@b.c', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    const res = await worker.fetch(
+      new Request('https://worker.test/query?q=top-pages&site=example.com', { headers: { Cookie: cookie } }),
+      env, {} as ExecutionContext,
+    );
+    expect(res.status).toBe(200);
+    fetchMock.mockRestore();
+  });
+
+  it('session is forbidden for a site its org does not own', async () => {
+    const env = authEnv();
+    await env.SITE_CONFIG.put('org:u1:sites', JSON.stringify([{ hostname: 'example.com', label: 'example.com' }]));
+    const cookie = await cookieFor({ email: 'a@b.c', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    const res = await worker.fetch(
+      new Request('https://worker.test/query?q=top-pages&site=foreign.com', { headers: { Cookie: cookie } }),
+      env, {} as ExecutionContext,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('admin email bypasses org site ownership', async () => {
+    const fetchMock = cfMock();
+    const env = authEnv();
+    const cookie = await cookieFor({ email: 'kalle@kalle.works', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    const res = await worker.fetch(
+      new Request('https://worker.test/query?q=top-pages&site=any-site.com', { headers: { Cookie: cookie } }),
+      env, {} as ExecutionContext,
+    );
+    expect(res.status).toBe(200);
+    fetchMock.mockRestore();
+  });
+});
+
+describe('multi-org auth — /admin/sites (org-scoped)', () => {
+  const SECRET = 'test-session-secret-at-least-32-chars-long';
+  const ORIGIN = 'https://app.flarelytics.dev';
+
+  function authEnv(over: Record<string, unknown> = {}) {
+    return makeEnv({ SESSION_SECRET: SECRET, DASHBOARD_URL: ORIGIN, ...over });
+  }
+  async function cookieFor(opts: Parameters<typeof createSessionCookie>[0]): Promise<string> {
+    const { cookieHeader } = await createSessionCookie(opts);
+    return cookieHeader.split(';')[0];
+  }
+
+  it('X-API-Key keeps managing the global allowed_origins list (legacy)', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/admin/sites', { headers: { 'X-API-Key': 'test-key' } }),
+      authEnv(), {} as ExecutionContext,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json() as { sites: string[] };
+    expect(Array.isArray(body.sites)).toBe(true);
+  });
+
+  it('owner POST returns a pending DNS-TXT claim (no access until verified)', async () => {
+    const env = authEnv();
+    const cookie = await cookieFor({ email: 'a@b.c', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    const res = await worker.fetch(
+      new Request('https://worker.test/admin/sites', {
+        method: 'POST',
+        headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'newsite.com', label: 'New' }),
+      }), env, {} as ExecutionContext,
+    );
+    expect(res.status).toBe(202);
+    const body = await res.json() as { pending: boolean; verification: { name: string; value: string } };
+    expect(body.pending).toBe(true);
+    expect(body.verification.name).toBe('_flarelytics.newsite.com');
+    // Not granted yet.
+    const session = await env.SITE_CONFIG.get('org:u1:sites');
+    expect(session).toBeNull();
+  });
+
+  it('owner can verify a claim via DNS TXT and then gains access', async () => {
+    const env = authEnv();
+    const cookie = await cookieFor({ email: 'a@b.c', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    // Start the claim to mint the token.
+    const claimRes = await worker.fetch(
+      new Request('https://worker.test/admin/sites', {
+        method: 'POST', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'newsite.com', label: 'New' }),
+      }), env, {} as ExecutionContext,
+    );
+    const token = ((await claimRes.json()) as { verification: { value: string } }).verification.value;
+    // Mock DNS-over-HTTPS to return the matching TXT record.
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input).includes('cloudflare-dns.com')) {
+        return new Response(JSON.stringify({ Answer: [{ data: `"${token}"` }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    });
+    const verifyRes = await worker.fetch(
+      new Request('https://worker.test/admin/sites/verify', {
+        method: 'POST', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'newsite.com', label: 'New' }),
+      }), env, {} as ExecutionContext,
+    );
+    expect(verifyRes.status).toBe(200);
+    const body = await verifyRes.json() as { verified: boolean; sites: { hostname: string }[] };
+    expect(body.verified).toBe(true);
+    expect(body.sites.some((s) => s.hostname === 'newsite.com')).toBe(true);
+    expect(await env.SITE_CONFIG.get('site_owner:newsite.com')).toBe('u1');
+    fetchMock.mockRestore();
+  });
+
+  it('rejects claiming a hostname already owned by another org (409)', async () => {
+    const env = authEnv();
+    await env.SITE_CONFIG.put('site_owner:taken.com', 'someone-else');
+    const cookie = await cookieFor({ email: 'a@b.c', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    const res = await worker.fetch(
+      new Request('https://worker.test/admin/sites', {
+        method: 'POST', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'taken.com' }),
+      }), env, {} as ExecutionContext,
+    );
+    expect(res.status).toBe(409);
+  });
+
+  it('fails verification (422) when the DNS TXT record is missing', async () => {
+    const env = authEnv();
+    const cookie = await cookieFor({ email: 'a@b.c', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    await worker.fetch(new Request('https://worker.test/admin/sites', {
+      method: 'POST', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostname: 'newsite.com' }),
+    }), env, {} as ExecutionContext);
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ Answer: [] }), { status: 200 }));
+    const res = await worker.fetch(new Request('https://worker.test/admin/sites/verify', {
+      method: 'POST', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostname: 'newsite.com' }),
+    }), env, {} as ExecutionContext);
+    expect(res.status).toBe(422);
+    fetchMock.mockRestore();
+  });
+
+  it('rejects a member (insufficient role)', async () => {
+    const env = authEnv();
+    const cookie = await cookieFor({
+      email: 'a@b.c', sub: 'u1',
+      orgs: buildOrgList('u1', [{ id: 'org-a', name: 'Acme', role: 'member' }]),
+      active_org: 'org-a', secret: SECRET,
+    });
+    const res = await worker.fetch(
+      new Request('https://worker.test/admin/sites', {
+        method: 'POST',
+        headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'x.com' }),
+      }), env, {} as ExecutionContext,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects a mutation without a same-origin header (CSRF)', async () => {
+    const env = authEnv();
+    const cookie = await cookieFor({ email: 'a@b.c', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    const res = await worker.fetch(
+      new Request('https://worker.test/admin/sites', {
+        method: 'POST',
+        headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'x.com' }),
+      }), env, {} as ExecutionContext,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('GET returns the active org site list for a session', async () => {
+    const env = authEnv();
+    await env.SITE_CONFIG.put('org:u1:sites', JSON.stringify([{ hostname: 'mine.com', label: 'Mine' }]));
+    const cookie = await cookieFor({ email: 'a@b.c', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    const res = await worker.fetch(
+      new Request('https://worker.test/admin/sites', { headers: { Cookie: cookie } }),
+      env, {} as ExecutionContext,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json() as { sites: { hostname: string }[] };
+    expect(body.sites).toEqual([{ hostname: 'mine.com', label: 'Mine' }]);
   });
 });

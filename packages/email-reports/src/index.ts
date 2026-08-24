@@ -14,7 +14,7 @@
  * Cron: runs weekly (configured in wrangler.toml)
  */
 
-interface Env {
+export interface Env {
   ANALYTICS_WORKER_URL: string;
   ANALYTICS_API_KEY: string;
   EMAIL_API_URL: string;
@@ -30,20 +30,60 @@ interface AnalyticsRow {
   [key: string]: string | number;
 }
 
+// The analytics worker is multi-tenant and scopes every query to one site.
+// It wants a plain hostname, so derive it from the site URL the report is
+// already configured with rather than adding a second setting that could
+// drift from it.
+export function siteHost(env: Env): string {
+  const raw = (env.SITE_URL || '').trim();
+  if (!raw) return '';
+  try {
+    return new URL(raw.includes('://') ? raw : `https://${raw}`).hostname;
+  } catch {
+    return '';
+  }
+}
+
+// A query either returns rows or fails. Those are different facts and the
+// report must not confuse them: an empty week and a broken query both render
+// as "0 views", and a report that quietly says zero when it could not read
+// anything is worse than no report — it actively signals "nothing to see".
+interface QueryOutcome {
+  rows: AnalyticsRow[];
+  failed: boolean;
+}
+
 // Fetch analytics data from the Flarelytics worker
-async function queryAnalytics(
+export async function queryAnalytics(
   env: Env,
   queryName: string,
   period = '7d',
-): Promise<AnalyticsRow[]> {
-  const url = `${env.ANALYTICS_WORKER_URL}/query?q=${queryName}&period=${period}`;
-  const res = await fetch(url, {
-    headers: { 'X-API-Key': env.ANALYTICS_API_KEY },
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!res.ok) return [];
-  const data = await res.json() as { data?: AnalyticsRow[] } | AnalyticsRow[];
-  return Array.isArray(data) ? data : (data.data || []);
+): Promise<QueryOutcome> {
+  const site = siteHost(env);
+  if (!site) {
+    console.error('[report] SITE_URL is unset or unparseable; cannot scope the query');
+    return { rows: [], failed: true };
+  }
+  const url =
+    `${env.ANALYTICS_WORKER_URL}/query?q=${queryName}` +
+    `&period=${period}&site=${encodeURIComponent(site)}`;
+  try {
+    const res = await fetch(url, {
+      headers: { 'X-API-Key': env.ANALYTICS_API_KEY },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      console.error(
+        `[report] query ${queryName} (${period}) failed: HTTP ${res.status} ${await res.text()}`,
+      );
+      return { rows: [], failed: true };
+    }
+    const data = (await res.json()) as { data?: AnalyticsRow[] } | AnalyticsRow[];
+    return { rows: Array.isArray(data) ? data : data.data || [], failed: false };
+  } catch (err) {
+    console.error(`[report] query ${queryName} (${period}) threw:`, err);
+    return { rows: [], failed: true };
+  }
 }
 
 function num(n: number | string | null | undefined): string {
@@ -63,20 +103,9 @@ function sum(rows: AnalyticsRow[], field: string): number {
 }
 
 // Generate the HTML email report
-async function generateReport(env: Env): Promise<{ subject: string; html: string }> {
+export async function generateReport(env: Env): Promise<{ subject: string; html: string }> {
   // Fetch current and previous period data
-  const [
-    dailyViews,
-    dailyVisitors,
-    topPages,
-    referrers,
-    countries,
-    customEvents,
-    prevDailyViews,
-    prevDailyVisitors,
-    botHits,
-    botHitsTotal,
-  ] = await Promise.all([
+  const outcomes = await Promise.all([
     queryAnalytics(env, 'daily-views', '7d'),
     queryAnalytics(env, 'daily-unique-visitors', '7d'),
     queryAnalytics(env, 'top-pages', '7d'),
@@ -88,6 +117,22 @@ async function generateReport(env: Env): Promise<{ subject: string; html: string
     queryAnalytics(env, 'bot-hits', '7d'),
     queryAnalytics(env, 'bot-hits-total', '7d'),
   ]);
+
+  // Any failure poisons the numbers below, because a missing row set is
+  // indistinguishable from a quiet week once it has been summed.
+  const queriesFailed = outcomes.some((o) => o.failed);
+  const [
+    dailyViews,
+    dailyVisitors,
+    topPages,
+    referrers,
+    countries,
+    customEvents,
+    prevDailyViews,
+    prevDailyVisitors,
+    botHits,
+    botHitsTotal,
+  ] = outcomes.map((o) => o.rows);
 
   const totalViews = sum(dailyViews, 'views');
   const totalVisitors = sum(dailyVisitors, 'unique_visitors');
@@ -115,7 +160,12 @@ async function generateReport(env: Env): Promise<{ subject: string; html: string
   if (viewsChangeNum > 30) anomalies.push(`Traffic spike: pageviews up ${viewsDelta} vs last week`);
   if (viewsChangeNum < -30) anomalies.push(`Traffic drop: pageviews down ${viewsDelta} vs last week`);
 
-  const subject = `${siteName} — Weekly Analytics: ${num(totalViews)} views, ${num(totalVisitors)} visitors`;
+  // Never put a fabricated zero in the subject line: it is the part that gets
+  // read at a glance, and "0 views" reads as a fact about the site rather than
+  // a fact about the pipeline.
+  const subject = queriesFailed
+    ? `${siteName} — Weekly Analytics unavailable (could not read the data)`
+    : `${siteName} — Weekly Analytics: ${num(totalViews)} views, ${num(totalVisitors)} visitors`;
 
   const html = `<!DOCTYPE html>
 <html>
@@ -129,22 +179,30 @@ async function generateReport(env: Env): Promise<{ subject: string; html: string
     <h1 style="margin:8px 0 0;font-size:20px;color:#1a1a1a;">Weekly Report</h1>
     <p style="margin:4px 0 0;font-size:13px;color:#8a8a8a;">${siteName} — Last 7 days</p>
   </div>
-
+${queriesFailed ? `
+  <!-- Data could not be read -->
+  <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:4px;padding:12px 14px;margin-bottom:24px;">
+    <div style="font-size:13px;font-weight:600;color:#991b1b;">These numbers could not be read.</div>
+    <div style="font-size:13px;color:#991b1b;margin-top:4px;">
+      At least one query to the analytics worker failed, so the figures below are missing rather than zero.
+      Do not read this as a quiet week. Check the reports worker logs.
+    </div>
+  </div>` : ''}
   <!-- KPI Cards -->
   <div style="display:flex;gap:12px;margin-bottom:24px;">
     <div style="flex:1;background:white;border:1px solid #e5e5e3;border-radius:4px;padding:12px;">
       <div style="font-size:11px;color:#8a8a8a;text-transform:uppercase;letter-spacing:0.05em;">Pageviews</div>
-      <div style="font-size:24px;font-weight:700;color:#1a1a1a;">${num(totalViews)}</div>
+      <div style="font-size:24px;font-weight:700;color:#1a1a1a;">${queriesFailed ? '—' : num(totalViews)}</div>
       <div style="font-size:12px;color:${viewsChangeNum >= 0 ? '#16a34a' : '#dc2626'};">${viewsDelta}</div>
     </div>
     <div style="flex:1;background:white;border:1px solid #e5e5e3;border-radius:4px;padding:12px;">
       <div style="font-size:11px;color:#8a8a8a;text-transform:uppercase;letter-spacing:0.05em;">Visitors</div>
-      <div style="font-size:24px;font-weight:700;color:#1a1a1a;">${num(totalVisitors)}</div>
+      <div style="font-size:24px;font-weight:700;color:#1a1a1a;">${queriesFailed ? '—' : num(totalVisitors)}</div>
       <div style="font-size:12px;color:${viewsChangeNum >= 0 ? '#16a34a' : '#dc2626'};">${visitorsDelta}</div>
     </div>
     <div style="flex:1;background:white;border:1px solid #e5e5e3;border-radius:4px;padding:12px;">
       <div style="font-size:11px;color:#8a8a8a;text-transform:uppercase;letter-spacing:0.05em;">Events</div>
-      <div style="font-size:24px;font-weight:700;color:#1a1a1a;">${num(totalEvents)}</div>
+      <div style="font-size:24px;font-weight:700;color:#1a1a1a;">${queriesFailed ? '—' : num(totalEvents)}</div>
     </div>
   </div>
 
