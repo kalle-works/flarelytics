@@ -22,10 +22,11 @@ Privacy-first web analytics that runs entirely on Cloudflare. No cookies, no ext
 
 ```bash
 git clone https://github.com/kalle-works/flarelytics.git
-cd flarelytics/packages/worker
+cd flarelytics && npm install
+cd packages/worker
 
 # Edit wrangler.toml with your account_id and allowed origins
-npx wrangler deploy
+npm run deploy      # builds the tracker bundle, then wrangler deploy
 npx wrangler secret put QUERY_API_KEY    # random string for dashboard auth
 npx wrangler secret put CF_API_TOKEN     # CF API token (Analytics Engine read)
 npx wrangler secret put CF_ACCOUNT_ID    # your CF account ID

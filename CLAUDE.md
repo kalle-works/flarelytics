@@ -76,7 +76,7 @@ npm run test         # Run tests
 
 ```bash
 cd packages/worker
-npx wrangler deploy  # Deploy analytics worker
+npm run deploy       # builds the tracker bundle, then wrangler deploy
 
 cd packages/dashboard
 npx wrangler pages deploy dist  # Deploy dashboard

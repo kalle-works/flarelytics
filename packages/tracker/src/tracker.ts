@@ -119,9 +119,10 @@ function send(event: string, data: Record<string, unknown> = {}, opts: { noRefer
   const json = JSON.stringify(payload);
   const blob = new Blob([json], { type: 'application/json' });
 
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon(endpoint + '/track', blob);
-  } else {
+  // sendBeacon returns false when the browser refuses to queue the request
+  // (per-origin beacon quota); fall through to fetch in that case instead of
+  // dropping the event silently.
+  if (!(navigator.sendBeacon && navigator.sendBeacon(endpoint + '/track', blob))) {
     fetch(endpoint + '/track', {
       method: 'POST',
       body: json,
@@ -215,10 +216,12 @@ function initScrollDepth(): void {
 // looking at the page instead of cumulative time since load.
 let pageStart = Date.now();
 
-function reportTiming(): void {
+function reportTiming(path?: string): void {
   const seconds = Math.round((Date.now() - pageStart) / 1000);
   if (seconds > 0 && seconds < 3600) {
-    send('timing', { props: { seconds: String(seconds) } });
+    const data: Record<string, unknown> = { props: { seconds: String(seconds) } };
+    if (path) data.path = path;
+    send('timing', data);
   }
   pageStart = Date.now();
 }
@@ -235,13 +238,20 @@ function patchHistoryMethod(method: 'pushState' | 'replaceState'): void {
   const original = history[method];
   history[method] = function (this: History, ...args: Parameters<History['pushState']>) {
     const result = original.apply(this, args);
-    onLocationChange();
+    // The host site's router is the caller here: a tracker failure (for
+    // example sendBeacon throwing on a full beacon queue) must never break
+    // the site's own navigation.
+    try { onLocationChange(); } catch { /* tracker failures are non-fatal */ }
     return result;
   } as typeof history[typeof method];
 }
 
 function onLocationChange(): void {
   if (location.pathname === lastPath) return;
+  // Flush the time spent on the route we are leaving before the clock
+  // restarts for the new one, otherwise every SPA route but the last loses
+  // its engagement time.
+  reportTiming(lastPath);
   lastPath = location.pathname;
 
   resetTiming();
@@ -293,7 +303,11 @@ export function init(workerEndpoint: string, options: InitOptions = {}): void {
   });
   // bfcache restores (and regular unloads) don't always fire visibilitychange
   // first — pagehide is the reliable last chance to flush the current period.
-  window.addEventListener('pagehide', reportTiming);
+  window.addEventListener('pagehide', () => reportTiming());
+  // A bfcache restore fires pageshow (persisted) without a visibilitychange
+  // to 'visible', so restart the clock there or the dormant interval counts
+  // as engagement.
+  window.addEventListener('pageshow', (e) => { if ((e as PageTransitionEvent).persisted) resetTiming(); });
 
   if (scrollDepthEnabled) initScrollDepth();
   if (options.noSpa !== true) initSpaTracking();

@@ -646,6 +646,8 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
 // @ts-nocheck
 import Chart from 'chart.js/auto';
 import { esc } from '../lib/escape';
+import { resolveWorkerOrigin } from '../lib/worker-origin';
+import { tableToCsv } from '../lib/csv';
 import { num, fmtCurrency, fmtSeconds, fmtPercentChange } from '../lib/format';
 import { fetchJson, buildQueryUrl, AuthError } from '../lib/api';
 import {
@@ -667,7 +669,7 @@ import { parseUrlState, withUrlState } from '../lib/url-state';
 // existed only to guard against exactly that race under `is:inline`).
 
 // Single analytics worker. `?worker=` overrides for local dev / self-hosting.
-var WORKER = (new URLSearchParams(location.search).get('worker') || window.FLARELYTICS_API_BASE || '').replace(/\/$/, '');
+var WORKER = resolveWorkerOrigin(new URLSearchParams(location.search).get('worker'), window.FLARELYTICS_API_BASE || '');
 var initialUrlState = parseUrlState(location.search);
 var site = '';
 var period = initialUrlState.period || '7d';
@@ -1131,11 +1133,9 @@ document.querySelectorAll('.csv-btn').forEach(function(btn) {
     if (!table) return;
     var csvRows = [];
     table.querySelectorAll('tr').forEach(function(tr) {
-      var cells = [];
-      tr.querySelectorAll('th, td').forEach(function(td) { cells.push('"' + td.textContent.replace(/"/g, '""') + '"'); });
-      csvRows.push(cells.join(','));
+      csvRows.push(Array.from(tr.querySelectorAll('th, td'), function(td) { return td.textContent; }));
     });
-    var blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    var blob = new Blob([tableToCsv(csvRows)], { type: 'text/csv' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = btn.dataset.table + '-' + period + '.csv';

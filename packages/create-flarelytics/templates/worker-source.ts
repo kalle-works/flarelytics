@@ -302,6 +302,15 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
         return /^[a-zA-Z0-9.\-]+$/.test(s) ? s : '';
       })();
 
+  if (!site) {
+    // Every query scopes by blob10, so an event stored under an empty site
+    // can never be read back. Refuse it instead of accepting it into a void.
+    return Response.json(
+      { error: 'Bad Request', hint: 'Server-side tracking needs a "site" field with a plain hostname, e.g. { "site": "yoursite.com" }.' },
+      { status: 400, headers: cors },
+    );
+  }
+
   const ip = request.headers.get('CF-Connecting-IP') || '0.0.0.0';
   const vid = await visitorHash(ip, ua, site, env);
 

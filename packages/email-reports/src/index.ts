@@ -135,9 +135,16 @@ export function sumInWeek(rows: AnalyticsRow[], field: string, weekStart: string
     .reduce((acc, r) => acc + (Number(r[field]) || 0), 0);
 }
 
-// The 7 calendar days immediately before the current week: if "current week"
-// is the last 7 days ending today (today-6 .. today), "previous week" is the
-// 7 days before that (today-13 .. today-7).
+// The report compares two whole-calendar-day windows taken from the same
+// 30-day daily series: the current week is today-6 .. today and the previous
+// week is today-13 .. today-7. Summing the rolling `NOW() - 7 DAY` query for
+// the current side would overlap the previous window on the boundary day and
+// make the percentage drift with the cron hour.
+export function currentWeekWindow(now: Date): { start: string; end: string } {
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return { start: isoDate(addDays(today, -6)), end: isoDate(today) };
+}
+
 export function previousWeekWindow(now: Date): { start: string; end: string } {
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   return { start: isoDate(addDays(today, -13)), end: isoDate(addDays(today, -7)) };
@@ -214,13 +221,14 @@ export async function generateReport(
     botHitsTotal,
   ] = outcomes.map((o) => o.rows);
 
-  const totalViews = sum(dailyViews, 'views');
-  const totalVisitors = sum(dailyVisitors, 'unique_visitors');
   const totalEvents = sum(customEvents, 'count');
 
-  // Previous 7 calendar days, immediately before the current 7-day window —
-  // computed from each row's own date, not its position (see sumInWeek).
+  // Both comparison windows come from the 30-day daily series so they are
+  // whole calendar days and cannot overlap (see currentWeekWindow).
+  const { start: curWeekStart, end: curWeekEnd } = currentWeekWindow(now);
   const { start: prevWeekStart, end: prevWeekEnd } = previousWeekWindow(now);
+  const totalViews = sumInWeek(prevDailyViews, 'views', curWeekStart, curWeekEnd);
+  const totalVisitors = sumInWeek(prevDailyVisitors, 'unique_visitors', curWeekStart, curWeekEnd);
   const prevViews = sumInWeek(prevDailyViews, 'views', prevWeekStart, prevWeekEnd);
   const prevVisitors = sumInWeek(prevDailyVisitors, 'unique_visitors', prevWeekStart, prevWeekEnd);
 
@@ -557,9 +565,13 @@ export default {
       }
 
       console.log(`[reports] Sent to ${sent}/${recipients.length} recipients (${failed} failed)`);
-      // Only mark the period sent once the loop has actually finished —
-      // a throw before this point leaves the marker unset so a genuine
-      // "we sent nothing at all" retry can still go ahead.
+      if (sent === 0) {
+        // sendEmail never throws, so a total outage reaches this point with
+        // sentAny still false. Throwing here leaves the marker unset and
+        // lets the platform retry, since nobody has received anything yet.
+        throw new Error(`no recipient received the report (${failed} failed)`);
+      }
+      // Mark the period sent only once at least one email went out.
       await env.REPORT_RECIPIENTS.put(periodKey, now.toISOString());
     } catch (err) {
       console.error('[reports] scheduled run failed:', err);

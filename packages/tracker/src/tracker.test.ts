@@ -411,6 +411,26 @@ describe('tracker', () => {
       expect(pageviews[0]).not.toHaveProperty('referrer');
     });
 
+    it('reports the time spent on the previous route before starting the next one', async () => {
+      vi.useFakeTimers();
+      try {
+        NATIVE_REPLACE_STATE(null, '', 'https://example.com/first');
+        const tracker = await import('./tracker');
+        tracker.init('https://analytics.example.com');
+        sentPayloads = [];
+
+        vi.advanceTimersByTime(30_000);
+        history.pushState(null, '', '/second');
+
+        const timing = sentPayloads.map((p) => JSON.parse(p)).filter((p) => p.event === 'timing');
+        expect(timing).toHaveLength(1);
+        expect(timing[0].path).toBe('/first');
+        expect(timing[0].props.seconds).toBe('30');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('does not fire a pageview when pushState targets the current path', async () => {
       NATIVE_REPLACE_STATE(null, '', 'https://example.com/same');
       const tracker = await import('./tracker');
@@ -421,6 +441,16 @@ describe('tracker', () => {
       history.pushState(null, '', '/same');
 
       expect(sentPayloads).toHaveLength(0);
+    });
+
+    it('does not let a sendBeacon failure escape through the patched pushState', async () => {
+      NATIVE_REPLACE_STATE(null, '', 'https://example.com/');
+      const tracker = await import('./tracker');
+      tracker.init('https://analytics.example.com');
+      beaconSpy.mockImplementationOnce(() => { throw new Error('beacon queue full'); });
+
+      expect(() => history.pushState(null, '', '/router-target')).not.toThrow();
+      expect(location.pathname).toBe('/router-target');
     });
 
     it('data-no-spa / { noSpa: true } disables automatic pushState tracking', async () => {

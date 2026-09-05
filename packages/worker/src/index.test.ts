@@ -783,6 +783,21 @@ describe('POST /track — server-side tracking', () => {
     expect(res.status).toBe(401);
   });
 
+  it('rejects a server-side request whose site is missing or not a hostname with 400 and writes nothing', async () => {
+    for (const site of [undefined, '', 'not a host name', 'evil.com/path']) {
+      const { ctx } = makeCtx();
+      const env = makeEnv();
+      const req = new Request('https://worker.test/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': HUMAN_UA, 'X-API-Key': 'test-key' },
+        body: JSON.stringify({ event: 'purchase', path: '/checkout', ...(site === undefined ? {} : { site }) }),
+      });
+      const res = await worker.fetch(req, env, ctx);
+      expect(res.status, `site=${String(site)}`).toBe(400);
+      expect(env.ANALYTICS.writeDataPoint).not.toHaveBeenCalled();
+    }
+  });
+
   it('accepts server-side request with valid API key and site field', async () => {
     const { ctx, settle } = makeCtx();
     const env = makeEnv();

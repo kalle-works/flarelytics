@@ -9,6 +9,9 @@ on:
 jobs:
   check:
     runs-on: kalle-works-arm64
+    # The runner is a persistent machine that later runs publish and deploy
+    # jobs, so pull requests from forks must not execute on it.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

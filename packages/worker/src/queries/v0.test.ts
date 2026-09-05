@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { QUERY_TEMPLATES, PERIOD_MAP, FILTER_BLOB, injectFilters } from './v0';
+import { parseFilters as parseFiltersGuard, FILTER_BLOB as FILTER_BLOB_GUARD, FILTER_PATTERN as FILTER_PATTERN_GUARD } from './v0';
 
 // Fixed fixtures for every template call — none contain characters (quotes)
 // that would need escaping, since real callers validate site/page/event_name
@@ -14,6 +15,27 @@ const FIXTURE_SITE = 'fixture-site.example';
 const FIXTURE_EVENT = 'fixture_event';
 const FIXTURE_PAGE = '/fixture/page';
 const FIXTURE_PERIOD = PERIOD_MAP['30d'];
+
+const FILTER_SAMPLE: Record<string, string> = {
+  country: 'FI',
+  referrer: 'news.ycombinator.com',
+  page: '/pricing',
+  device: 'mobile',
+  browser: 'Chrome',
+  os: 'macOS',
+  utm_source: 'newsletter',
+  utm_campaign: 'spring launch',
+};
+
+describe('filter keys', () => {
+  it('every documented filter key has a validation pattern and parses a valid value', () => {
+    for (const key of Object.keys(FILTER_BLOB_GUARD)) {
+      expect(FILTER_PATTERN_GUARD[key], `missing FILTER_PATTERN for ${key}`).toBeInstanceOf(RegExp);
+      const url = new URL(`https://w.test/query?q=top-pages&filter[${key}]=${encodeURIComponent(FILTER_SAMPLE[key])}`);
+      expect(parseFiltersGuard(url)).toBe(`AND ${FILTER_BLOB_GUARD[key]} = '${FILTER_SAMPLE[key]}'`);
+    }
+  });
+});
 
 describe('QUERY_TEMPLATES (table-driven)', () => {
   for (const [name, template] of Object.entries(QUERY_TEMPLATES)) {

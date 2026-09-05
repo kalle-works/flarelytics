@@ -219,7 +219,7 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
   if (isBot(ua)) {
     // Record bot hit for reporting, then drop
     const botOrigin = request.headers.get('Origin');
-    const botSite = botOrigin ? (() => { try { return new URL(botOrigin).hostname.replace(/^www\./, ''); } catch { return botOrigin; } })() : '';
+    let botSite = botOrigin ? (() => { try { return new URL(botOrigin).hostname.replace(/^www\./, ''); } catch { return botOrigin; } })() : '';
     let botPath = '/';
     let botReferrer = '';
     try {
@@ -311,6 +311,15 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
         const s = typeof body.site === 'string' ? body.site.trim().replace(/^www\./, '') : '';
         return /^[a-zA-Z0-9.\-]+$/.test(s) ? s : '';
       })();
+
+  if (!site) {
+    // Every query scopes by blob10, so an event stored under an empty site
+    // can never be read back. Refuse it instead of accepting it into a void.
+    return Response.json(
+      { error: 'Bad Request', hint: 'Server-side tracking needs a "site" field with a plain hostname, e.g. { "site": "yoursite.com" }.' },
+      { status: 400, headers: cors },
+    );
+  }
 
   // Custom event preflight (§3 / §11 contract): for sites in V1_EMIT_SITES,
   // reject oversize event_props_json with 400 rather than silently truncating

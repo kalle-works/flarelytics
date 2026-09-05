@@ -6,6 +6,7 @@
   "main": "src/index.ts",
   "scripts": {
     "setup": "bash setup.sh",
+    "predev": "npm --prefix ../tracker run build",
     "dev": "wrangler dev",
     "build": "wrangler deploy --dry-run --outdir dist",
     "predeploy": "npm --prefix ../tracker run build",

@@ -4,6 +4,7 @@ import worker, {
   queryAnalytics,
   siteHost,
   previousWeekWindow,
+  currentWeekWindow,
   sumInWeek,
   type Env,
 } from './index';
@@ -154,11 +155,16 @@ describe('generateReport', () => {
   });
 
   it('reports the real totals when the data is there', async () => {
+    const now = new Date('2026-09-05T08:00:00Z');
+    const today = now.toISOString().slice(0, 10);
+    const yesterday = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+    const lastWeek = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10); // today-7: previous window
     vi.stubGlobal('fetch', async (url: string) => {
-      const rows = String(url).includes('daily-views')
-        ? [{ views: 25 }, { views: 58 }]
-        : String(url).includes('daily-unique-visitors')
-          ? [{ unique_visitors: 18 }, { unique_visitors: 30 }]
+      const u = String(url);
+      const rows = u.includes('daily-views') && u.includes('period=30d')
+        ? [{ date: lastWeek, views: 999 }, { date: yesterday, views: 25 }, { date: today, views: 58 }]
+        : u.includes('daily-unique-visitors') && u.includes('period=30d')
+          ? [{ date: lastWeek, unique_visitors: 999 }, { date: yesterday, unique_visitors: 18 }, { date: today, unique_visitors: 30 }]
           : [];
       return {
         ok: true,
@@ -168,10 +174,22 @@ describe('generateReport', () => {
       } as unknown as Response;
     });
 
-    const { subject } = await generateReport(env());
+    const { subject } = await generateReport(env(), now);
 
+    // today-7 belongs to the previous window and must not leak into the totals
     expect(subject).toContain('83 views');
     expect(subject).toContain('48 visitors');
+  });
+});
+
+describe('comparison windows', () => {
+  it('current and previous week are adjacent whole-day windows that do not overlap', () => {
+    const now = new Date('2026-09-05T08:00:00Z');
+    const cur = currentWeekWindow(now);
+    const prev = previousWeekWindow(now);
+    expect(cur).toEqual({ start: '2026-08-30', end: '2026-09-05' });
+    expect(prev).toEqual({ start: '2026-08-23', end: '2026-08-29' });
+    expect(prev.end < cur.start).toBe(true);
   });
 });
 
@@ -284,13 +302,11 @@ describe('anomaly minimum sample size', () => {
       date,
       views: perDay + (i === 0 ? remainder : 0),
     }));
+    dailyViews30d.push({ date: daysAgoISO(now, 0), views: currentTotal });
     return vi.stubGlobal('fetch', async (url: string) => {
       const u = String(url);
       if (u.includes('q=daily-views') && u.includes('period=30d')) {
         return { ok: true, status: 200, json: async () => ({ data: dailyViews30d }), text: async () => '' } as unknown as Response;
-      }
-      if (u.includes('q=daily-views') && u.includes('period=7d')) {
-        return { ok: true, status: 200, json: async () => ({ data: [{ views: currentTotal }] }), text: async () => '' } as unknown as Response;
       }
       return { ok: true, status: 200, json: async () => ({ data: [] }), text: async () => '' } as unknown as Response;
     });
@@ -390,6 +406,28 @@ describe('scheduled() idempotency', () => {
     await worker.scheduled(scheduledEvent, e, fakeCtx);
     const sendsAfterSecond = emailCalls.filter((u) => u.includes('/v1/emails')).length;
     expect(sendsAfterSecond).toBe(1); // the second run must send nothing
+  });
+
+  it('leaves the period unmarked and keeps the platform retry when every send fails', async () => {
+    const kv = createFakeKV({ 'a@example.com': 'x', 'b@example.com': 'x' });
+    const e = env({ REPORT_RECIPIENTS: kv });
+    vi.stubGlobal('fetch', async (url: string) => {
+      const isSend = String(url).includes('/v1/emails');
+      return {
+        ok: !isSend,
+        status: isSend ? 503 : 200,
+        json: async () => ({ data: [] }),
+        text: async () => (isSend ? 'mail api down' : ''),
+      } as unknown as Response;
+    });
+    const noRetry = vi.fn();
+    const scheduledEvent = { ...fakeScheduledEvent(Date.parse('2026-09-07T08:00:00Z')), noRetry } as unknown as ScheduledEvent;
+
+    await expect(worker.scheduled(scheduledEvent, e, fakeCtx)).rejects.toThrow('no recipient received');
+    expect(noRetry).not.toHaveBeenCalled();
+    expect(await kv.get('sent:weekly:2026-W37')).toBeNull();
+    const marked = (await kv.list()).keys.filter((k) => String(k.name).startsWith('sent:weekly:'));
+    expect(marked).toHaveLength(0);
   });
 
   it('opts out of the platform retry once a send has gone out and something afterward throws', async () => {
@@ -542,7 +580,7 @@ describe('admin auth and recipient handling', () => {
     });
 
     const kv = createFakeKV({ 'secret-address@example.com': 'x' });
-    await worker.scheduled(fakeScheduledEvent(Date.now()), env({ REPORT_RECIPIENTS: kv }), fakeCtx);
+    await expect(worker.scheduled(fakeScheduledEvent(Date.now()), env({ REPORT_RECIPIENTS: kv }), fakeCtx)).rejects.toThrow();
 
     const loggedText = [...errorSpy.mock.calls, ...logSpy.mock.calls].flat().map(String).join(' ');
     expect(loggedText).not.toContain('secret-address@example.com');
