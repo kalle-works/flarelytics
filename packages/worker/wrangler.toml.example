@@ -3,6 +3,12 @@ main = "src/index.ts"
 compatibility_date = "2025-03-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Workers Logs — structured request logs, queryable in the dashboard. Worth
+# having on record for a Worker handling session cookies, OIDC callbacks, and
+# cross-tenant site authorization.
+[observability]
+enabled = true
+
 # Optional: serve the worker on a custom domain (SSO API origin). Cloudflare
 # auto-creates the DNS record + cert on `wrangler deploy` when the apex is a zone
 # on this account. Put the dashboard on a sibling subdomain (app.<domain>) so the
