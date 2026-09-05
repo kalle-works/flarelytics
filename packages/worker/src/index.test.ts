@@ -1126,6 +1126,60 @@ describe('multi-org auth — /admin/sites (org-scoped)', () => {
     fetchMock.mockRestore();
   });
 
+  it('removing a verified site also revokes its /track CORS access (403 afterward)', async () => {
+    const env = authEnv();
+    const cookie = await cookieFor({ email: 'a@b.c', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    const claimRes = await worker.fetch(
+      new Request('https://worker.test/admin/sites', {
+        method: 'POST', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'newsite.com' }),
+      }), env, {} as ExecutionContext,
+    );
+    const token = ((await claimRes.json()) as { verification: { value: string } }).verification.value;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input).includes('cloudflare-dns.com')) {
+        return new Response(JSON.stringify({ Answer: [{ data: `"${token}"` }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    });
+    await worker.fetch(
+      new Request('https://worker.test/admin/sites/verify', {
+        method: 'POST', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'newsite.com' }),
+      }), env, {} as ExecutionContext,
+    );
+    fetchMock.mockRestore();
+
+    // Before removal: /track from the newly-verified origin is accepted.
+    const beforeReq = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': HUMAN_UA, Origin: 'https://newsite.com' },
+      body: JSON.stringify({ event: 'pageview', path: '/' }),
+    });
+    const { ctx: beforeCtx } = makeCtx();
+    const beforeRes = await worker.fetch(beforeReq, env, beforeCtx);
+    expect(beforeRes.status).toBe(204);
+
+    const deleteRes = await worker.fetch(
+      new Request('https://worker.test/admin/sites', {
+        method: 'DELETE', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'newsite.com' }),
+      }), env, {} as ExecutionContext,
+    );
+    expect(deleteRes.status).toBe(200);
+
+    // After removal: /track from that origin is rejected — the org can no
+    // longer query it, so /track must stop accepting events for it too.
+    const afterReq = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': HUMAN_UA, Origin: 'https://newsite.com' },
+      body: JSON.stringify({ event: 'pageview', path: '/' }),
+    });
+    const { ctx: afterCtx } = makeCtx();
+    const afterRes = await worker.fetch(afterReq, env, afterCtx);
+    expect(afterRes.status).toBe(403);
+  });
+
   it('rejects claiming a hostname already owned by another org (409)', async () => {
     const env = authEnv();
     await env.SITE_CONFIG.put('site_owner:taken.com', 'someone-else');
