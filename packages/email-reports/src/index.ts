@@ -12,6 +12,14 @@
  *   GET  /health        — Health check
  *
  * Cron: runs weekly (configured in wrangler.toml)
+ *
+ * Idempotency: before sending, `scheduled()` checks a KV marker
+ * (`sent:weekly:<iso-week>`) written once the send loop finishes. Cloudflare
+ * retries a cron invocation that throws, and without this marker a retry
+ * after a partial send would re-send that week's email to everyone,
+ * including recipients who already got it. The marker is never deleted —
+ * it is one small key per calendar week and KV list() below filters
+ * non-email keys back out, so it costs nothing to keep indefinitely.
  */
 
 export interface Env {
@@ -133,6 +141,20 @@ export function sumInWeek(rows: AnalyticsRow[], field: string, weekStart: string
 export function previousWeekWindow(now: Date): { start: string; end: string } {
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   return { start: isoDate(addDays(today, -13)), end: isoDate(addDays(today, -7)) };
+}
+
+// ISO-8601 week identifier (e.g. "2026-W36") — stable across a whole
+// calendar week regardless of which day or hour the cron actually runs on,
+// so a Cloudflare retry a few hours later lands on the same period key.
+function isoWeekKey(date: Date): string {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7; // Mon=0 .. Sun=6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3); // Thursday of this ISO week
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
+  const weekNum = 1 + Math.round((d.getTime() - firstThursday.getTime()) / (7 * 24 * 3600 * 1000));
+  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
 }
 
 // Escape everything HTML-meaningful before interpolating visitor-controlled
@@ -408,13 +430,19 @@ ${queriesFailed ? `
   return { subject, html, text };
 }
 
-// Send email via HTTP API (Euromail, Resend, SendGrid, etc.)
+// Send email via HTTP API (Euromail, Resend, SendGrid, etc.). `index` is a
+// 1-based position in the current send loop, logged instead of the address
+// itself so failures are traceable without putting a recipient's email in
+// the logs.
 async function sendEmail(
   env: Env,
   to: string,
   subject: string,
   html: string,
+  text: string,
+  index?: number,
 ): Promise<boolean> {
+  const label = index != null ? `recipient #${index}` : 'recipient';
   try {
     const apiUrl = env.EMAIL_API_URL.replace(/\/$/, '');
     const res = await fetch(`${apiUrl}/v1/emails`, {
@@ -428,34 +456,83 @@ async function sendEmail(
         to,
         subject,
         html_body: html,
+        text_body: text,
       }),
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
       const errText = await res.text();
-      console.log(`[reports] Email API error ${res.status}: ${errText}`);
+      console.error(`[reports] Email API error ${res.status} sending to ${label}: ${errText}`);
     }
     return res.ok;
   } catch (err) {
-    console.log(`[reports] Failed to send to ${to}: ${err}`);
+    console.error(`[reports] Failed to send to ${label}: ${err}`);
     return false;
   }
 }
 
-// Get all recipients from KV
+// A deliberately permissive but sane "local@domain.tld" shape — not a full
+// RFC 5322 validator, just enough to reject the empty-local-part and
+// missing-TLD garbage that `.includes('@')` let through.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function isValidEmail(email: unknown): email is string {
+  return typeof email === 'string' && email.length <= 254 && EMAIL_PATTERN.test(email);
+}
+
+// Get all recipients from KV, paginating past KV's 1000-key-per-call cap.
+// Filters to valid-looking email addresses only: the same KV namespace also
+// holds the `sent:weekly:<...>` idempotency marker (see scheduled()), and
+// treating that key as a recipient would silently try to email it.
 async function getRecipients(env: Env): Promise<string[]> {
-  const list = await env.REPORT_RECIPIENTS.list();
-  return list.keys.map((k) => k.name);
+  const emails: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await env.REPORT_RECIPIENTS.list(cursor ? { cursor } : {});
+    for (const k of page.keys) {
+      if (isValidEmail(k.name)) emails.push(k.name);
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return emails;
+}
+
+// Constant-time comparison of the admin API key, mirroring
+// packages/worker/src/auth/crypto.ts's timingSafeEqual so a network
+// observer can't recover the key one byte at a time from response timing.
+const utf8 = new TextEncoder();
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const aa = utf8.encode(a);
+  const bb = utf8.encode(b);
+  if (aa.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aa.length; i++) diff |= aa[i] ^ bb[i];
+  return diff === 0;
 }
 
 function isAuthenticated(request: Request, env: Env): boolean {
   const key = request.headers.get('X-API-Key');
-  return !!key && key === env.ADMIN_API_KEY;
+  if (!key || !env.ADMIN_API_KEY) return false;
+  return timingSafeEqual(key, env.ADMIN_API_KEY);
 }
 
 export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    console.log(`[reports] Cron triggered at ${new Date().toISOString()}`);
+  async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+    const now = new Date(event.scheduledTime);
+    console.log(`[reports] Cron triggered at ${now.toISOString()}`);
+
+    // Idempotency guard: Cloudflare retries a cron invocation that throws.
+    // Without this marker, a retry after a partial send (an exception
+    // outside the per-recipient try/catch below, e.g. a KV outage while
+    // listing recipients) would re-send this week's email to everyone,
+    // including recipients who already got it.
+    const periodKey = `sent:weekly:${isoWeekKey(now)}`;
+    const alreadySent = await env.REPORT_RECIPIENTS.get(periodKey);
+    if (alreadySent) {
+      console.log(`[reports] Already sent for ${periodKey}, skipping`);
+      return;
+    }
 
     const recipients = await getRecipients(env);
     if (recipients.length === 0) {
@@ -463,17 +540,38 @@ export default {
       return;
     }
 
-    const { subject, html } = await generateReport(env);
+    let sentAny = false;
+    try {
+      const { subject, html, text } = await generateReport(env, now);
 
-    let sent = 0;
-    let failed = 0;
-    for (const email of recipients) {
-      const ok = await sendEmail(env, email, subject, html);
-      if (ok) sent++;
-      else failed++;
+      let sent = 0;
+      let failed = 0;
+      for (let i = 0; i < recipients.length; i++) {
+        const ok = await sendEmail(env, recipients[i], subject, html, text, i + 1);
+        if (ok) {
+          sent++;
+          sentAny = true;
+        } else {
+          failed++;
+        }
+      }
+
+      console.log(`[reports] Sent to ${sent}/${recipients.length} recipients (${failed} failed)`);
+      // Only mark the period sent once the loop has actually finished —
+      // a throw before this point leaves the marker unset so a genuine
+      // "we sent nothing at all" retry can still go ahead.
+      await env.REPORT_RECIPIENTS.put(periodKey, now.toISOString());
+    } catch (err) {
+      console.error('[reports] scheduled run failed:', err);
+      if (sentAny) {
+        // Some recipients already received this period's email. Opt out of
+        // Cloudflare's automatic retry rather than risk a duplicate send to
+        // everyone — a partial failure here needs a human to look at the
+        // logs, not a silent full replay.
+        event.noRetry();
+      }
+      throw err;
     }
-
-    console.log(`[reports] Sent to ${sent}/${recipients.length} recipients (${failed} failed)`);
   },
 
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -503,7 +601,7 @@ export default {
     // Add recipient
     if (pathname === '/recipients' && request.method === 'POST') {
       const body = await request.json() as { email?: string };
-      if (!body.email || !body.email.includes('@')) {
+      if (!isValidEmail(body.email)) {
         return Response.json({ error: 'Invalid email' }, { status: 400 });
       }
       await env.REPORT_RECIPIENTS.put(body.email, new Date().toISOString());
@@ -524,12 +622,12 @@ export default {
     if (pathname === '/test' && request.method === 'POST') {
       const body = await request.json() as { email?: string };
       const email = body.email;
-      if (!email || !email.includes('@')) {
+      if (!isValidEmail(email)) {
         return Response.json({ error: 'Provide email to send test to' }, { status: 400 });
       }
 
-      const { subject, html } = await generateReport(env);
-      const ok = await sendEmail(env, email, subject, html);
+      const { subject, html, text } = await generateReport(env);
+      const ok = await sendEmail(env, email, subject, html, text);
       return Response.json({ ok, subject, sentTo: email });
     }
 

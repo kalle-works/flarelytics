@@ -1,5 +1,12 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { generateReport, queryAnalytics, siteHost, previousWeekWindow, sumInWeek, type Env } from './index';
+import worker, {
+  generateReport,
+  queryAnalytics,
+  siteHost,
+  previousWeekWindow,
+  sumInWeek,
+  type Env,
+} from './index';
 
 // What this report must guarantee, stated before reading the implementation:
 //
@@ -20,6 +27,11 @@ import { generateReport, queryAnalytics, siteHost, previousWeekWindow, sumInWeek
 //    raw values, since it isn't rendered as markup.
 // 6. A traffic swing only becomes an "Alert" once the previous week's
 //    baseline is large enough that the swing isn't just noise.
+// 7. A cron retry for a period that has already been sent sends nothing.
+// 8. The admin API key check accepts the right key and rejects any other,
+//    and a failed send is logged without the recipient's address.
+// 9. `POST /recipients` rejects anything that isn't a plausible email, and
+//    the recipient list survives more than one page of KV keys.
 
 function env(overrides: Partial<Env> = {}): Env {
   return {
@@ -310,5 +322,233 @@ describe('anomaly minimum sample size', () => {
     const { html } = await generateReport(env(), now);
 
     expect(html).toContain('Traffic drop');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test helpers for the delivery/admin surface below.
+
+/** In-memory KVNamespace stand-in supporting get/put/delete/list. */
+function createFakeKV(initial: Record<string, string> = {}): KVNamespace {
+  const store = new Map<string, string>(Object.entries(initial));
+  return {
+    get: async (key: string) => (store.has(key) ? (store.get(key) as string) : null),
+    put: async (key: string, value: string) => {
+      store.set(key, String(value));
+    },
+    delete: async (key: string) => {
+      store.delete(key);
+    },
+    list: async () => ({
+      keys: Array.from(store.keys()).map((name) => ({ name })),
+      list_complete: true,
+      cacheStatus: null,
+    }),
+  } as unknown as KVNamespace;
+}
+
+/** Every fetch (analytics query or email API) succeeds with empty data. */
+function stubAllOk() {
+  const calls: string[] = [];
+  vi.stubGlobal('fetch', async (url: string) => {
+    calls.push(String(url));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [] }),
+      text: async () => '',
+    } as unknown as Response;
+  });
+  return calls;
+}
+
+function fakeScheduledEvent(scheduledTime: number): ScheduledEvent {
+  return { scheduledTime, cron: '0 8 * * 1', noRetry: vi.fn(), waitUntil: () => {} } as unknown as ScheduledEvent;
+}
+
+const fakeCtx = { waitUntil: () => {}, passThroughOnException: () => {} } as unknown as ExecutionContext;
+
+async function json(res: Response): Promise<any> {
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+
+describe('scheduled() idempotency', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('sends once per ISO week and skips a retry for the same period', async () => {
+    const kv = createFakeKV({ 'a@example.com': 'x' });
+    const e = env({ REPORT_RECIPIENTS: kv });
+    const emailCalls = stubAllOk();
+    const scheduledEvent = fakeScheduledEvent(Date.parse('2026-09-07T08:00:00Z'));
+
+    await worker.scheduled(scheduledEvent, e, fakeCtx);
+    const sendsAfterFirst = emailCalls.filter((u) => u.includes('/v1/emails')).length;
+    expect(sendsAfterFirst).toBe(1);
+
+    await worker.scheduled(scheduledEvent, e, fakeCtx);
+    const sendsAfterSecond = emailCalls.filter((u) => u.includes('/v1/emails')).length;
+    expect(sendsAfterSecond).toBe(1); // the second run must send nothing
+  });
+
+  it('opts out of the platform retry once a send has gone out and something afterward throws', async () => {
+    const kv = createFakeKV({ 'a@example.com': 'x' });
+    const originalPut = kv.put.bind(kv);
+    kv.put = (async (key: string, value: string) => {
+      if (String(key).startsWith('sent:weekly:')) throw new Error('kv outage while marking sent');
+      return originalPut(key, value);
+    }) as typeof kv.put;
+    const e = env({ REPORT_RECIPIENTS: kv });
+    stubAllOk();
+    const noRetry = vi.fn();
+    const scheduledEvent = { ...fakeScheduledEvent(Date.now()), noRetry } as unknown as ScheduledEvent;
+
+    await expect(worker.scheduled(scheduledEvent, e, fakeCtx)).rejects.toThrow('kv outage');
+    expect(noRetry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('admin auth and recipient handling', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('GET /health needs no auth', async () => {
+    const res = await worker.fetch(new Request('https://x.example/health'), env());
+    expect(res.status).toBe(200);
+    expect((await json(res)).status).toBe('ok');
+  });
+
+  it('rejects every other route without the admin key', async () => {
+    const res = await worker.fetch(new Request('https://x.example/recipients'), env({ ADMIN_API_KEY: 'k' }));
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a same-length wrong key and a different-length wrong key alike', async () => {
+    const e = env({ ADMIN_API_KEY: 'correct-key' }); // 11 chars
+    const sameLen = await worker.fetch(
+      new Request('https://x.example/recipients', { headers: { 'X-API-Key': 'wrong-key11' } }), // also 11 chars
+      e,
+    );
+    const shorter = await worker.fetch(
+      new Request('https://x.example/recipients', { headers: { 'X-API-Key': 'x' } }),
+      e,
+    );
+    expect(sameLen.status).toBe(401);
+    expect(shorter.status).toBe(401);
+  });
+
+  it('accepts the correct admin key', async () => {
+    const kv = createFakeKV();
+    const res = await worker.fetch(
+      new Request('https://x.example/recipients', { headers: { 'X-API-Key': 'k' } }),
+      env({ ADMIN_API_KEY: 'k', REPORT_RECIPIENTS: kv }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('adds, lists, and removes a recipient', async () => {
+    const kv = createFakeKV();
+    const e = env({ ADMIN_API_KEY: 'k', REPORT_RECIPIENTS: kv });
+    const headers = { 'X-API-Key': 'k', 'Content-Type': 'application/json' };
+
+    const add = await worker.fetch(
+      new Request('https://x.example/recipients', { method: 'POST', headers, body: JSON.stringify({ email: 'person@example.com' }) }),
+      e,
+    );
+    expect(add.status).toBe(200);
+
+    const list = await worker.fetch(new Request('https://x.example/recipients', { headers }), e);
+    expect((await json(list)).recipients).toEqual(['person@example.com']);
+
+    const del = await worker.fetch(
+      new Request('https://x.example/recipients', { method: 'DELETE', headers, body: JSON.stringify({ email: 'person@example.com' }) }),
+      e,
+    );
+    expect(del.status).toBe(200);
+
+    const listAfter = await worker.fetch(new Request('https://x.example/recipients', { headers }), e);
+    expect((await json(listAfter)).recipients).toEqual([]);
+  });
+
+  it.each(['not-an-email', '@example.com', 'person@', 'person@example', ''])(
+    'rejects %j as a recipient',
+    async (bad) => {
+      const e = env({ ADMIN_API_KEY: 'k', REPORT_RECIPIENTS: createFakeKV() });
+      const res = await worker.fetch(
+        new Request('https://x.example/recipients', {
+          method: 'POST',
+          headers: { 'X-API-Key': 'k', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: bad }),
+        }),
+        e,
+      );
+      expect(res.status).toBe(400);
+    },
+  );
+
+  it('paginates past a single KV list() page', async () => {
+    const pages = [
+      { keys: [{ name: 'user0@example.com' }], list_complete: false, cursor: 'c1', cacheStatus: null },
+      { keys: [{ name: 'user1@example.com' }], list_complete: false, cursor: 'c2', cacheStatus: null },
+      { keys: [{ name: 'user2@example.com' }], list_complete: true, cacheStatus: null },
+    ];
+    let call = 0;
+    const kv = { list: vi.fn(async () => pages[call++]) } as unknown as KVNamespace;
+    const e = env({ ADMIN_API_KEY: 'k', REPORT_RECIPIENTS: kv });
+
+    const res = await worker.fetch(new Request('https://x.example/recipients', { headers: { 'X-API-Key': 'k' } }), e);
+
+    expect((await json(res)).recipients).toEqual(['user0@example.com', 'user1@example.com', 'user2@example.com']);
+    expect(kv.list).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not surface the idempotency marker key as a recipient', async () => {
+    const kv = createFakeKV({ 'a@example.com': 'x', 'sent:weekly:2026-W36': new Date().toISOString() });
+    const e = env({ ADMIN_API_KEY: 'k', REPORT_RECIPIENTS: kv });
+
+    const res = await worker.fetch(new Request('https://x.example/recipients', { headers: { 'X-API-Key': 'k' } }), e);
+
+    expect((await json(res)).recipients).toEqual(['a@example.com']);
+  });
+
+  it('sends a test report to an explicit address', async () => {
+    stubAllOk();
+    const res = await worker.fetch(
+      new Request('https://x.example/test', {
+        method: 'POST',
+        headers: { 'X-API-Key': 'k', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'someone@example.com' }),
+      }),
+      env({ ADMIN_API_KEY: 'k' }),
+    );
+    const body = await json(res);
+    expect(body.ok).toBe(true);
+    expect(body.sentTo).toBe('someone@example.com');
+  });
+
+  it('404s on an unknown route', async () => {
+    const res = await worker.fetch(new Request('https://x.example/nope', { headers: { 'X-API-Key': 'k' } }), env({ ADMIN_API_KEY: 'k' }));
+    expect(res.status).toBe(404);
+  });
+
+  it('logs a failed send at error level without the recipient address', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (String(url).includes('/v1/emails')) {
+        return { ok: false, status: 500, json: async () => ({}), text: async () => 'boom' } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ data: [] }), text: async () => '' } as unknown as Response;
+    });
+
+    const kv = createFakeKV({ 'secret-address@example.com': 'x' });
+    await worker.scheduled(fakeScheduledEvent(Date.now()), env({ REPORT_RECIPIENTS: kv }), fakeCtx);
+
+    const loggedText = [...errorSpy.mock.calls, ...logSpy.mock.calls].flat().map(String).join(' ');
+    expect(loggedText).not.toContain('secret-address@example.com');
+    expect(errorSpy).toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });
