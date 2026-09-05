@@ -32,7 +32,7 @@ import { handleTrack, isBot } from './track';
 import { handleAdminSites } from './admin';
 import { handlePublicStats } from './public-stats';
 import { handleTrackerJs } from './tracker-script';
-import { QUERY_TEMPLATES, PERIOD_MAP, FILTER_BLOB, parseFilters, injectFilters, runCFQuery } from './queries/v0';
+import { QUERY_TEMPLATES, PERIOD_MAP, FILTER_BLOB, parseFilters, injectFilters } from './queries/v0';
 
 // Re-exported so existing imports of these helpers from './index' keep working.
 export { parseFilters, deviceType, browserName, osName, isBot, QUERY_TEMPLATES, PERIOD_MAP };
@@ -74,37 +74,6 @@ async function authorizeQuery(
     );
   }
   return null;
-}
-
-async function handleNewVsReturning(env: Env, site: string, period: string, dataset: string, cors: Record<string, string>, filterClauses: string): Promise<Response> {
-  const currentSql = `SELECT blob9 AS vid FROM ${dataset} WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}' ${filterClauses} GROUP BY blob9`;
-  const priorSql   = `SELECT blob9 AS vid FROM ${dataset} WHERE timestamp <= NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}' ${filterClauses} GROUP BY blob9`;
-
-  try {
-    const [currentData, priorData] = await Promise.all([
-      runCFQuery(currentSql, env),
-      runCFQuery(priorSql, env),
-    ]);
-
-    const currentVids: string[] = (currentData.data ?? []).map((r: any) => r.vid);
-    const priorVids = new Set<string>((priorData.data ?? []).map((r: any) => r.vid));
-
-    let newVisitors = 0, returningVisitors = 0;
-    for (const vid of currentVids) {
-      if (priorVids.has(vid)) returningVisitors++;
-      else newVisitors++;
-    }
-
-    return Response.json(
-      { data: [{ new_visitors: newVisitors, returning_visitors: returningVisitors, total: currentVids.length }] },
-      // Private: /query is API-key-protected; the key lives in a request
-      // header so shared caches keying on URL+method could replay across keys.
-      { headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=300, must-revalidate' } },
-    );
-  } catch (err) {
-    console.log(`[new-vs-returning] error: ${err}`);
-    return Response.json({ error: 'Query execution failed', hint: 'The new-vs-returning query requires two Analytics Engine API calls. Check that CF_API_TOKEN and CF_ACCOUNT_ID are configured correctly.' }, { status: 502, headers: cors });
-  }
 }
 
 async function handleQuery(request: Request, env: Env): Promise<Response> {
@@ -159,15 +128,12 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  const validQueries = [...Object.keys(QUERY_TEMPLATES), 'new-vs-returning'];
+  const validQueries = Object.keys(QUERY_TEMPLATES);
   if (!queryName || !validQueries.includes(queryName)) {
     return Response.json(
       {
         error: 'Invalid query',
-        available: [
-          ...Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
-          { name: 'new-vs-returning', description: 'New vs returning visitors in the selected period' },
-        ],
+        available: Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
       },
       { status: 400, headers: cors },
     );
@@ -196,11 +162,6 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   const dataset = env.DATASET_NAME;
   if (!dataset) {
     return Response.json({ error: 'DATASET_NAME not configured', hint: 'Set DATASET_NAME in wrangler.toml under [vars]. It must match your Analytics Engine dataset binding.' }, { status: 500, headers: cors });
-  }
-
-  // new-vs-returning requires two CF API calls — handled separately
-  if (queryName === 'new-vs-returning') {
-    return handleNewVsReturning(env, siteParam, period, dataset, cors, filterClauses);
   }
 
   // funnel-by-event requires a valid event_name param
@@ -254,10 +215,7 @@ function handleConfig(env: Env): Response {
   return Response.json({
     name: 'flarelytics',
     version: VERSION,
-    queries: [
-      ...Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
-      { name: 'new-vs-returning', description: 'New vs returning visitors in the selected period' },
-    ],
+    queries: Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
     queries_v1: Object.entries(V1_QUERIES).map(([name, q]) => ({ name, description: q.description })),
     periods: Object.keys(PERIOD_MAP),
     tracking: {

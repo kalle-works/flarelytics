@@ -688,6 +688,26 @@ describe('GET /config', () => {
     expect(body.filters.keys).toContain('country');
     expect(body.filters.keys).toContain('device');
   });
+
+  it('does not list new-vs-returning (removed: cannot work with a daily-rotating visitor hash)', async () => {
+    const res = await worker.fetch(new Request('https://worker.test/config'), makeEnv(), {} as ExecutionContext);
+    const body = await res.json() as { queries: { name: string }[] };
+    expect(body.queries.map((q) => q.name)).not.toContain('new-vs-returning');
+  });
+});
+
+describe('GET /query?q=new-vs-returning', () => {
+  it('returns 400 (query removed: cannot work with a daily-rotating visitor hash)', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/query?q=new-vs-returning&site=example.com', { headers: { 'X-API-Key': 'test-key' } }),
+      makeEnv({ CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' }),
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string; available: { name: string }[] };
+    expect(body.error).toMatch(/invalid query/i);
+    expect(body.available.map((q) => q.name)).not.toContain('new-vs-returning');
+  });
 });
 
 describe('parseFilters', () => {
