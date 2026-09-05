@@ -131,6 +131,13 @@ import Layout from '../layouts/Layout.astro';
 </style>
 
 <script>
+  // Same @ts-nocheck rationale as index.astro: this is untyped DOM glue,
+  // while the escaping/formatting helpers it calls are imported from the
+  // fully typed + unit-tested src/lib modules.
+  // @ts-nocheck
+  import { esc } from '../lib/escape';
+  import { num } from '../lib/format';
+
   var params = new URLSearchParams(location.search);
   var workerUrl = (params.get('worker') || '').replace(/\/$/, '');
   var siteParam = params.get('site') || '';
@@ -139,15 +146,6 @@ import Layout from '../layouts/Layout.astro';
     ['state-loading','state-setup','state-error','state-stats'].forEach(function(s) {
       document.getElementById(s).style.display = s === id ? '' : 'none';
     });
-  }
-
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  }
-
-  function num(n) {
-    return Number(n).toLocaleString();
   }
 
   function renderBar(container, rows, keyLabel, keyValue) {
