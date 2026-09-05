@@ -17,28 +17,10 @@ const TEMPLATE_SOURCE = readFileSync(TEMPLATE_PATH, 'utf-8');
 // omits it, rather than loosening the assertion below.
 const INTENTIONAL_WORKER_ONLY_QUERIES: string[] = [];
 
-let workerQueryNames: string[] | null = null;
-let workerImportNote = '';
-try {
-  // Deliberately not a static import: this reaches across package
-  // boundaries into packages/worker, which may be mid-refactor on another
-  // branch. A missing/undefined export degrades to a skipped test (see
-  // below) instead of a hard failure that blocks unrelated CLI work.
-  const workerModule = (await import('../../worker/src/index')) as { QUERY_TEMPLATES?: Record<string, unknown> };
-  if (workerModule.QUERY_TEMPLATES) {
-    workerQueryNames = Object.keys(workerModule.QUERY_TEMPLATES);
-  } else {
-    workerImportNote = 'packages/worker/src/index.ts does not (yet) export QUERY_TEMPLATES';
-  }
-} catch (err) {
-  workerImportNote = `could not import packages/worker/src/index.ts: ${String(err)}`;
-}
-
-if (workerQueryNames === null) {
-  // eslint-disable-next-line no-console
-  console.warn(`[worker-source.test.ts] Skipping QUERY_TEMPLATES parity test — ${workerImportNote}.`);
-}
-
+// Static import from the worker's query module. A refactor that moves or
+// renames the template table must fail this test loudly rather than skip it.
+import { QUERY_TEMPLATES as WORKER_QUERY_TEMPLATES } from '../../worker/src/queries/v0';
+const workerQueryNames: string[] = Object.keys(WORKER_QUERY_TEMPLATES);
 function makeEnv(overrides: Record<string, unknown> = {}) {
   return {
     ANALYTICS: { writeDataPoint: vi.fn() },
@@ -191,19 +173,19 @@ describe('query filters (parity with the main worker)', () => {
 });
 
 describe('QUERY_TEMPLATES parity with the main worker', () => {
-  it.skipIf(workerQueryNames === null)(
+  it(
     'the CLI template offers every v0 query the main worker offers, minus documented exceptions',
     () => {
       const templateNames = new Set(Object.keys(TEMPLATE_QUERY_TEMPLATES));
-      const missing = (workerQueryNames as string[]).filter(
+      const missing = workerQueryNames.filter(
         (name) => !INTENTIONAL_WORKER_ONLY_QUERIES.includes(name) && !templateNames.has(name),
       );
       expect(missing, `template is missing worker queries: ${missing.join(', ')}`).toEqual([]);
     },
   );
 
-  it.skipIf(workerQueryNames === null)('has no query the worker does not also have', () => {
-    const workerNames = new Set(workerQueryNames as string[]);
+  it('has no query the worker does not also have', () => {
+    const workerNames = new Set(workerQueryNames);
     const extra = Object.keys(TEMPLATE_QUERY_TEMPLATES).filter((name) => !workerNames.has(name));
     expect(extra, `template has queries the worker no longer offers: ${extra.join(', ')}`).toEqual([]);
   });
