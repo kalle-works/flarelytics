@@ -32,6 +32,9 @@
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "keywords": ["analytics", "cloudflare", "privacy", "tracking"],
   "license": "MIT"
 }
