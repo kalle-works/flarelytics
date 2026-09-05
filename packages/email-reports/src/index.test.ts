@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { generateReport, queryAnalytics, siteHost, type Env } from './index';
+import { generateReport, queryAnalytics, siteHost, previousWeekWindow, sumInWeek, type Env } from './index';
 
 // What this report must guarantee, stated before reading the implementation:
 //
@@ -11,6 +11,15 @@ import { generateReport, queryAnalytics, siteHost, type Env } from './index';
 //    look identical to a reader glancing at a subject line.
 // 3. A genuinely empty week still reports zero, plainly. Guarding (2) is
 //    worthless if it also swallows the real answer.
+// 4. The previous-week baseline is the 7 calendar days immediately before
+//    the current week, found by date — not by array position, because
+//    Analytics Engine omits zero-traffic days entirely and a positional
+//    slice silently drifts onto the wrong days when that happens.
+// 5. Visitor-controlled strings (page path, referrer, user agent) are
+//    HTML-escaped in the email body; the plain-text alternative carries the
+//    raw values, since it isn't rendered as markup.
+// 6. A traffic swing only becomes an "Alert" once the previous week's
+//    baseline is large enough that the swing isn't just noise.
 
 function env(overrides: Partial<Env> = {}): Env {
   return {
@@ -151,5 +160,155 @@ describe('generateReport', () => {
 
     expect(subject).toContain('83 views');
     expect(subject).toContain('48 visitors');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test helpers shared by the sections below.
+
+function daysAgoISO(now: Date, n: number): string {
+  const d = new Date(now);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Inclusive range of ISO date strings, `fromAgo` and `toAgo` counted in days before `now`. */
+function datesRange(now: Date, fromAgo: number, toAgo: number): string[] {
+  const out: string[] = [];
+  for (let n = fromAgo; n <= toAgo; n++) out.push(daysAgoISO(now, n));
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+
+describe('previous-week baseline (F1)', () => {
+  it('windows the previous 7 calendar days by date, not by array position', () => {
+    const now = new Date('2026-09-05T08:00:00Z');
+    const { start, end } = previousWeekWindow(now);
+
+    // today = 2026-09-05 (0 days ago); previous week = 7-13 days ago.
+    expect(start).toBe('2026-08-23');
+    expect(end).toBe('2026-08-29');
+
+    const rows = [
+      // The week before the previous one — what the old `.slice(-21, -14)`
+      // bug would actually have summed. Must be excluded.
+      ...datesRange(now, 14, 20).map((date) => ({ date, views: 999 })),
+      // The real previous week: 7 days at 20 views = 140.
+      ...datesRange(now, 7, 13).map((date) => ({ date, views: 20 })),
+      // The current week — not part of this window either.
+      ...datesRange(now, 0, 6).map((date) => ({ date, views: 10 })),
+    ];
+
+    expect(sumInWeek(rows, 'views', start, end)).toBe(140);
+  });
+
+  it('is unaffected by a day missing from the array (Analytics Engine omits empty days)', () => {
+    const now = new Date('2026-09-05T08:00:00Z');
+    const { start, end } = previousWeekWindow(now);
+
+    const rows = datesRange(now, 7, 13)
+      .filter((date) => date !== '2026-08-26') // one quiet day, entirely absent
+      .map((date) => ({ date, views: 20 }));
+
+    expect(rows).toHaveLength(6);
+    expect(sumInWeek(rows, 'views', start, end)).toBe(120);
+  });
+
+  it("wires the date-based window into generateReport's week-over-week percentage", async () => {
+    const now = new Date('2026-09-05T08:00:00Z');
+    const dailyViews30d = [
+      ...datesRange(now, 14, 29).map((date) => ({ date, views: 999 })),
+      ...datesRange(now, 7, 13).map((date) => ({ date, views: 20 })), // sums to 140
+      ...datesRange(now, 0, 6).map((date) => ({ date, views: 10 })),
+    ];
+
+    vi.stubGlobal('fetch', async (url: string) => {
+      const u = String(url);
+      if (u.includes('q=daily-views') && u.includes('period=30d')) {
+        return { ok: true, status: 200, json: async () => ({ data: dailyViews30d }), text: async () => '' } as unknown as Response;
+      }
+      if (u.includes('q=daily-views') && u.includes('period=7d')) {
+        // Current week total equals the correct previous-week total (140),
+        // so the correct comparison reads 0.0%. The buggy code would have
+        // compared 140 against 999*7=6993 and shown a large negative swing.
+        return { ok: true, status: 200, json: async () => ({ data: [{ views: 140 }] }), text: async () => '' } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ data: [] }), text: async () => '' } as unknown as Response;
+    });
+
+    const { html } = await generateReport(env(), now);
+
+    expect(html).toContain('0.0%');
+  });
+});
+
+describe('HTML escaping and plain-text alternative (F2)', () => {
+  const evil = '"><img src=x onerror=alert(1)>';
+
+  it('escapes a visitor-controlled page path in the html but not the text part', async () => {
+    vi.stubGlobal('fetch', async (url: string) => {
+      const u = String(url);
+      if (u.includes('q=top-pages')) {
+        return { ok: true, status: 200, json: async () => ({ data: [{ path: evil, views: 3 }] }), text: async () => '' } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ data: [] }), text: async () => '' } as unknown as Response;
+    });
+
+    const { html, text } = await generateReport(env());
+
+    expect(html).not.toContain(evil);
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(text).toContain(evil);
+  });
+});
+
+describe('anomaly minimum sample size', () => {
+  function fixtureWithPrevWeekTotal(now: Date, prevTotal: number, currentTotal: number) {
+    const perDay = Math.floor(prevTotal / 7);
+    const remainder = prevTotal - perDay * 7;
+    const prevWeekDates = datesRange(now, 7, 13);
+    const dailyViews30d = prevWeekDates.map((date, i) => ({
+      date,
+      views: perDay + (i === 0 ? remainder : 0),
+    }));
+    return vi.stubGlobal('fetch', async (url: string) => {
+      const u = String(url);
+      if (u.includes('q=daily-views') && u.includes('period=30d')) {
+        return { ok: true, status: 200, json: async () => ({ data: dailyViews30d }), text: async () => '' } as unknown as Response;
+      }
+      if (u.includes('q=daily-views') && u.includes('period=7d')) {
+        return { ok: true, status: 200, json: async () => ({ data: [{ views: currentTotal }] }), text: async () => '' } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ data: [] }), text: async () => '' } as unknown as Response;
+    });
+  }
+
+  it('does not alert on a huge percentage swing from a tiny baseline (1 -> 2 views)', async () => {
+    const now = new Date('2026-09-05T08:00:00Z');
+    fixtureWithPrevWeekTotal(now, 1, 2); // +100%, but previous week total is far below the minimum sample
+
+    const { html } = await generateReport(env(), now);
+
+    expect(html).not.toContain('Alert');
+    expect(html).not.toContain('Traffic spike');
+  });
+
+  it('alerts on the same +30%+ swing once the baseline clears the minimum sample size', async () => {
+    const now = new Date('2026-09-05T08:00:00Z');
+    fixtureWithPrevWeekTotal(now, 100, 140); // +40%, previous week total is 100 (>= minimum)
+
+    const { html } = await generateReport(env(), now);
+
+    expect(html).toContain('Traffic spike');
+  });
+
+  it('alerts on a matching drop once the baseline clears the minimum sample size', async () => {
+    const now = new Date('2026-09-05T08:00:00Z');
+    fixtureWithPrevWeekTotal(now, 100, 50); // -50%, previous week total is 100 (>= minimum)
+
+    const { html } = await generateReport(env(), now);
+
+    expect(html).toContain('Traffic drop');
   });
 });
