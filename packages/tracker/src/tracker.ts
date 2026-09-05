@@ -270,6 +270,9 @@ export function init(workerEndpoint: string, options: InitOptions = {}): void {
   emitCanonical = options.emitCanonical === true;
   allowLocalhost = options.allowLocalhost === true;
   scrollDepthEnabled = options.scrollDepth === true;
+  // Start the visible-period clock from init(), not module-evaluation time —
+  // a bundled/npm consumer may import the module well before calling init().
+  resetTiming();
 
   // Auto-track pageview
   send('pageview');
