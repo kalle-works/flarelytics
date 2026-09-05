@@ -24,6 +24,12 @@ import { timingSafeEqual } from './auth/crypto';
 // allowlist (§4 Phase 1).
 const V1_EMIT_SITES = new Set(['kiiru.fi']);
 
+// Reject /track bodies larger than this before parsing — checked against
+// Content-Length when present, and enforced on the actual byte stream either
+// way so a client that omits/lies about Content-Length can't force the worker
+// to buffer and parse an arbitrarily large payload.
+const MAX_TRACK_BODY_BYTES = 8192;
+
 export interface TrackPayload {
   /** Event name: 'pageview', 'outbound', or any custom event name */
   event: string;
@@ -135,6 +141,40 @@ async function resolveCanonical(
   return { hash: '', inferred: true };
 }
 
+/**
+ * Read the request body up to `maxBytes`, checking `Content-Length` first (a
+ * cheap rejection before reading anything) and then the actual byte stream
+ * (so a missing/understated Content-Length can't bypass the cap). Returns
+ * `null` when the body exceeds the cap.
+ */
+async function readCappedBody(request: Request, maxBytes: number): Promise<string | null> {
+  const contentLength = request.headers.get('Content-Length');
+  if (contentLength && Number(contentLength) > maxBytes) return null;
+
+  if (!request.body) return request.text();
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      try { await reader.cancel(); } catch { /* already closing */ }
+      return null;
+    }
+    chunks.push(value);
+  }
+  const buf = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buf.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(buf);
+}
+
 export async function handleTrack(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const origin = request.headers.get('Origin');
 
@@ -157,6 +197,14 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
     return Response.json({ error: 'Forbidden', hint: 'Origin not in allowed list. Add it via POST /admin/sites or ALLOWED_ORIGINS in wrangler.toml.' }, { status: 403, headers: cors });
   }
 
+  const bodyText = await readCappedBody(request, MAX_TRACK_BODY_BYTES);
+  if (bodyText === null) {
+    return Response.json(
+      { error: 'Payload Too Large', hint: `Request body must not exceed ${MAX_TRACK_BODY_BYTES} bytes.` },
+      { status: 413, headers: cors },
+    );
+  }
+
   const ua = request.headers.get('User-Agent') || '';
   if (isBot(ua)) {
     // Record bot hit for reporting, then drop
@@ -165,7 +213,7 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
     let botPath = '/';
     let botReferrer = '';
     try {
-      const botBody = await request.clone().json() as { path?: string; p?: string; referrer?: string; r?: string };
+      const botBody = JSON.parse(bodyText) as { path?: string; p?: string; referrer?: string; r?: string };
       botPath = (botBody.path || botBody.p || '/').replace(/\/+$/, '').slice(0, 500) || '/';
       botReferrer = (botBody.referrer || botBody.r || '').slice(0, 500);
     } catch { /* ignore parse errors */ }
@@ -218,7 +266,7 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
 
   let raw: TrackPayload | LegacyPayload;
   try {
-    raw = await request.json();
+    raw = JSON.parse(bodyText);
   } catch {
     return Response.json({ error: 'Bad Request', hint: 'POST body must be valid JSON with "event" and "path" fields.' }, { status: 400, headers: cors });
   }

@@ -807,6 +807,50 @@ describe('POST /track — server-side tracking', () => {
   });
 });
 
+describe('POST /track — request body size cap', () => {
+  it('rejects a request whose Content-Length header exceeds the cap, without reading the body', async () => {
+    const req = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': HUMAN_UA,
+        Origin: 'https://example.com',
+        'Content-Length': '99999',
+      },
+      body: JSON.stringify({ event: 'pageview', path: '/' }),
+    });
+    const res = await worker.fetch(req, makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(413);
+  });
+
+  it('rejects an oversize body even without a Content-Length header (streamed cap)', async () => {
+    // No explicit Content-Length is set here — Node's Request does not compute
+    // one for a string body, matching a client that streams without declaring
+    // a length. The cap must still be enforced by reading the actual bytes.
+    const req = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': HUMAN_UA,
+        Origin: 'https://example.com',
+      },
+      body: JSON.stringify({ event: 'pageview', path: '/', referrer: 'a'.repeat(9000) }),
+    });
+    expect(req.headers.get('Content-Length')).toBeNull();
+    const res = await worker.fetch(req, makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(413);
+  });
+
+  it('accepts a request comfortably under the cap', async () => {
+    const { ctx, settle } = makeCtx();
+    const env = makeEnv();
+    const req = trackReq({ event: 'pageview', path: '/' }, { Origin: 'https://example.com' });
+    const res = await worker.fetch(req, env, ctx);
+    await settle();
+    expect(res.status).toBe(204);
+  });
+});
+
 describe('GET /public-stats', () => {
   const cfStatsResponse = {
     data: [{ pageviews: 1200, visitors: 340, total_bot_hits: 18, views: 100, visits: 50, path: '/', referrer: 'google.com', country: 'FI', device: 'desktop', date: '2025-05-01' }],
