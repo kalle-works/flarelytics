@@ -22,6 +22,7 @@
   "scripts": {
     "build": "tsup src/tracker.ts --format cjs,esm --dts --minify",
     "dev": "tsup src/tracker.ts --format cjs,esm --dts --watch",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "prepublishOnly": "tsup src/tracker.ts --format cjs,esm --dts --minify"
   },
