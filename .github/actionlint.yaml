@@ -1,0 +1,6 @@
+self-hosted-runner:
+  # Custom labels for the self-hosted runners used by every workflow in this
+  # repo (GitHub-hosted runners cannot start on this account).
+  labels:
+    - kalle-works-arm64
+    - kalle-works-amd64
