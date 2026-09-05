@@ -197,6 +197,7 @@ const builtins = [
           </div>
         </div>
         <p>Properties are stored as pipe-separated values in blob5 and queryable via the <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">custom-events</code> and <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">funnel-by-event</code> queries.</p>
+        <p>Property values are stored verbatim and are not vetted — don't pass personal data (emails, names, IPs) in <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">props</code>.</p>
         <p>The event name is stored in blob4. Query custom events using <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">?q=custom-events&period=30d&site=mysite.com</code>.</p>
 
         <h2 id="schema">Analytics Engine schema</h2>

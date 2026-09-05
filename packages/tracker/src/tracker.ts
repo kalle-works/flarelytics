@@ -1,5 +1,5 @@
 /**
- * Flarelytics Tracker — lightweight client-side analytics (<1KB gzipped)
+ * Flarelytics Tracker — lightweight client-side analytics (under 2KB gzipped)
  *
  * Usage (script tag):
  *   <script defer data-endpoint="https://your-worker.workers.dev" src="/tracker.js"></script>
@@ -7,7 +7,7 @@
  * Usage (npm):
  *   import { init, track } from '@flarelytics/tracker'
  *   init('https://your-worker.workers.dev')
- *   track('signup', { plan: 'pro' })
+ *   track('signup', { props: { plan: 'pro' } })
  */
 
 let endpoint = '';

@@ -1,7 +1,7 @@
 ---
 const features = [
   { title: 'No cookies', desc: 'No consent banners needed. GDPR, CCPA, and PECR compliant by architecture.' },
-  { title: 'Under 1KB', desc: 'The tracking script is smaller than most cookie banners. Zero impact on page speed.' },
+  { title: 'Under 2KB gzipped', desc: 'The tracking script is smaller than most cookie banners. Zero impact on page speed.' },
   { title: '100% Cloudflare', desc: 'Workers + Analytics Engine. No databases, no servers, no third-party services.' },
   { title: 'Real dashboard', desc: 'Traffic, referrers, countries, custom events, UTM tracking, conversion funnels.' },
   { title: 'Email reports', desc: 'Weekly digests with traffic trends, top pages, and anomaly alerts.' },
@@ -261,7 +261,7 @@ const comparisons = [
     <div class="hero-badges">
       <span class="badge">MIT Licensed</span>
       <span class="badge">Open Source</span>
-      <span class="badge">&lt;1KB Script</span>
+      <span class="badge">Under 2KB Script</span>
     </div>
     <div class="hero-actions">
       <a href="https://github.com/kalle-works/flarelytics" class="btn btn-primary">View on GitHub</a>
@@ -308,7 +308,7 @@ const comparisons = [
   <!-- Privacy -->
   <section class="privacy container">
     <h2>Privacy by architecture, not policy</h2>
-    <p>Flarelytics doesn't need a privacy policy because it doesn't collect personal data. No cookies, no fingerprinting, no IP addresses stored.</p>
+    <p>No cookies, no fingerprinting, and IP addresses are never stored. Visitors are counted via a salted hash that rotates daily — it can't be linked across days or across sites.</p>
     <div class="privacy-grid">
       <div class="privacy-item">
         <div class="privacy-label">Cookies</div>

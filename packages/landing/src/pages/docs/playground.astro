@@ -8,7 +8,7 @@ const queryGroups = [
       { name: 'top-pages-stories' },
       { name: 'daily-views' },
       { name: 'daily-unique-visitors' },
-      { name: 'new-vs-returning' },
+      { name: 'total-sessions' },
     ],
   },
   {
@@ -36,6 +36,14 @@ const queryGroups = [
       { name: 'countries-by-page', needsPage: true },
       { name: 'devices' },
       { name: 'browsers' },
+      { name: 'operating-systems' },
+    ],
+  },
+  {
+    label: 'Revenue',
+    queries: [
+      { name: 'revenue-by-event' },
+      { name: 'revenue-over-time' },
     ],
   },
   {
@@ -46,6 +54,15 @@ const queryGroups = [
       { name: 'custom-events' },
       { name: 'conversion-funnel' },
       { name: 'funnel-by-event', needsEventName: true },
+    ],
+  },
+  {
+    label: 'Live (30-min window)',
+    queries: [
+      { name: 'live-visitors' },
+      { name: 'live-pages' },
+      { name: 'live-referrers' },
+      { name: 'hourly-today' },
     ],
   },
   {

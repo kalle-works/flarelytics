@@ -107,6 +107,7 @@
           <a href="#tracking-script">Add tracking script</a>
           <a href="#verify">Verify it works</a>
           <a href="#dashboard">View dashboard</a>
+          <a href="#data-retention">Data retention</a>
         </nav>
         <div class="sidebar-label" style="margin-top:2rem;">Docs</div>
         <nav>
@@ -287,6 +288,9 @@
           </div>
         </div>
         <p>Open the dashboard URL from the deploy output and enter your <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">QUERY_API_KEY</code> when prompted. The dashboard works with multiple sites — use the site switcher to toggle between them.</p>
+
+        <h2 id="data-retention">Data retention</h2>
+        <p>Event data lives entirely in Cloudflare Analytics Engine — Flarelytics has no database of its own and applies no additional retention logic on top. Analytics Engine keeps written data for <a href="https://developers.cloudflare.com/analytics/analytics-engine/limits/" target="_blank" rel="noopener">three months</a>, after which it's automatically removed. If you need longer retention, export query results on a schedule (the email reports worker is one way to do this) and store them yourself.</p>
 
         <div id="doc-feedback" style="margin-top:3rem;padding:1.5rem;border:1px solid var(--border);border-radius:6px;text-align:center;">
           <p style="font-family:var(--mono);font-size:12px;color:var(--ink2);margin-bottom:0.75rem;">Was this page helpful?</p>
