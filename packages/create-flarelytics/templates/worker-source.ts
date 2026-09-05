@@ -341,7 +341,7 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
 }
 
 // Query templates
-const QUERY_TEMPLATES: Record<string, {
+export const QUERY_TEMPLATES: Record<string, {
   description: string;
   sql: (ds: string, p: string, site: string, eventName: string, page: string) => string;
   requiresPage?: boolean;

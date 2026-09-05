@@ -2,11 +2,42 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import worker, { deviceType, browserName, osName, isBot, parseFilters } from '../templates/worker-source.js';
+import worker, { deviceType, browserName, osName, isBot, parseFilters, QUERY_TEMPLATES as TEMPLATE_QUERY_TEMPLATES } from '../templates/worker-source.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_PATH = resolve(__dirname, '..', 'templates', 'worker-source.ts');
 const TEMPLATE_SOURCE = readFileSync(TEMPLATE_PATH, 'utf-8');
+
+// The CLI template is a single-tenant, hand-maintained copy of the real
+// worker's v0 query surface. It's meant to be an exact match at the
+// QUERY_TEMPLATES level — the worker has no v0 query that doesn't make sense
+// for a self-hosted single-site worker. If that ever changes (a v1-only,
+// multi-org, or auth-internal query gets added to the worker's v0 object),
+// add its name here with a comment explaining why the template intentionally
+// omits it, rather than loosening the assertion below.
+const INTENTIONAL_WORKER_ONLY_QUERIES: string[] = [];
+
+let workerQueryNames: string[] | null = null;
+let workerImportNote = '';
+try {
+  // Deliberately not a static import: this reaches across package
+  // boundaries into packages/worker, which may be mid-refactor on another
+  // branch. A missing/undefined export degrades to a skipped test (see
+  // below) instead of a hard failure that blocks unrelated CLI work.
+  const workerModule = (await import('../../worker/src/index')) as { QUERY_TEMPLATES?: Record<string, unknown> };
+  if (workerModule.QUERY_TEMPLATES) {
+    workerQueryNames = Object.keys(workerModule.QUERY_TEMPLATES);
+  } else {
+    workerImportNote = 'packages/worker/src/index.ts does not (yet) export QUERY_TEMPLATES';
+  }
+} catch (err) {
+  workerImportNote = `could not import packages/worker/src/index.ts: ${String(err)}`;
+}
+
+if (workerQueryNames === null) {
+  // eslint-disable-next-line no-console
+  console.warn(`[worker-source.test.ts] Skipping QUERY_TEMPLATES parity test — ${workerImportNote}.`);
+}
 
 function makeEnv(overrides: Record<string, unknown> = {}) {
   return {
@@ -156,6 +187,25 @@ describe('query filters (parity with the main worker)', () => {
   it('drops a filter value that fails its pattern', () => {
     const url = new URL('https://worker.example.com/query?q=top-pages&filter[country]=not-a-country-code');
     expect(parseFilters(url)).toBe('');
+  });
+});
+
+describe('QUERY_TEMPLATES parity with the main worker', () => {
+  it.skipIf(workerQueryNames === null)(
+    'the CLI template offers every v0 query the main worker offers, minus documented exceptions',
+    () => {
+      const templateNames = new Set(Object.keys(TEMPLATE_QUERY_TEMPLATES));
+      const missing = (workerQueryNames as string[]).filter(
+        (name) => !INTENTIONAL_WORKER_ONLY_QUERIES.includes(name) && !templateNames.has(name),
+      );
+      expect(missing, `template is missing worker queries: ${missing.join(', ')}`).toEqual([]);
+    },
+  );
+
+  it.skipIf(workerQueryNames === null)('has no query the worker does not also have', () => {
+    const workerNames = new Set(workerQueryNames as string[]);
+    const extra = Object.keys(TEMPLATE_QUERY_TEMPLATES).filter((name) => !workerNames.has(name));
+    expect(extra, `template has queries the worker no longer offers: ${extra.join(', ')}`).toEqual([]);
   });
 });
 
