@@ -1,10 +1,14 @@
 /**
  * GET /public-stats — unauthenticated 30-day summary for sites explicitly
- * opted in via PUBLIC_STATS_SITES.
+ * opted in via PUBLIC_STATS_SITES. Built from the same QUERY_TEMPLATES used
+ * by the authenticated /query endpoint rather than a second, hand-written
+ * copy of the SQL. Side effect of sharing the templates: topPages,
+ * referrers, and countries now return up to 20 rows (the templates' LIMIT)
+ * instead of the previously hand-tuned LIMIT 10 — same shape, more rows.
  */
 import type { Env } from './env';
 import { corsHeaders } from './cors';
-import { PERIOD_MAP, runCFQuery } from './queries/v0';
+import { QUERY_TEMPLATES, PERIOD_MAP, runCFQuery } from './queries/v0';
 
 interface PublicStatsResult {
   period: string;
@@ -68,65 +72,22 @@ export async function handlePublicStats(request: Request, env: Env): Promise<Res
   const period = PERIOD_MAP['30d']; // fixed 30-day window
   const site = siteParam;
 
-  const queries = {
-    pageviews: `
-      SELECT SUM(_sample_interval * double1) AS pageviews
-      FROM ${dataset}
-      WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'
-    `,
-    visitors: `
-      SELECT COUNT(DISTINCT blob9) AS visitors
-      FROM ${dataset}
-      WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'
-    `,
-    topPages: `
-      SELECT blob1 AS path, SUM(_sample_interval * double1) AS views
-      FROM ${dataset}
-      WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'
-      GROUP BY path ORDER BY views DESC LIMIT 10
-    `,
-    referrers: `
-      SELECT blob2 AS referrer, SUM(_sample_interval * double1) AS visits
-      FROM ${dataset}
-      WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob2 != 'direct' AND blob10 = '${site}'
-      GROUP BY referrer ORDER BY visits DESC LIMIT 10
-    `,
-    countries: `
-      SELECT blob3 AS country, SUM(_sample_interval * double1) AS views
-      FROM ${dataset}
-      WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'
-      GROUP BY country ORDER BY views DESC LIMIT 10
-    `,
-    devices: `
-      SELECT blob11 AS device, SUM(_sample_interval * double1) AS views
-      FROM ${dataset}
-      WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'
-      GROUP BY device ORDER BY views DESC
-    `,
-    dailyViews: `
-      SELECT toDate(timestamp) AS date, SUM(_sample_interval * double1) AS views
-      FROM ${dataset}
-      WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}'
-      GROUP BY date ORDER BY date ASC
-    `,
-    botHitsTotal: `
-      SELECT SUM(_sample_interval * double1) AS total_bot_hits
-      FROM ${dataset}
-      WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'bot_hit' AND blob10 = '${site}'
-    `,
-  };
+  // Each entry reuses the same SQL an authenticated /query?q=<name> call
+  // would run, so a future fix to (say) the pageview definition applies
+  // here automatically instead of needing to be made in two places.
+  const sql = (name: string) => QUERY_TEMPLATES[name].sql(dataset, period, site, '', '');
 
   try {
     const [pageviewsData, visitorsData, topPagesData, referrersData, countriesData, devicesData, dailyViewsData, botHitsData] =
       await Promise.all([
-        runCFQuery(queries.pageviews, env),
-        runCFQuery(queries.visitors, env),
-        runCFQuery(queries.topPages, env),
-        runCFQuery(queries.referrers, env),
-        runCFQuery(queries.countries, env),
-        runCFQuery(queries.devices, env),
-        runCFQuery(queries.dailyViews, env),
-        runCFQuery(queries.botHitsTotal, env),
+        runCFQuery(sql('total-pageviews'), env),
+        runCFQuery(sql('total-visitors'), env),
+        runCFQuery(sql('top-pages'), env),
+        runCFQuery(sql('referrers'), env),
+        runCFQuery(sql('countries'), env),
+        runCFQuery(sql('devices'), env),
+        runCFQuery(sql('daily-views'), env),
+        runCFQuery(sql('bot-hits-total'), env),
       ]);
 
     const result: PublicStatsResult = {

@@ -350,6 +350,22 @@ export const QUERY_TEMPLATES: Record<string, {
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'timing' AND blob10 = '${site}'
     `,
   },
+  'total-pageviews': {
+    description: 'Total pageviews in the period',
+    sql: (ds, p, site) => `
+      SELECT SUM(_sample_interval * double1) AS pageviews
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
+    `,
+  },
+  'total-visitors': {
+    description: 'Total unique visitors in the period',
+    sql: (ds, p, site) => `
+      SELECT COUNT(DISTINCT blob9) AS visitors
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
+    `,
+  },
 
   // new-vs-returning is handled separately (requires two CF API calls)
 

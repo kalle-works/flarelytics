@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import worker, { isBot, deviceType, browserName, osName, parseFilters } from './index';
+import worker, { isBot, deviceType, browserName, osName, parseFilters, QUERY_TEMPLATES, PERIOD_MAP } from './index';
 import { PV_SCHEMA, ENG_SCHEMA, SHARE_SCHEMA, BOT_SCHEMA, CUSTOM_SCHEMA } from './v1/emit';
 import { createSessionCookie, buildOrgList } from './auth/session';
 
@@ -960,6 +960,24 @@ describe('GET /public-stats', () => {
     expect(Array.isArray(body.stats.devices)).toBe(true);
     expect(Array.isArray(body.stats.dailyViews)).toBe(true);
     expect(typeof body.stats.botHitsTotal).toBe('number');
+    fetchMock.mockRestore();
+  });
+
+  it('sends the same SQL QUERY_TEMPLATES would generate for each metric (no duplicated inline SQL)', async () => {
+    const fetchMock = makeCfMock();
+    const env = makeEnv({ PUBLIC_STATS_SITES: 'example.com', CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok', DATASET_NAME: 'test' });
+    await worker.fetch(
+      new Request('https://worker.test/public-stats?site=example.com'),
+      env,
+      {} as ExecutionContext,
+    );
+    const sentBodies = fetchMock.mock.calls.map((call) => String((call[1] as RequestInit).body).trim());
+    const period = PERIOD_MAP['30d'];
+    const expectedTemplates = ['total-pageviews', 'total-visitors', 'top-pages', 'referrers', 'countries', 'devices', 'daily-views', 'bot-hits-total'];
+    for (const name of expectedTemplates) {
+      const expectedSql = QUERY_TEMPLATES[name].sql('test', period, 'example.com', '', '').trim();
+      expect(sentBodies).toContain(expectedSql);
+    }
     fetchMock.mockRestore();
   });
 
