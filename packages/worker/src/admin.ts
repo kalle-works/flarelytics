@@ -10,6 +10,7 @@ import {
   listSites, claimSite, verifySite, removeSite,
   SiteConflictError, NoClaimError, VerificationError,
 } from './auth/sites-store';
+import { timingSafeEqual } from './auth/crypto';
 import { dataCorsHeaders, getAllowedOrigins } from './cors';
 
 export async function handleAdminSites(request: Request, env: Env): Promise<Response> {
@@ -22,7 +23,7 @@ export async function handleAdminSites(request: Request, env: Env): Promise<Resp
   // Legacy mode: a valid X-API-Key manages the GLOBAL allowed_origins list
   // (programmatic/admin), unchanged for back-compat.
   const apiKey = request.headers.get('X-API-Key');
-  if (apiKey && env.QUERY_API_KEY && apiKey === env.QUERY_API_KEY) {
+  if (apiKey && env.QUERY_API_KEY && timingSafeEqual(apiKey, env.QUERY_API_KEY)) {
     return handleAdminSitesLegacy(request, env, cors);
   }
 

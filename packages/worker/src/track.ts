@@ -16,6 +16,7 @@ import {
 import type { Env } from './env';
 import { deviceType, browserName, osName } from './ua';
 import { fetchAllowedOrigins, corsHeaders } from './cors';
+import { timingSafeEqual } from './auth/crypto';
 
 // Phase 0.5 dual-emit allowlist. Hardcoded to Kiiru per MIGRATION_PLAN.md §4
 // "Phase 0.5 (Day 0 — Day 21) — Pilot validation on Kiiru only (T2A)".
@@ -141,7 +142,7 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
   // This prevents unauthenticated server-to-server event injection.
   if (!origin) {
     const incomingKey = request.headers.get('X-API-Key');
-    if (!incomingKey || incomingKey !== env.QUERY_API_KEY) {
+    if (!incomingKey || !env.QUERY_API_KEY || !timingSafeEqual(incomingKey, env.QUERY_API_KEY)) {
       return Response.json(
         { error: 'Unauthorized', hint: 'Server-side tracking requires X-API-Key header with your QUERY_API_KEY. Include a "site" field in the payload to identify the site.' },
         { status: 401 },

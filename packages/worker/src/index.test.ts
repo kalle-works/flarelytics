@@ -1135,3 +1135,44 @@ describe('multi-org auth — /admin/sites (org-scoped)', () => {
     expect(body.sites).toEqual([{ hostname: 'mine.com', label: 'Mine' }]);
   });
 });
+
+// ── Timing-safe X-API-Key comparisons ─────────────────────────────────────────
+// makeEnv()'s QUERY_API_KEY is 'test-key' (8 chars). 'test-kex' is the same
+// length, differing only in the last byte — a key that would defeat a naive
+// early-exit === comparison's timing signal but must still be rejected.
+describe('X-API-Key comparisons are timing-safe (equal-length, last-byte-different key rejected)', () => {
+  const WRONG_KEY_SAME_LENGTH = 'test-kex';
+
+  it('GET /query rejects a same-length wrong key (falls through to 401, no session)', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/query?q=top-pages&site=example.com', {
+        headers: { 'X-API-Key': WRONG_KEY_SAME_LENGTH },
+      }),
+      makeEnv(), {} as ExecutionContext,
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /track (server-side, no Origin) rejects a same-length wrong key', async () => {
+    const { ctx } = makeCtx();
+    const req = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': HUMAN_UA,
+        'X-API-Key': WRONG_KEY_SAME_LENGTH,
+      },
+      body: JSON.stringify({ event: 'purchase', path: '/checkout', site: 'example.com' }),
+    });
+    const res = await worker.fetch(req, makeEnv(), ctx);
+    expect(res.status).toBe(401);
+  });
+
+  it('legacy /admin/sites rejects a same-length wrong key (falls through to 401, no session)', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/admin/sites', { headers: { 'X-API-Key': WRONG_KEY_SAME_LENGTH } }),
+      makeEnv(), {} as ExecutionContext,
+    );
+    expect(res.status).toBe(401);
+  });
+});

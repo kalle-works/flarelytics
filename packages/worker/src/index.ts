@@ -24,6 +24,7 @@ import {
   dashboardOrigins, authCorsHeaders,
   handleLogin, handleCallback, handleLogout, handleMe, handleSwitchOrg,
 } from './auth/routes';
+import { timingSafeEqual } from './auth/crypto';
 import type { Env } from './env';
 import { corsHeaders, dataCorsHeaders, fetchAllowedOrigins } from './cors';
 import { deviceType, browserName, osName } from './ua';
@@ -34,7 +35,7 @@ import { handleTrackerJs } from './tracker-script';
 import { QUERY_TEMPLATES, PERIOD_MAP, FILTER_BLOB, parseFilters, injectFilters, runCFQuery } from './queries/v0';
 
 // Re-exported so existing imports of these helpers from './index' keep working.
-export { parseFilters, deviceType, browserName, osName, isBot, QUERY_TEMPLATES };
+export { parseFilters, deviceType, browserName, osName, isBot, QUERY_TEMPLATES, PERIOD_MAP };
 
 const VERSION = '0.2.0';
 
@@ -48,7 +49,7 @@ async function authorizeQuery(
   request: Request, env: Env, site: string | null, cors: Record<string, string>,
 ): Promise<Response | null> {
   const apiKey = request.headers.get('X-API-Key');
-  if (apiKey && env.QUERY_API_KEY && apiKey === env.QUERY_API_KEY) return null;
+  if (apiKey && env.QUERY_API_KEY && timingSafeEqual(apiKey, env.QUERY_API_KEY)) return null;
 
   const session = await readSession(request, env.SESSION_SECRET || '');
   if (!session) {
