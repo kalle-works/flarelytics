@@ -185,7 +185,7 @@ export function renderTopPageRowHtml(row: TopPageRow, shares: number | null): st
   const views = num(row.views);
   const visitors = num(row.visitors);
   let html =
-    '<tr class="drilldown-row" style="cursor:pointer;" data-path="' + esc(rawPath) + '">' +
+    '<tr class="drilldown-row" tabindex="0" style="cursor:pointer;" data-path="' + esc(rawPath) + '">' +
     '<td style="text-align:left;">' + path + '</td>' +
     '<td style="text-align:right;">' + views + '</td>' +
     '<td style="text-align:right;">' + visitors + '</td>';
@@ -199,7 +199,7 @@ export function renderTopPageRowHtml(row: TopPageRow, shares: number | null): st
 export function renderTopStoryRowHtml(row: TopPageRow, pct: number): string {
   const rawPath = row.path == null ? '' : String(row.path);
   return (
-    '<tr class="drilldown-row" style="cursor:pointer;" data-path="' + esc(rawPath) + '">' +
+    '<tr class="drilldown-row" tabindex="0" style="cursor:pointer;" data-path="' + esc(rawPath) + '">' +
     '<td style="text-align:left;">' + (esc(rawPath) || '-') + '</td>' +
     '<td style="text-align:right;">' + num(row.views) + '</td>' +
     '<td style="text-align:right;">' + num(row.visitors) + '</td>' +

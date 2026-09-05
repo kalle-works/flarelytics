@@ -133,6 +133,11 @@ describe('renderTopPageRowHtml — XSS regression', () => {
     expect(html).not.toContain(maliciousPath);
   });
 
+  it('is keyboard-focusable so the drill-down trigger is not mouse-only', () => {
+    const html = renderTopPageRowHtml({ path: '/a', views: 1, visitors: 1 }, null);
+    expect(html).toContain('tabindex="0"');
+  });
+
   it('includes the shares column only when shares is non-null', () => {
     const withShares = renderTopPageRowHtml({ path: '/a', views: 1, visitors: 1 }, 3);
     const withoutShares = renderTopPageRowHtml({ path: '/a', views: 1, visitors: 1 }, null);
@@ -147,5 +152,10 @@ describe('renderTopStoryRowHtml — XSS regression', () => {
     const html = renderTopStoryRowHtml({ path: `');alert(1);('`, views: 1, visitors: 1 }, 50);
     expect(html).not.toContain('onclick');
     expect(html).toContain('data-path="&#39;);alert(1);(&#39;"');
+  });
+
+  it('is keyboard-focusable so the drill-down trigger is not mouse-only', () => {
+    const html = renderTopStoryRowHtml({ path: '/a', views: 1, visitors: 1 }, 50);
+    expect(html).toContain('tabindex="0"');
   });
 });

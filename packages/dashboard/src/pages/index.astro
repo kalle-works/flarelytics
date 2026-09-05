@@ -766,6 +766,20 @@ document.addEventListener('click', function(e) {
   if (target.closest('#drilldown-close')) { closeDrilldown(); return; }
 });
 
+// tr.drilldown-row is tabindex="0" but is not a native <button>, so Enter/
+// Space need a manual handler to make the trigger keyboard-operable (and,
+// since it receives real focus, so "restore focus on close" has something
+// to restore focus to).
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  var target = e.target;
+  if (!target || !target.closest) return;
+  var drilldownRow = target.closest('tr.drilldown-row');
+  if (!drilldownRow) return;
+  e.preventDefault();
+  openDrilldown(drilldownRow.dataset.path, drilldownRow);
+});
+
 // `error` doesn't bubble, so favicon fallback needs a capture-phase listener.
 document.addEventListener('error', function(e) {
   var t = e.target;
