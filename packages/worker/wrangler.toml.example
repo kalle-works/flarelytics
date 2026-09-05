@@ -110,6 +110,13 @@ DATASET_NAME = "flarelytics"
 #                        Find at: https://dash.cloudflare.com → any zone → Overview sidebar
 #   SESSION_SECRET     — random 32+ byte string; signs the session cookie (SSO)
 #   OIDC_CLIENT_SECRET — OIDC client secret from your provider (SSO)
+#   VISITOR_SALT       — optional; random string salting the daily visitor
+#                        hash (blob9). Falls back to QUERY_API_KEY when unset,
+#                        so existing deployments keep working — set a
+#                        dedicated value if you want the visitor hash to
+#                        survive rotating QUERY_API_KEY. Changing this value
+#                        changes every visitor hash going forward (expected,
+#                        since the hash already rotates daily).
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Staging environment — used by MIGRATION_PLAN.md §9 Task B (baseline p99)

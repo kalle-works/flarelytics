@@ -120,12 +120,21 @@ export async function verifySite(
   return sites;
 }
 
-/** Remove a site from an org and release its global ownership + any pending claim. */
+/**
+ * Remove a site from an org and release its global ownership + any pending
+ * claim. When this org is the current owner, also releases the hostname's
+ * origin from the global /track CORS allowlist that verifySite granted —
+ * otherwise /track keeps accepting (and billing) events for a site no org
+ * can query anymore.
+ */
 export async function removeSite(kv: KVNamespace, orgId: string, hostname: string): Promise<OrgSite[]> {
   const sites = (await listSites(kv, orgId)).filter((s) => s.hostname !== hostname);
   await kv.put(orgKey(orgId), JSON.stringify(sites));
   const owner = await siteOwner(kv, hostname);
-  if (owner === orgId) await kv.delete(ownerKey(hostname));
+  if (owner === orgId) {
+    await kv.delete(ownerKey(hostname));
+    await removeGlobalOrigin(kv, hostname);
+  }
   await kv.delete(claimKey(orgId, hostname));
   return sites;
 }
@@ -168,6 +177,17 @@ async function addGlobalOrigin(kv: KVNamespace, hostname: string): Promise<void>
     origins.push(origin);
     await kv.put(GLOBAL_ORIGINS_KEY, JSON.stringify(origins));
   }
+}
+
+/** Remove the https origin for `hostname` from the global CORS allowlist (inverse of addGlobalOrigin). */
+async function removeGlobalOrigin(kv: KVNamespace, hostname: string): Promise<void> {
+  const origin = `https://${hostname}`;
+  const raw = await kv.get(GLOBAL_ORIGINS_KEY);
+  if (!raw) return;
+  let origins: string[];
+  try { origins = JSON.parse(raw); } catch { return; }
+  if (!Array.isArray(origins) || !origins.includes(origin)) return;
+  await kv.put(GLOBAL_ORIGINS_KEY, JSON.stringify(origins.filter((o) => o !== origin)));
 }
 
 export class SiteConflictError extends Error {

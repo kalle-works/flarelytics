@@ -98,15 +98,29 @@ describe('verifySite', () => {
 });
 
 describe('removeSite', () => {
-  it('removes the site and releases global ownership', async () => {
+  it('removes the site, releases global ownership, and drops the global /track origin', async () => {
     const { kv, store } = mockKV();
     const claim = await claimSite(kv, 'org-1', 'a.com') as PendingClaim;
     await verifySite(kv, 'org-1', 'a.com', undefined, dohWith(claim.verification.value));
+    expect(JSON.parse(store.get('allowed_origins')!)).toContain('https://a.com');
     const after = await removeSite(kv, 'org-1', 'a.com');
     expect(after).toEqual([]);
     expect(await siteOwner(kv, 'a.com')).toBeNull(); // released for re-claim
-    // Global /track origin remains (other tooling may rely on it).
-    expect(JSON.parse(store.get('allowed_origins')!)).toContain('https://a.com');
+    // The org no longer owns this site, so /track must stop accepting (and
+    // billing) events for it — the origin verifySite added is released too.
+    expect(JSON.parse(store.get('allowed_origins')!)).not.toContain('https://a.com');
+  });
+
+  it('leaves other origins in the global allowlist untouched', async () => {
+    const { kv, store } = mockKV();
+    const claimA = await claimSite(kv, 'org-1', 'a.com') as PendingClaim;
+    await verifySite(kv, 'org-1', 'a.com', undefined, dohWith(claimA.verification.value));
+    const claimB = await claimSite(kv, 'org-1', 'b.com') as PendingClaim;
+    await verifySite(kv, 'org-1', 'b.com', undefined, dohWith(claimB.verification.value));
+    await removeSite(kv, 'org-1', 'a.com');
+    const origins = JSON.parse(store.get('allowed_origins')!);
+    expect(origins).not.toContain('https://a.com');
+    expect(origins).toContain('https://b.com');
   });
 
   it('does not release ownership held by a different org', async () => {
