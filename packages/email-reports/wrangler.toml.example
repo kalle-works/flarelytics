@@ -8,7 +8,11 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 
-# Weekly cron: every Monday at 8:00 UTC
+# Weekly cron. NOTE: Cloudflare's day-of-week field is offset by one from
+# standard cron — `1` fires on SUNDAY here, not Monday. Verified against this
+# worker: the schedule below has been unchanged since 2026-03-30 and every
+# report has landed on a Sunday, while a GitHub Actions workflow using the
+# identical `0 4 * * 1` runs on Mondays. Use `2` for Monday, `1` for Sunday.
 [triggers]
 crons = ["0 8 * * 1"]
 
