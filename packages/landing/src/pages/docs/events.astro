@@ -17,9 +17,9 @@ const schema = [
 ];
 
 const builtins = [
-  { name: 'pageview', trigger: 'Every page load', fields: 'path, referrer, country, device, browser, UTM params' },
-  { name: 'outbound', trigger: 'External link click', fields: 'path, destination URL (blob5)' },
-  { name: 'timing', trigger: 'visibilitychange (tab close/switch)', fields: 'path, seconds on page (double2)' },
+  { name: 'pageview', trigger: 'Every page load, plus SPA route changes (pushState/replaceState/popstate)', fields: 'path, referrer, country, device, browser, UTM params' },
+  { name: 'outbound', trigger: 'External link click or middle-click; subdomains of the current site count as internal', fields: 'path, destination URL (blob5)' },
+  { name: 'timing', trigger: 'visibilitychange / pagehide, per visible period (resets on tab switch)', fields: 'path, seconds on page (double2)' },
   { name: 'scroll_depth', trigger: '25 / 50 / 75 / 100% scroll milestone', fields: 'path, depth percentage (blob5)' },
 ];
 ---

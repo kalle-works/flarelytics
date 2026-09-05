@@ -46,9 +46,9 @@ packages/
 ## Event Types
 
 Events written to Analytics Engine:
-- `pageview` — Page views with referrer, UTM params, device, browser, country
-- `outbound` — External link clicks (destination in blob5)
-- `timing` — Time on page in seconds (fires on `visibilitychange`); seconds stored in `double2`
+- `pageview` — Page views with referrer, UTM params, device, browser, country. Fires on load and on SPA route changes (pushState/replaceState/popstate); opt out with `data-no-spa`
+- `outbound` — External link clicks, including middle-click (destination in blob5); subdomains of the current site count as internal, not outbound
+- `timing` — Time on page in seconds, per *visible period* (resets on tab switch/pagehide, not cumulative since load); seconds stored in `double2`
 - `scroll_depth` — Scroll milestones 25/50/75/100% via IntersectionObserver (opt-in); depth in blob5
 - `bot_hit` — Bot traffic recorded separately for analytics; UA in blob5
 - `(custom)` — Any event via `flarelytics.track('event', { props })` — name in blob4, props in blob5
@@ -61,6 +61,7 @@ Events written to Analytics Engine:
 - Hash resets every day — no cross-day tracking
 - GDPR/CCPA compliant by architecture
 - Bot filtering built-in
+- Tracker skips sending on `localhost`/`127.0.0.1`/`[::1]`/`file:` by default (`data-allow-localhost` opts in), so local dev doesn't send test traffic into production
 
 ## Development
 

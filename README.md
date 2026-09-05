@@ -43,6 +43,21 @@ npx wrangler secret put CF_ACCOUNT_ID    # your CF account ID
 <script defer data-endpoint="https://your-worker.workers.dev" data-scroll-depth src="/tracker.js"></script>
 ```
 
+Pageviews, outbound link clicks, and time-on-page are tracked automatically, including
+client-side navigation in single-page apps (React Router, Vue Router, Astro view
+transitions, etc.) — a route change fires a pageview without a full page reload. The
+tracker also skips sending anything while running on `localhost`/`127.0.0.1`/`file://`,
+so a plain `npm run dev` session doesn't send test traffic into production. Both are
+configurable via script-tag attributes:
+
+```html
+<!-- Disable automatic SPA pageview tracking -->
+<script defer data-endpoint="https://your-worker.workers.dev" data-no-spa src="/tracker.js"></script>
+
+<!-- Send events even on localhost (useful when testing against a real worker) -->
+<script defer data-endpoint="https://your-worker.workers.dev" data-allow-localhost src="/tracker.js"></script>
+```
+
 Or with npm:
 
 ```bash
@@ -57,6 +72,9 @@ init('https://your-worker.workers.dev')
 
 // With scroll depth tracking at 25/50/75/100% milestones
 init('https://your-worker.workers.dev', { scrollDepth: true })
+
+// Disable SPA navigation tracking, or send events on localhost
+init('https://your-worker.workers.dev', { noSpa: true, allowLocalhost: true })
 
 // Track custom events
 track('signup', { props: { plan: 'pro' } })

@@ -253,6 +253,22 @@
             <div><span class="code-string">  data-scroll-depth="true"&gt;&lt;/script&gt;</span></div>
           </div>
         </div>
+        <p>Pageviews, outbound link clicks, and time-on-page are tracked automatically — including client-side navigation in single-page apps, where a route change fires a pageview without a full reload. The tracker also skips sending anything on <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">localhost</code>/<code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">127.0.0.1</code>/<code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">file://</code> by default, so local dev doesn't pollute production data. Both are opt-out/opt-in via attributes:</p>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dot" style="background:#dc2626;"></div>
+            <div class="code-dot" style="background:#dc6b14;"></div>
+            <div class="code-dot" style="background:#16a34a;"></div>
+            <div class="code-label">HTML</div>
+          </div>
+          <div class="code-body">
+            <div><span class="code-comment">&lt;!-- disable automatic SPA pageview tracking --&gt;</span></div>
+            <div><span class="code-string">&lt;script defer src="https://my-site-analytics.workers.dev/tracker.js" data-no-spa&gt;&lt;/script&gt;</span></div>
+            <div>&nbsp;</div>
+            <div><span class="code-comment">&lt;!-- send events even on localhost --&gt;</span></div>
+            <div><span class="code-string">&lt;script defer src="https://my-site-analytics.workers.dev/tracker.js" data-allow-localhost&gt;&lt;/script&gt;</span></div>
+          </div>
+        </div>
 
         <h2 id="verify">Verify it works</h2>
         <div class="code-block">
