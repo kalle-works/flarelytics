@@ -94,6 +94,29 @@ describe('handleTrack — server-side auth gate (no Origin header)', () => {
   });
 });
 
+describe('handleTrack — salted, per-site visitor hash', () => {
+  async function blob9For(env: ReturnType<typeof makeEnv>, origin: string): Promise<string> {
+    env.ANALYTICS.writeDataPoint.mockClear();
+    const res = await worker.fetch(trackRequest({ event: 'pageview', path: '/' }, { Origin: origin }), env as any, {} as any);
+    expect(res.status).toBe(204);
+    return env.ANALYTICS.writeDataPoint.mock.calls[0][0].blobs[8];
+  }
+
+  it('gives the same visitor a different blob9 on each site', async () => {
+    const env = makeEnv({ ALLOWED_ORIGINS: 'https://site-a.com,https://site-b.com' });
+    const a = await blob9For(env, 'https://site-a.com');
+    const b = await blob9For(env, 'https://site-b.com');
+    expect(a).toHaveLength(16);
+    expect(a).not.toBe(b);
+  });
+
+  it('changes blob9 when VISITOR_SALT changes', async () => {
+    const a = await blob9For(makeEnv({ VISITOR_SALT: 'salt-one' }), 'https://example.com');
+    const b = await blob9For(makeEnv({ VISITOR_SALT: 'salt-two' }), 'https://example.com');
+    expect(a).not.toBe(b);
+  });
+});
+
 describe('handleTrack — OS detection and revenue tracking parity', () => {
   it('stores the operating system in blob13', async () => {
     const env = makeEnv();

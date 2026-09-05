@@ -527,6 +527,31 @@ describe('tracker', () => {
       tracker.init('https://analytics.example.com', { allowLocalhost: true });
       expect(beaconSpy).toHaveBeenCalledTimes(1);
     });
+
+    it('reads data-allow-localhost from the script tag on auto-init', async () => {
+      stubLocation('http://localhost:3000/');
+      const script = document.createElement('script');
+      script.dataset.endpoint = 'https://analytics.example.com';
+      script.dataset.allowLocalhost = '';
+      Object.defineProperty(document, 'currentScript', { configurable: true, value: script });
+      await import('./tracker');
+      expect(beaconSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads data-no-spa from the script tag on auto-init', async () => {
+      NATIVE_REPLACE_STATE(null, '', 'https://example.com/');
+      const script = document.createElement('script');
+      script.dataset.endpoint = 'https://analytics.example.com';
+      script.dataset.noSpa = '';
+      Object.defineProperty(document, 'currentScript', { configurable: true, value: script });
+      await import('./tracker');
+      beaconSpy.mockClear();
+      sentPayloads = [];
+
+      history.pushState(null, '', '/second');
+
+      expect(sentPayloads).toHaveLength(0);
+    });
   });
 
   describe('fetch fallback (no sendBeacon)', () => {
