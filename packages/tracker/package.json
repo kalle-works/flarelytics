@@ -1,7 +1,7 @@
 {
   "name": "@flarelytics/tracker",
   "version": "0.2.0",
-  "description": "Privacy-first analytics tracker for Flarelytics. Under 1KB gzipped.",
+  "description": "Privacy-first analytics tracker for Flarelytics. Under 2KB gzipped.",
   "main": "dist/tracker.js",
   "module": "dist/tracker.mjs",
   "types": "dist/tracker.d.ts",

@@ -17,6 +17,8 @@ interface Env {
   CF_API_TOKEN: string;
   DATASET_NAME: string;
   PUBLIC_STATS_SITES?: string;
+  /** Secret pepper for the visitor hash. Falls back to QUERY_API_KEY if unset. */
+  VISITOR_SALT?: string;
 }
 
 interface TrackPayload {
@@ -32,6 +34,10 @@ interface TrackPayload {
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
+  /** Site hostname — required for server-side tracking (no Origin header) */
+  site?: string;
+  /** Revenue / conversion value — stored in double3, used by revenue-by-event query */
+  value?: number;
 }
 
 // Legacy short-form payload (backwards compatible with mailtoolfinder format)
@@ -47,6 +53,50 @@ interface LegacyPayload {
 }
 
 const VERSION = '0.2.0';
+
+// Query filter support — maps ?filter[key]=value params to SQL WHERE clauses.
+// Values are validated against strict patterns before use; single quotes are
+// also escaped as a second layer of defence against SQL injection.
+const FILTER_BLOB: Record<string, string> = {
+  country:      'blob3',
+  referrer:     'blob2',
+  page:         'blob1',
+  device:       'blob11',
+  browser:      'blob12',
+  os:           'blob13',
+  utm_source:   'blob6',
+  utm_campaign: 'blob8',
+};
+
+const FILTER_PATTERN: Record<string, RegExp> = {
+  country:      /^[A-Z]{2}$/,
+  device:       /^(mobile|tablet|desktop)$/,
+  browser:      /^[a-zA-Z0-9 ]{1,30}$/,
+  os:           /^[a-zA-Z0-9 ]{1,20}$/,
+  referrer:     /^[a-zA-Z0-9.\-]{1,100}$/,
+  page:         /^\/[a-zA-Z0-9.\-_/]*$/,
+  utm_source:   /^[a-zA-Z0-9.\-_]{1,50}$/,
+  utm_campaign: /^[a-zA-Z0-9.\-_ ]{1,100}$/,
+};
+
+export function parseFilters(url: URL): string {
+  const clauses: string[] = [];
+  for (const [key, value] of url.searchParams.entries()) {
+    const m = key.match(/^filter\[([a-z_]+)\]$/);
+    if (!m) continue;
+    const k = m[1];
+    if (!FILTER_BLOB[k] || !FILTER_PATTERN[k]) continue;
+    if (!FILTER_PATTERN[k].test(value)) continue;
+    const safe = value.replace(/'/g, "''");
+    clauses.push(`AND ${FILTER_BLOB[k]} = '${safe}'`);
+  }
+  return clauses.join(' ');
+}
+
+function injectFilters(sql: string, filterClauses: string): string {
+  if (!filterClauses) return sql;
+  return sql.replace(/AND blob10 = '[^']+'/g, (m) => `${m} ${filterClauses}`);
+}
 
 const DEFAULT_BOT_PATTERNS = [
   'bot', 'crawl', 'spider', 'slurp', 'baidu', 'yandex',
@@ -70,6 +120,16 @@ export function browserName(ua: string): string {
   if (/Firefox\//.test(ua)) return 'Firefox';
   if (/Mobile.*Safari/.test(ua)) return 'Safari Mobile';
   if (/Safari\//.test(ua)) return 'Safari';
+  return 'Other';
+}
+
+export function osName(ua: string): string {
+  if (/iPhone|iPad|iPod/.test(ua)) return 'iOS';
+  if (/Android/.test(ua)) return 'Android';
+  if (/CrOS/.test(ua)) return 'ChromeOS';
+  if (/Windows/.test(ua)) return 'Windows';
+  if (/Macintosh|Mac OS X/.test(ua)) return 'macOS';
+  if (/Linux/.test(ua)) return 'Linux';
   return 'Other';
 }
 
@@ -99,12 +159,37 @@ function corsHeaders(origin: string | null, env: Env, allowAny = false): Record<
   return headers;
 }
 
-/** Daily-rotating visitor hash. GDPR-friendly: no raw IP stored. */
-async function visitorHash(ip: string, ua: string): Promise<string> {
+/**
+ * Constant-time string comparison for API key checks — prevents a remote
+ * timing attack from narrowing down QUERY_API_KEY one byte at a time.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  const aa = new TextEncoder().encode(a);
+  const bb = new TextEncoder().encode(b);
+  if (aa.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aa.length; i++) diff |= aa[i] ^ bb[i];
+  return diff === 0;
+}
+
+/**
+ * Daily-rotating, per-site, salted visitor hash. GDPR-friendly: no raw IP
+ * stored. Keyed by VISITOR_SALT (falling back to QUERY_API_KEY when unset)
+ * so the hash cannot be reversed from dataset access alone via a
+ * precomputed IP/UA table.
+ */
+async function visitorHash(ip: string, ua: string, site: string, env: Env): Promise<string> {
+  const salt = env.VISITOR_SALT || env.QUERY_API_KEY;
   const date = new Date().toISOString().slice(0, 10);
-  const data = new TextEncoder().encode(`${ip}:${ua}:${date}`);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash).slice(0, 8))
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(salt),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${ip}:${ua}:${site}:${date}`));
+  return Array.from(new Uint8Array(signature))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
@@ -135,6 +220,21 @@ function normalizePayload(raw: TrackPayload | LegacyPayload): TrackPayload {
 
 async function handleTrack(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get('Origin');
+
+  // Server-side tracking: no Origin header → require X-API-Key for auth.
+  // This prevents unauthenticated server-to-server event injection — anyone
+  // omitting the Origin header (curl, a script, fetch outside CORS mode)
+  // would otherwise bypass the origin allowlist entirely.
+  if (!origin) {
+    const incomingKey = request.headers.get('X-API-Key');
+    if (!incomingKey || !timingSafeEqual(incomingKey, env.QUERY_API_KEY)) {
+      return Response.json(
+        { error: 'Unauthorized', hint: 'Server-side tracking requires X-API-Key header with your QUERY_API_KEY. Include a "site" field in the payload to identify the site.' },
+        { status: 401 },
+      );
+    }
+  }
+
   const cors = corsHeaders(origin, env);
 
   const allowed = getAllowedOrigins(env);
@@ -192,11 +292,18 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
   const country = (request.cf?.country as string) || 'XX';
   const propValue = body.props ? Object.values(body.props).join('|').slice(0, 200) : '';
 
-  const ip = request.headers.get('CF-Connecting-IP') || '0.0.0.0';
-  const vid = await visitorHash(ip, ua);
+  // Derive site from Origin header, strip www. prefix; for server-side
+  // requests (no Origin, already X-API-Key gated above) fall back to a
+  // validated "site" field in the body.
+  const site = origin
+    ? (() => { try { return new URL(origin).hostname.replace(/^www\./, ''); } catch { return origin; } })()
+    : (() => {
+        const s = typeof body.site === 'string' ? body.site.trim().replace(/^www\./, '') : '';
+        return /^[a-zA-Z0-9.\-]+$/.test(s) ? s : '';
+      })();
 
-  // Derive site from Origin header, strip www. prefix
-  const site = origin ? (() => { try { return new URL(origin).hostname.replace(/^www\./, ''); } catch { return origin; } })() : '';
+  const ip = request.headers.get('CF-Connecting-IP') || '0.0.0.0';
+  const vid = await visitorHash(ip, ua, site, env);
 
   // If referrer hostname matches the site itself, treat as direct (internal navigation)
   const rawReferrer = (body.referrer || 'direct').slice(0, 500);
@@ -204,8 +311,11 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
 
   // For timing events, extract seconds into double2 for AVG queries
   const timingSeconds = eventName === 'timing' ? (parseFloat(body.props?.seconds || '0') || 0) : 0;
+  // Revenue value (double3) — only for custom events with a numeric value field
+  const revenueValue = typeof body.value === 'number' && isFinite(body.value) && body.value >= 0 ? body.value : 0;
   const device = deviceType(ua);
   const browser = browserName(ua);
+  const os = osName(ua);
 
   env.ANALYTICS.writeDataPoint({
     blobs: [
@@ -221,8 +331,9 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
       site,                                      // blob10: site hostname
       device,                                    // blob11: device type (mobile/tablet/desktop)
       browser,                                   // blob12: browser name
+      os,                                        // blob13: operating system
     ],
-    doubles: [1, timingSeconds],               // double1: event count, double2: timing seconds
+    doubles: [1, timingSeconds, revenueValue], // double1: event count, double2: timing seconds, double3: revenue value
     indexes: [path],
   });
 
@@ -230,7 +341,7 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
 }
 
 // Query templates
-const QUERY_TEMPLATES: Record<string, {
+export const QUERY_TEMPLATES: Record<string, {
   description: string;
   sql: (ds: string, p: string, site: string, eventName: string, page: string) => string;
   requiresPage?: boolean;
@@ -375,6 +486,15 @@ const QUERY_TEMPLATES: Record<string, {
       GROUP BY browser ORDER BY views DESC LIMIT 10
     `,
   },
+  'operating-systems': {
+    description: 'Pageviews by operating system',
+    sql: (ds, p, site) => `
+      SELECT blob13 AS os, SUM(_sample_interval * double1) AS views
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}'
+      GROUP BY os ORDER BY views DESC LIMIT 10
+    `,
+  },
   'top-pages-visitors': {
     description: 'Top pages with both views and unique visitor counts',
     sql: (ds, p, site) => `
@@ -513,7 +633,6 @@ const QUERY_TEMPLATES: Record<string, {
       GROUP BY path, depth ORDER BY path ASC, depth ASC
     `,
   },
-  // new-vs-returning is handled separately (requires two CF API calls)
   'total-sessions': {
     description: 'Total sessions in period (based on timing events)',
     sql: (ds, p, site) => `
@@ -609,6 +728,30 @@ const QUERY_TEMPLATES: Record<string, {
       GROUP BY country ORDER BY hits DESC LIMIT 15
     `,
   },
+
+  'revenue-by-event': {
+    description: 'Events with revenue value — total, count, and average (requires value field in track calls)',
+    sql: (ds, p, site) => `
+      SELECT blob4 AS event,
+        ROUND(SUM(_sample_interval * double3), 2) AS revenue,
+        SUM(_sample_interval * double1) AS count,
+        ROUND(AVG(_sample_interval * double3), 2) AS avg_value
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND double3 > 0 AND blob10 = '${site}'
+      GROUP BY event ORDER BY revenue DESC LIMIT 20
+    `,
+  },
+  'revenue-over-time': {
+    description: 'Daily revenue totals and conversion counts',
+    sql: (ds, p, site) => `
+      SELECT toDate(timestamp) AS date,
+        ROUND(SUM(_sample_interval * double3), 2) AS revenue,
+        SUM(_sample_interval * double1) AS conversions
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND double3 > 0 AND blob10 = '${site}'
+      GROUP BY date ORDER BY date ASC
+    `,
+  },
 };
 
 const PERIOD_MAP: Record<string, string> = {
@@ -637,41 +780,12 @@ async function runCFQuery(sql: string, env: Env): Promise<any> {
   return response.json();
 }
 
-async function handleNewVsReturning(env: Env, site: string, period: string, dataset: string, cors: Record<string, string>): Promise<Response> {
-  const currentSql = `SELECT blob9 AS vid FROM ${dataset} WHERE timestamp > NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}' GROUP BY blob9`;
-  const priorSql   = `SELECT blob9 AS vid FROM ${dataset} WHERE timestamp <= NOW() - INTERVAL ${period} AND blob4 = 'pageview' AND blob10 = '${site}' GROUP BY blob9`;
-
-  try {
-    const [currentData, priorData] = await Promise.all([
-      runCFQuery(currentSql, env),
-      runCFQuery(priorSql, env),
-    ]);
-
-    const currentVids: string[] = (currentData.data ?? []).map((r: any) => r.vid);
-    const priorVids = new Set<string>((priorData.data ?? []).map((r: any) => r.vid));
-
-    let newVisitors = 0, returningVisitors = 0;
-    for (const vid of currentVids) {
-      if (priorVids.has(vid)) returningVisitors++;
-      else newVisitors++;
-    }
-
-    return Response.json(
-      { data: [{ new_visitors: newVisitors, returning_visitors: returningVisitors, total: currentVids.length }] },
-      { headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' } },
-    );
-  } catch (err) {
-    console.log(`[new-vs-returning] error: ${err}`);
-    return Response.json({ error: 'Query execution failed', hint: 'The new-vs-returning query requires two Analytics Engine API calls. Check that CF_API_TOKEN and CF_ACCOUNT_ID are configured correctly.' }, { status: 502, headers: cors });
-  }
-}
-
 async function handleQuery(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get('Origin');
   const cors = corsHeaders(origin, env, true);
 
   const apiKey = request.headers.get('X-API-Key');
-  if (!apiKey || apiKey !== env.QUERY_API_KEY) {
+  if (!apiKey || !timingSafeEqual(apiKey, env.QUERY_API_KEY)) {
     return Response.json({ error: 'Unauthorized', hint: 'Include X-API-Key header with your QUERY_API_KEY.' }, { status: 401, headers: cors });
   }
 
@@ -681,16 +795,14 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   const siteParam = url.searchParams.get('site');
   const eventNameParam = url.searchParams.get('event_name') || '';
   const pageParam = url.searchParams.get('page') || '';
+  const filterClauses = parseFilters(url);
 
-  const validQueries = [...Object.keys(QUERY_TEMPLATES), 'new-vs-returning'];
+  const validQueries = Object.keys(QUERY_TEMPLATES);
   if (!queryName || !validQueries.includes(queryName)) {
     return Response.json(
       {
         error: 'Invalid query',
-        available: [
-          ...Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
-          { name: 'new-vs-returning', description: 'New vs returning visitors in the selected period' },
-        ],
+        available: Object.entries(QUERY_TEMPLATES).map(([name, q]) => ({ name, description: q.description })),
       },
       { status: 400, headers: cors },
     );
@@ -721,11 +833,6 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     return Response.json({ error: 'DATASET_NAME not configured', hint: 'Set DATASET_NAME in wrangler.toml under [vars]. It must match your Analytics Engine dataset binding.' }, { status: 500, headers: cors });
   }
 
-  // new-vs-returning requires two CF API calls — handled separately
-  if (queryName === 'new-vs-returning') {
-    return handleNewVsReturning(env, siteParam, period, dataset, cors);
-  }
-
   // funnel-by-event requires a valid event_name param
   if (queryName === 'funnel-by-event') {
     if (!eventNameParam || !/^[a-zA-Z0-9_\-]+$/.test(eventNameParam)) {
@@ -740,7 +847,7 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  const sql = template.sql(dataset, period, siteParam, eventNameParam, pageParam);
+  const sql = injectFilters(template.sql(dataset, period, siteParam, eventNameParam, pageParam), filterClauses);
 
   try {
     const response = await fetch(
@@ -792,6 +899,13 @@ function handleConfig(env: Env): Response {
       endpoint: '/track',
       method: 'POST',
       events: ['pageview', 'outbound', '(any custom event name)'],
+      server_side: 'POST /track with X-API-Key header and "site" field in body — no Origin required',
+      revenue: 'Add "value": <number> to any custom event payload to track revenue (stored in double3)',
+    },
+    filters: {
+      description: 'Scope any query to a dimension via ?filter[key]=value',
+      keys: Object.keys(FILTER_BLOB),
+      example: '?q=top-pages&period=30d&site=yoursite.com&filter[country]=FI&filter[device]=mobile',
     },
   }, {
     headers: { 'Cache-Control': 'public, max-age=3600' },

@@ -10,7 +10,7 @@ Privacy-first web analytics that runs entirely on Cloudflare. No cookies, no ext
 - **Runtime:** Cloudflare Workers
 - **Storage:** Cloudflare Analytics Engine (event data), KV (config/reports)
 - **Dashboard:** Astro static site (deployed alongside worker)
-- **Tracker:** Vanilla JS (<1KB gzipped)
+- **Tracker:** Vanilla JS (under 2KB gzipped)
 - **Email Reports:** Cloudflare Worker cron + Euromail SDK
 - **Monorepo:** npm workspaces + Turbo
 
@@ -57,7 +57,7 @@ Events written to Analytics Engine:
 
 - No cookies
 - No fingerprinting
-- Daily-rotating visitor hash (SHA-256 of IP+UA+date) for unique visitor counts
+- Daily-rotating, per-site visitor hash (HMAC-SHA256 of IP+UA+site+date, keyed by `VISITOR_SALT`) for unique visitor counts
 - Hash resets every day — no cross-day tracking
 - GDPR/CCPA compliant by architecture
 - Bot filtering built-in
@@ -101,6 +101,7 @@ DATASET_NAME = "my-site"
 - `QUERY_API_KEY` — Random string for dashboard authentication
 - `CF_API_TOKEN` — Cloudflare API token with Analytics Engine read access
 - `CF_ACCOUNT_ID` — Your Cloudflare account ID
+- `VISITOR_SALT` — Secret pepper for the visitor hash; falls back to `QUERY_API_KEY` if unset
 
 ## Analytics Engine Schema
 
@@ -129,9 +130,9 @@ All queries must include `AND blob10 = '${site}'` to scope to a single site.
 
 ## Available Queries
 
-37 queries available via `GET /query?q=<name>&period=<period>&site=<hostname>`:
+39 queries available via `GET /query?q=<name>&period=<period>&site=<hostname>`:
 
-**Traffic:** `top-pages`, `top-pages-visitors`, `top-pages-stories`, `daily-views`, `daily-unique-visitors`, `new-vs-returning`, `total-sessions`
+**Traffic:** `top-pages`, `top-pages-visitors`, `top-pages-stories`, `daily-views`, `daily-unique-visitors`, `total-sessions`
 
 **Revenue:** `revenue-by-event`, `revenue-over-time` (only populated when `value` field is sent in track calls)
 
@@ -143,7 +144,7 @@ All queries must include `AND blob10 = '${site}'` to scope to a single site.
 
 **Content:** `page-views-over-time` (?page=), `page-timing`, `timing-by-page` (?page=), `bounce-rate-by-page` (?event_name=seconds), `scroll-depth`, `scroll-depth-by-page`, `scroll-depth-for-page` (?page=)
 
-**Geo/Devices:** `countries`, `countries-by-page` (?page=), `devices`, `browsers`
+**Geo/Devices:** `countries`, `countries-by-page` (?page=), `devices`, `browsers`, `operating-systems`
 
 **Conversions:** `outbound-links`, `page-performance`, `custom-events`, `conversion-funnel`, `funnel-by-event` (?event_name=)
 
@@ -165,7 +166,7 @@ GET /query?v=1&q=<name>&site=<hostname>&period=<period>
 |---|---|
 | `loop-overview` | `{ period, site, partial, status, kpis, articles[] }` — Distribution Loop view: shares → social inbound → engaged reads → quality score, surfaced at canonical_url_hash level |
 
-v1 queries return a structured object (not the raw CF SQL `{data:[...]}` envelope). They aggregate multiple parallel SQL calls inside the worker using `Promise.allSettled`, so partial failures degrade gracefully — failed buckets surface as `null` KPIs and `partial: true`. v0 queries are unchanged.
+v1 queries return a structured object (not the raw CF SQL `{data:[...]}` envelope). They aggregate multiple parallel SQL calls inside the worker using `Promise.all` over a per-bucket `tryRun` wrapper that catches its own errors and resolves to `null` (rather than `Promise.allSettled`), so partial failures degrade gracefully — failed buckets surface as `null` KPIs and `partial: true`. v0 queries are unchanged.
 
 Loop view filters:
 - `shares_out` counts only outbound clicks whose target URL was recognized as a known social platform (`bluesky`, `facebook`, `hn`, `reddit`, `x`, `mastodon`) — non-social outbound clicks (source links, ads) are excluded.
