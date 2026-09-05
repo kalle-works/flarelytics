@@ -20,10 +20,11 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsup src/tracker.ts --format cjs,esm --dts --minify",
+    "build": "tsup src/tracker.ts --format cjs,esm --dts --minify && tsup src/tracker.ts --format iife --minify --clean=false && mv -f dist/tracker.global.js dist/tracker.iife.js && npm run size",
     "dev": "tsup src/tracker.ts --format cjs,esm --dts --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "size": "node scripts/check-size.mjs",
     "prepublishOnly": "tsup src/tracker.ts --format cjs,esm --dts --minify"
   },
   "devDependencies": {
