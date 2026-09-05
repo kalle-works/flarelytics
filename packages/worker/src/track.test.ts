@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { visitorHash } from './track';
+import { describe, it, expect, vi } from 'vitest';
+import { visitorHash, handleTrack } from './track';
 import { handleTrackerJs } from './tracker-script';
+import type { Env } from './env';
 
 describe('visitorHash', () => {
   it('scopes the hash per-site: same ip/ua/date on two different sites produces different hashes', async () => {
@@ -44,5 +45,40 @@ describe('handleTrackerJs', () => {
     const body = await res.text();
     expect(body).toContain('https://other-worker.example.net');
     expect(body).not.toContain('https://api.example.com');
+  });
+});
+
+describe('handleTrack — props serialization (blob5)', () => {
+  function makeEnv(): Env {
+    return {
+      ANALYTICS: { writeDataPoint: vi.fn() },
+      QUERY_API_KEY: 'test-key',
+      ALLOWED_ORIGINS: '',
+    } as unknown as Env;
+  }
+
+  function makeCtx(): ExecutionContext {
+    return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
+  }
+
+  it('escapes a literal "|" inside a prop value so it cannot desync the pipe-joined blob5 format', async () => {
+    const env = makeEnv();
+    const req = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0', 'X-API-Key': 'test-key' },
+      body: JSON.stringify({
+        event: 'share',
+        path: '/post',
+        site: 'example.com',
+        props: { url: 'a|b', x: 'c' },
+      }),
+    });
+
+    const res = await handleTrack(req, env, makeCtx());
+    expect(res.status).toBe(204);
+
+    const call = (env.ANALYTICS.writeDataPoint as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const blob5 = call.blobs[4];
+    expect(blob5).toBe('a%7Cb|c');
   });
 });

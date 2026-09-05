@@ -291,7 +291,15 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
   const path = body.path.replace(/\/+$/, '').slice(0, 500) || '/';
   const eventName = body.event.slice(0, 100);
   const country = (request.cf?.country as string) || 'XX';
-  const propValue = body.props ? Object.values(body.props).join('|').slice(0, 200) : '';
+  // v0's blob5 is a positional pipe-joined string (the dashboard parses it
+  // by index, e.g. `share` events' url prop). A literal `|` inside a value
+  // — legal in a URL query string or fragment — would otherwise desync that
+  // positional parsing, so escape it before joining. `%7C` mirrors how a
+  // URL-encoded pipe already looks, so an escaped value round-trips the same
+  // way a real encoded pipe would if it appeared in, say, a URL prop.
+  const propValue = body.props
+    ? Object.values(body.props).map((v) => String(v).replace(/\|/g, '%7C')).join('|').slice(0, 200)
+    : '';
 
   // Derive site early so we can preflight v1-only constraints.
   // For server-side requests (no Origin), use body.site with hostname validation.
