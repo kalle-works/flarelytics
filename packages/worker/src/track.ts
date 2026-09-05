@@ -63,18 +63,13 @@ export interface LegacyPayload {
   utm_campaign?: string;
 }
 
-const DEFAULT_BOT_PATTERNS = [
-  'bot', 'crawl', 'spider', 'slurp', 'baidu', 'yandex',
-  'lighthouse', 'pagespeed', 'gtmetrix', 'pingdom', 'uptimerobot',
-  'headlesschrome', 'phantomjs', 'semrush', 'ahrefs', 'moz.com',
-  'dotbot', 'facebookexternalhit', 'twitterbot', 'linkedinbot',
-  'whatsapp', 'telegrambot', 'bytespider', 'gptbot', 'claudebot',
-];
-
+// Delegates to the v1 classifier so there is a single bot pattern list
+// (v0 previously carried its own drifting, naive substring-only copy — see
+// classifier/index.ts for the token-boundary matching that avoids false
+// positives like `gptbotmalicious` matching `gptbot`).
 export function isBot(ua: string): boolean {
   if (!ua) return true;
-  const lower = ua.toLowerCase();
-  return DEFAULT_BOT_PATTERNS.some((p) => lower.includes(p));
+  return classifyUserAgent(ua).bot_class !== 'human';
 }
 
 /**

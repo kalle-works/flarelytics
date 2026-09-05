@@ -170,6 +170,22 @@ describe('isBot', () => {
   it('allows Firefox', () => {
     expect(isBot('Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0')).toBe(false);
   });
+
+  // v0's old isBot did a flat substring match on bare strings like 'baidu'
+  // and 'yandex' (no token-boundary check), so a real, human-driven browser
+  // whose UA merely contains one of those words as a substring — not the
+  // actual bot suffix ('baiduspider', 'yandexbot') — was misclassified as a
+  // bot. Delegating to the v1 classifier's token-boundary matching fixes
+  // this false-positive class (the 'gptbotmalicious' style problem): a UA
+  // still gets flagged when it contains a real bot token, but no longer
+  // just because it contains a substring of one.
+  it('does not flag a real human browser whose UA merely contains "baidu" without the baiduspider bot token', () => {
+    expect(isBot('Mozilla/5.0 (Linux; Android 9; SM-G960F) BaiduBrowser/11.4')).toBe(false);
+  });
+
+  it('does not flag a real human tool whose UA merely contains "yandex" without the yandexbot bot token', () => {
+    expect(isBot('Mozilla/5.0 (Windows NT 10.0) YandexTranslate/1.0')).toBe(false);
+  });
 });
 
 describe('deviceType', () => {
