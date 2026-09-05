@@ -57,7 +57,7 @@ Events written to Analytics Engine:
 
 - No cookies
 - No fingerprinting
-- Daily-rotating, per-site visitor hash (HMAC-SHA256 of IP+UA+site+date, keyed by `VISITOR_SALT`) for unique visitor counts
+- Daily-rotating, per-site visitor hash (SHA-256 of `VISITOR_SALT`+IP+UA+site+date) for unique visitor counts
 - Hash resets every day — no cross-day tracking
 - GDPR/CCPA compliant by architecture
 - Bot filtering built-in
@@ -130,9 +130,9 @@ All queries must include `AND blob10 = '${site}'` to scope to a single site.
 
 ## Available Queries
 
-39 queries available via `GET /query?q=<name>&period=<period>&site=<hostname>`:
+41 queries available via `GET /query?q=<name>&period=<period>&site=<hostname>`:
 
-**Traffic:** `top-pages`, `top-pages-visitors`, `top-pages-stories`, `daily-views`, `daily-unique-visitors`, `total-sessions`
+**Traffic:** `top-pages`, `top-pages-visitors`, `top-pages-stories`, `daily-views`, `daily-unique-visitors`, `total-sessions`, `total-pageviews`, `total-visitors`
 
 **Revenue:** `revenue-by-event`, `revenue-over-time` (only populated when `value` field is sent in track calls)
 

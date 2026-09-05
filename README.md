@@ -156,6 +156,8 @@ X-API-Key: your-api-key
 | `daily-views` | | Pageviews per day |
 | `daily-unique-visitors` | | Unique visitors per day (+ total views) |
 | `total-sessions` | | Total sessions in period. A session is a `timing` event, which only fires after >1s of dwell time — pages left immediately aren't counted |
+| `total-pageviews` | | Total pageviews in period |
+| `total-visitors` | | Total unique visitors in period |
 
 **Referrers & Acquisition**
 
