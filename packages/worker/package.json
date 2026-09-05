@@ -12,6 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@flarelytics/tracker": "*"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250312.0",
     "typescript": "^5.8.0",
