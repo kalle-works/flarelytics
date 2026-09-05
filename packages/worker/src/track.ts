@@ -77,10 +77,23 @@ export function isBot(ua: string): boolean {
   return DEFAULT_BOT_PATTERNS.some((p) => lower.includes(p));
 }
 
-/** Daily-rotating visitor hash. GDPR-friendly: no raw IP stored. */
-async function visitorHash(ip: string, ua: string): Promise<string> {
+/**
+ * Daily-rotating visitor hash. GDPR-friendly: no raw IP stored, and scoped
+ * per-site so the same physical visitor doesn't hash to the same blob9 value
+ * across two unrelated tenant sites — without the site component, anyone
+ * reading the raw Analytics Engine dataset (e.g. via CF_API_TOKEN) could
+ * correlate one visitor's traffic across tenants.
+ *
+ * Salt defaults to QUERY_API_KEY when VISITOR_SALT is unset so existing
+ * deployments keep working without provisioning a new secret. Rotating the
+ * salt (or setting VISITOR_SALT for the first time) changes every hash going
+ * forward — expected, since the hash already rotates daily; the day of the
+ * change will double-count returning visitors as new for that one day.
+ */
+export async function visitorHash(env: Pick<Env, 'VISITOR_SALT' | 'QUERY_API_KEY'>, ip: string, ua: string, site: string): Promise<string> {
+  const salt = env.VISITOR_SALT ?? env.QUERY_API_KEY ?? '';
   const date = new Date().toISOString().slice(0, 10);
-  const data = new TextEncoder().encode(`${ip}:${ua}:${date}`);
+  const data = new TextEncoder().encode(`${salt}:${ip}:${ua}:${site}:${date}`);
   const hash = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hash).slice(0, 8))
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -311,7 +324,7 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
   }
 
   const ip = request.headers.get('CF-Connecting-IP') || '0.0.0.0';
-  const vid = await visitorHash(ip, ua);
+  const vid = await visitorHash(env, ip, ua, site);
 
   // If referrer hostname matches the site itself, treat as direct (internal navigation)
   const rawReferrer = (body.referrer || 'direct').slice(0, 500);

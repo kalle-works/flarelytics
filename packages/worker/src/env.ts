@@ -13,6 +13,9 @@ export interface Env {
   CF_API_TOKEN: string;
   DATASET_NAME: string;
   PUBLIC_STATS_SITES?: string;
+  /** Dedicated visitor-hash salt. Falls back to QUERY_API_KEY when unset so
+   * existing deployments keep working without provisioning a new secret. */
+  VISITOR_SALT?: string;
 
   // v1 (Phase 0 — bindings declared, not used until Phase 0.5 dual-emit).
   // See MIGRATION_PLAN.md §3 for per-family schemas and §0 1A for why
