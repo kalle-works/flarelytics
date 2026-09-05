@@ -8,8 +8,9 @@ const queryCategories = [
       { name: 'top-pages-stories', desc: 'Top pages with engagement metrics' },
       { name: 'daily-views', desc: 'Pageviews per day' },
       { name: 'daily-unique-visitors', desc: 'Unique visitors per day' },
-      { name: 'new-vs-returning', desc: 'New vs returning visitor ratio' },
       { name: 'total-sessions', desc: 'Total session count in period' },
+      { name: 'total-pageviews', desc: 'Total pageviews in period' },
+      { name: 'total-visitors', desc: 'Total unique visitors in period' },
     ],
   },
   {
@@ -41,6 +42,14 @@ const queryCategories = [
       { name: 'countries-by-page', desc: 'Country breakdown for a specific page', extra: '?page=/path' },
       { name: 'devices', desc: 'Device type split (mobile/tablet/desktop)' },
       { name: 'browsers', desc: 'Browser breakdown' },
+      { name: 'operating-systems', desc: 'Operating system breakdown' },
+    ],
+  },
+  {
+    label: 'Revenue',
+    queries: [
+      { name: 'revenue-by-event', desc: 'Revenue total, count, and average per event (requires "value" in /track calls)' },
+      { name: 'revenue-over-time', desc: 'Daily revenue totals and conversion counts' },
     ],
   },
   {

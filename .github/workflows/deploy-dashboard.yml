@@ -10,7 +10,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: kalle-works-arm64
     permissions:
       contents: read
       deployments: write

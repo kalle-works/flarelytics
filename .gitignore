@@ -7,3 +7,7 @@ dist/
 .gstack/
 wrangler.toml
 .astro/
+
+# Ad-hoc QA screenshots and Playwright MCP output at repo root
+/*.png
+.playwright-mcp/

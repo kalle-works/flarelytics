@@ -6,15 +6,24 @@
   "main": "src/index.ts",
   "scripts": {
     "setup": "bash setup.sh",
+    "predev": "npm --prefix ../tracker run build",
     "dev": "wrangler dev",
     "build": "wrangler deploy --dry-run --outdir dist",
+    "predeploy": "npm --prefix ../tracker run build",
     "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@flarelytics/tracker": "*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250312.0",
     "typescript": "^5.8.0",
     "wrangler": "^4.0.0",
     "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

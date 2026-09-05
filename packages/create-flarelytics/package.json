@@ -1,7 +1,7 @@
 {
   "name": "create-flarelytics",
   "version": "1.0.0",
-  "description": "Set up Flarelytics privacy-first analytics in under 3 minutes",
+  "description": "Set up Flarelytics privacy-first analytics in 5 minutes",
   "type": "module",
   "bin": {
     "create-flarelytics": "dist/index.js"
@@ -13,6 +13,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {

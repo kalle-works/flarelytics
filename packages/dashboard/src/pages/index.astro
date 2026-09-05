@@ -48,21 +48,21 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
         <h1 style="font-family:var(--mono);font-size:1rem;font-weight:500;">flarelytics</h1>
         <!-- Org switcher (hidden when the user belongs to a single org) -->
         <div id="org-switcher" style="position:relative;display:none;">
-          <button id="org-switcher-btn" style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:0.8125rem;border:1px solid var(--border);background:var(--surface-raised);border-radius:var(--radius-lg);padding:0.25rem 0.625rem;color:var(--ink-muted);cursor:pointer;min-height:30px;">
+          <button id="org-switcher-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:0.8125rem;border:1px solid var(--border);background:var(--surface-raised);border-radius:var(--radius-lg);padding:0.25rem 0.625rem;color:var(--ink-muted);cursor:pointer;min-height:30px;">
             <span id="org-switcher-label" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-            <span style="font-size:10px;color:var(--ink-muted);">&#9660;</span>
+            <span aria-hidden="true" style="font-size:10px;color:var(--ink-muted);">&#9660;</span>
           </button>
-          <div id="org-switcher-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:200px;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 4px 12px rgba(0,0,0,.08);z-index:100;overflow:hidden;">
+          <div id="org-switcher-menu" role="menu" aria-labelledby="org-switcher-btn" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:200px;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 4px 12px rgba(0,0,0,.08);z-index:100;overflow:hidden;">
             <div id="org-switcher-items"></div>
           </div>
         </div>
         <!-- Site switcher -->
         <div id="site-switcher" style="position:relative;">
-          <button id="site-switcher-btn" style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:0.8125rem;border:1px solid var(--border);background:var(--surface-raised);border-radius:var(--radius-lg);padding:0.25rem 0.625rem;color:var(--ink);cursor:pointer;min-height:30px;">
+          <button id="site-switcher-btn" type="button" aria-haspopup="menu" aria-expanded="false" style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:0.8125rem;border:1px solid var(--border);background:var(--surface-raised);border-radius:var(--radius-lg);padding:0.25rem 0.625rem;color:var(--ink);cursor:pointer;min-height:30px;">
             <span id="site-switcher-label" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-            <span style="font-size:10px;color:var(--ink-muted);">&#9660;</span>
+            <span aria-hidden="true" style="font-size:10px;color:var(--ink-muted);">&#9660;</span>
           </button>
-          <div id="site-switcher-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:220px;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 4px 12px rgba(0,0,0,.08);z-index:100;overflow:hidden;">
+          <div id="site-switcher-menu" role="menu" aria-labelledby="site-switcher-btn" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:220px;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 4px 12px rgba(0,0,0,.08);z-index:100;overflow:hidden;">
             <div id="site-switcher-items"></div>
             <div style="border-top:1px solid var(--border);padding:6px;">
               <form id="add-site-inline-form" style="display:flex;flex-direction:column;gap:6px;padding:4px 2px;">
@@ -113,7 +113,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
     </div>
 
     <!-- KPI Cards -->
-    <div id="kpi-cards" style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:2rem;">
+    <div id="kpi-cards" aria-live="polite" aria-atomic="false" style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:2rem;">
       <div class="card kpi" data-kpi="views">
         <span class="kpi-label">Pageviews</span>
         <span class="kpi-value">-</span>
@@ -184,7 +184,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
         </div>
         <div class="card table-wrap">
           <table class="tbl" id="table-pages">
-            <thead><tr><th style="text-align:left;">Path</th><th style="text-align:right;">Views</th><th style="text-align:right;">Visitors</th></tr></thead>
+            <thead><tr><th scope="col" style="text-align:left;">Path</th><th scope="col" style="text-align:right;">Views</th><th scope="col" style="text-align:right;">Visitors</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -196,7 +196,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
         </div>
         <div class="card table-wrap">
           <table class="tbl" id="table-referrers">
-            <thead><tr><th style="text-align:left;">Source</th><th style="text-align:right;">Visits</th></tr></thead>
+            <thead><tr><th scope="col" style="text-align:left;">Source</th><th scope="col" style="text-align:right;">Visits</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -210,7 +210,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
       </div>
       <div class="card table-wrap">
         <table class="tbl" id="table-stories">
-          <thead><tr><th style="text-align:left;">Article</th><th style="text-align:right;">Views</th><th style="text-align:right;">Visitors</th><th style="width:80px;"></th></tr></thead>
+          <thead><tr><th scope="col" style="text-align:left;">Article</th><th scope="col" style="text-align:right;">Views</th><th scope="col" style="text-align:right;">Visitors</th><th scope="col" style="width:80px;"></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -231,7 +231,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
         </div>
         <div class="card table-wrap">
           <table class="tbl" id="table-countries">
-            <thead><tr><th style="text-align:left;">Country</th><th style="text-align:right;">Views</th></tr></thead>
+            <thead><tr><th scope="col" style="text-align:left;">Country</th><th scope="col" style="text-align:right;">Views</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -243,7 +243,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
         </div>
         <div class="card table-wrap">
           <table class="tbl" id="table-events">
-            <thead><tr><th style="text-align:left;">Event</th><th style="text-align:left;">Properties</th><th style="text-align:right;">Count</th></tr></thead>
+            <thead><tr><th scope="col" style="text-align:left;">Event</th><th scope="col" style="text-align:left;">Properties</th><th scope="col" style="text-align:right;">Count</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -256,7 +256,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
         <h2 class="section-title">UTM Campaigns</h2>
         <div class="card table-wrap">
           <table class="tbl" id="table-utm">
-            <thead><tr><th style="text-align:left;">Source</th><th style="text-align:left;">Medium</th><th style="text-align:left;">Campaign</th><th style="text-align:right;">Visits</th></tr></thead>
+            <thead><tr><th scope="col" style="text-align:left;">Source</th><th scope="col" style="text-align:left;">Medium</th><th scope="col" style="text-align:left;">Campaign</th><th scope="col" style="text-align:right;">Visits</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -265,7 +265,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
         <h2 class="section-title">Outbound Links</h2>
         <div class="card table-wrap">
           <table class="tbl" id="table-outbound">
-            <thead><tr><th style="text-align:left;">Destination</th><th style="text-align:right;">Clicks</th></tr></thead>
+            <thead><tr><th scope="col" style="text-align:left;">Destination</th><th scope="col" style="text-align:right;">Clicks</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -280,7 +280,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
       </div>
       <div class="card table-wrap">
         <table class="tbl" id="table-timing">
-          <thead><tr><th style="text-align:left;">Path</th><th style="text-align:right;">Keskim. aika</th><th style="text-align:right;">Mittauksia</th></tr></thead>
+          <thead><tr><th scope="col" style="text-align:left;">Path</th><th scope="col" style="text-align:right;">Keskim. aika</th><th scope="col" style="text-align:right;">Mittauksia</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -295,7 +295,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
         </div>
         <div class="card table-wrap">
           <table class="tbl" id="table-browsers">
-            <thead><tr><th style="text-align:left;">Selain</th><th style="text-align:right;">Views</th></tr></thead>
+            <thead><tr><th scope="col" style="text-align:left;">Selain</th><th scope="col" style="text-align:right;">Views</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -307,7 +307,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
         </div>
         <div class="card table-wrap">
           <table class="tbl" id="table-os">
-            <thead><tr><th style="text-align:left;">OS</th><th style="text-align:right;">Views</th></tr></thead>
+            <thead><tr><th scope="col" style="text-align:left;">OS</th><th scope="col" style="text-align:right;">Views</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -326,7 +326,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
       </div>
       <div class="card table-wrap">
         <table class="tbl" id="table-revenue">
-          <thead><tr><th style="text-align:left;">Event</th><th style="text-align:right;">Revenue</th><th style="text-align:right;">Count</th><th style="text-align:right;">Avg Value</th></tr></thead>
+          <thead><tr><th scope="col" style="text-align:left;">Event</th><th scope="col" style="text-align:right;">Revenue</th><th scope="col" style="text-align:right;">Count</th><th scope="col" style="text-align:right;">Avg Value</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -372,7 +372,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
           </div>
           <div class="card table-wrap">
             <table class="tbl" id="table-bot-pages">
-              <thead><tr><th style="text-align:left;">Path</th><th style="text-align:right;">Hits</th></tr></thead>
+              <thead><tr><th scope="col" style="text-align:left;">Path</th><th scope="col" style="text-align:right;">Hits</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -384,7 +384,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
           </div>
           <div class="card table-wrap">
             <table class="tbl" id="table-bot-countries">
-              <thead><tr><th style="text-align:left;">Country</th><th style="text-align:right;">Hits</th></tr></thead>
+              <thead><tr><th scope="col" style="text-align:left;">Country</th><th scope="col" style="text-align:right;">Hits</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -396,7 +396,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
           </div>
           <div class="card table-wrap">
             <table class="tbl" id="table-bots">
-              <thead><tr><th style="text-align:left;">User-Agent</th><th style="text-align:right;">Hits</th></tr></thead>
+              <thead><tr><th scope="col" style="text-align:left;">User-Agent</th><th scope="col" style="text-align:right;">Hits</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -405,9 +405,9 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
     </div>
 
     <!-- Article Drill-down Panel -->
-    <div id="drilldown-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;overflow-y:auto;" onclick="if(event.target===this)closeDrilldown()">
-      <div style="max-width:720px;margin:3rem auto;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem;position:relative;">
-        <button onclick="closeDrilldown()" style="position:absolute;top:1rem;right:1rem;background:none;border:none;font-size:1.25rem;cursor:pointer;color:var(--ink-muted);">&#x2715;</button>
+    <div id="drilldown-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;overflow-y:auto;">
+      <div id="drilldown-dialog" role="dialog" aria-modal="true" aria-labelledby="drilldown-title" tabindex="-1" style="max-width:720px;margin:3rem auto;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem;position:relative;outline:none;">
+        <button id="drilldown-close" type="button" aria-label="Close" style="position:absolute;top:1rem;right:1rem;background:none;border:none;font-size:1.25rem;cursor:pointer;color:var(--ink-muted);">&#x2715;</button>
         <h2 id="drilldown-title" style="font-family:var(--mono);font-size:0.875rem;font-weight:600;margin-bottom:1.5rem;padding-right:2rem;word-break:break-all;"></h2>
 
         <!-- Drilldown KPIs -->
@@ -445,7 +445,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
             <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">Referrers</div>
             <div class="card table-wrap">
               <table class="tbl" id="table-dd-referrers">
-                <thead><tr><th style="text-align:left;">Source</th><th style="text-align:right;">Visits</th></tr></thead>
+                <thead><tr><th scope="col" style="text-align:left;">Source</th><th scope="col" style="text-align:right;">Visits</th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -454,7 +454,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
             <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">Countries</div>
             <div class="card table-wrap">
               <table class="tbl" id="table-dd-countries">
-                <thead><tr><th style="text-align:left;">Country</th><th style="text-align:right;">Views</th></tr></thead>
+                <thead><tr><th scope="col" style="text-align:left;">Country</th><th scope="col" style="text-align:right;">Views</th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
@@ -464,7 +464,7 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
           <div style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-bottom:0.5rem;">UTM Campaigns</div>
           <div class="card table-wrap">
             <table class="tbl" id="table-dd-utm">
-              <thead><tr><th style="text-align:left;">Source</th><th style="text-align:left;">Medium</th><th style="text-align:left;">Campaign</th><th style="text-align:right;">Visits</th></tr></thead>
+              <thead><tr><th scope="col" style="text-align:left;">Source</th><th scope="col" style="text-align:left;">Medium</th><th scope="col" style="text-align:left;">Campaign</th><th scope="col" style="text-align:right;">Visits</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -474,25 +474,12 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
   </div>
 </Layout>
 
-<script>
-  import Chart from 'chart.js/auto';
-  // Expose Chart globally for the inline dashboard script. Module scripts
-  // are deferred (run after HTML parsing), while the inline script fires
-  // fetch calls during parsing. The 'chartjs-ready' event ensures render
-  // functions wait for Chart.js even when API responses beat the module.
-  (window as any).Chart = Chart;
-  window.dispatchEvent(new Event('chartjs-ready'));
-</script>
+
 
 <style>
   @media (min-width: 768px) {
     .two-col { grid-template-columns: 1fr 1fr !important; }
     #kpi-cards { grid-template-columns: repeat(4, 1fr) !important; }
-  }
-
-  :root {
-    --green: #16a34a;
-    --red: #dc2626;
   }
 
   .card {
@@ -648,1472 +635,1511 @@ const apiBase = import.meta.env.PUBLIC_API_BASE || 'https://api.flarelytics.dev'
   }
 </style>
 
-<script is:inline>
-(function() {
-  // Single analytics worker. `?worker=` overrides for local dev / self-hosting.
-  var WORKER = (new URLSearchParams(location.search).get('worker') || window.FLARELYTICS_API_BASE || '').replace(/\/$/, '');
-  var site = '';
-  var period = '7d';
-  var activeFilters = {};
-  // Authenticated fetch — sends the session cookie cross-subdomain.
-  function api(path) {
-    return fetch(WORKER + path, { credentials: 'include' });
+
+<script>
+// This inline script is the DOM-glue layer: it wires fetched data into the
+// page. The reusable, high-risk logic (escaping, formatting, row mapping,
+// the fetch wrapper, the race guard, URL state) lives in typed + unit-
+// tested modules under src/lib and is imported below. @ts-nocheck applies
+// only to this glue file — every import target is still fully type-checked
+// on its own.
+// @ts-nocheck
+import Chart from 'chart.js/auto';
+import { esc } from '../lib/escape';
+import { resolveWorkerOrigin } from '../lib/worker-origin';
+import { tableToCsv } from '../lib/csv';
+import { num, fmtCurrency, fmtSeconds, fmtPercentChange } from '../lib/format';
+import { fetchJson, buildQueryUrl, AuthError } from '../lib/api';
+import {
+  rows,
+  sum,
+  buildShareMap,
+  computeWow,
+  computeMaxVals,
+  renderTableRowsHtml,
+  renderTopPageRowHtml,
+  renderTopStoryRowHtml,
+} from '../lib/rows';
+import { createLoadGuard } from '../lib/load-guard';
+import { parseUrlState, withUrlState } from '../lib/url-state';
+
+// Because this is an ES module, `chart.js/auto` is fully resolved before any
+// of this module's top-level code runs — no race between the module import
+// and the fetch calls below (the previous chartjs-ready/whenChart plumbing
+// existed only to guard against exactly that race under `is:inline`).
+
+// Single analytics worker. `?worker=` overrides for local dev / self-hosting.
+var WORKER = resolveWorkerOrigin(new URLSearchParams(location.search).get('worker'), window.FLARELYTICS_API_BASE || '');
+var initialUrlState = parseUrlState(location.search);
+var site = '';
+var period = initialUrlState.period || '7d';
+var activeFilters = {};
+var loadGuard = createLoadGuard();
+
+// Authenticated JSON fetch — sends the session cookie cross-subdomain, and
+// throws AuthError on 401/403 so callers can distinguish "not authorized"
+// from "genuinely empty data".
+function apiJson(path, init) {
+  return fetchJson(WORKER + path, init);
+}
+
+function updateUrlState() {
+  var qs = withUrlState(location.search, { site: site, period: period });
+  history.replaceState(null, '', location.pathname + qs);
+}
+
+var FILTER_LABELS = {
+  country: 'Country', device: 'Device', browser: 'Browser', os: 'OS',
+  referrer: 'Referrer', page: 'Page', utm_source: 'UTM Source', utm_campaign: 'UTM Campaign',
+};
+
+function setFilter(key, value) {
+  activeFilters[key] = value;
+  renderFilterBar();
+  loadAll();
+}
+
+function clearFilter(key) {
+  delete activeFilters[key];
+  renderFilterBar();
+  loadAll();
+}
+
+function clearAllFilters() {
+  activeFilters = {};
+  renderFilterBar();
+  loadAll();
+}
+
+function renderFilterBar() {
+  var bar = document.getElementById('filter-bar');
+  if (!bar) return;
+  var keys = Object.keys(activeFilters);
+  if (!keys.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  var html = '<span style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-right:4px;">Filter:</span>';
+  keys.forEach(function(k) {
+    var v = activeFilters[k];
+    html += '<span style="display:inline-flex;align-items:center;gap:3px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;padding:1px 10px 1px 10px;font-family:var(--mono);font-size:11px;color:#92400e;">';
+    html += esc(FILTER_LABELS[k] || k) + ': <strong>' + esc(v) + '</strong>';
+    html += '<button type="button" data-filter-clear="' + esc(k) + '" style="background:none;border:none;cursor:pointer;color:#92400e;font-size:14px;line-height:1;padding:0 0 0 4px;margin-left:2px;">×</button>';
+    html += '</span>';
+  });
+  if (keys.length > 1) {
+    html += '<button type="button" data-filter-clear-all style="font-family:var(--mono);font-size:10px;color:var(--ink-muted);background:none;border:1px solid var(--border);border-radius:20px;padding:2px 10px;cursor:pointer;margin-left:4px;">Clear all</button>';
   }
+  bar.innerHTML = html;
+}
 
-  var FILTER_LABELS = {
-    country: 'Country', device: 'Device', browser: 'Browser', os: 'OS',
-    referrer: 'Referrer', page: 'Page', utm_source: 'UTM Source', utm_campaign: 'UTM Campaign',
-  };
+// ── One delegated click listener for everything that used to be an inline
+// onclick="...(data)..." attribute. Data never flows into an event-handler
+// attribute string anywhere in this file any more — see lib/rows.ts for the
+// row renderers that replaced the vulnerable onclick="openDrilldown('...')"
+// construction with data-path attributes read here. ──────────────────────
+document.addEventListener('click', function(e) {
+  var target = e.target;
+  if (!target || !target.closest) return;
 
-  function filterParamString() {
-    return Object.keys(activeFilters).map(function(k) {
-      return '&filter%5B' + k + '%5D=' + encodeURIComponent(activeFilters[k]);
-    }).join('');
-  }
+  var clearBtn = target.closest('[data-filter-clear]');
+  if (clearBtn) { clearFilter(clearBtn.dataset.filterClear); return; }
 
-  window.setFilter = function(key, value) {
-    activeFilters[key] = value;
-    renderFilterBar();
-    loadAll();
-  };
+  if (target.closest('[data-filter-clear-all]')) { clearAllFilters(); return; }
 
-  window.clearFilter = function(key) {
-    delete activeFilters[key];
-    renderFilterBar();
-    loadAll();
-  };
-
-  window.clearAllFilters = function() {
-    activeFilters = {};
-    renderFilterBar();
-    loadAll();
-  };
-
-  function renderFilterBar() {
-    var bar = document.getElementById('filter-bar');
-    if (!bar) return;
-    var keys = Object.keys(activeFilters);
-    if (!keys.length) { bar.style.display = 'none'; return; }
-    bar.style.display = 'flex';
-    var html = '<span style="font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);margin-right:4px;">Filter:</span>';
-    keys.forEach(function(k) {
-      var v = activeFilters[k];
-      html += '<span style="display:inline-flex;align-items:center;gap:3px;background:#fffbeb;border:1px solid #fde68a;border-radius:20px;padding:1px 10px 1px 10px;font-family:var(--mono);font-size:11px;color:#92400e;">';
-      html += esc(FILTER_LABELS[k] || k) + ': <strong>' + esc(v) + '</strong>';
-      html += '<button onclick="clearFilter(\'' + k + '\')" style="background:none;border:none;cursor:pointer;color:#92400e;font-size:14px;line-height:1;padding:0 0 0 4px;margin-left:2px;">×</button>';
-      html += '</span>';
-    });
-    if (keys.length > 1) {
-      html += '<button onclick="clearAllFilters()" style="font-family:var(--mono);font-size:10px;color:var(--ink-muted);background:none;border:1px solid var(--border);border-radius:20px;padding:2px 10px;cursor:pointer;margin-left:4px;">Clear all</button>';
-    }
-    bar.innerHTML = html;
-  }
-
-  // Delegate click handling for filterable table cells
-  document.addEventListener('click', function(e) {
-    var td = e.target.closest ? e.target.closest('td.filterable') : null;
-    if (!td) return;
+  var td = target.closest('td.filterable');
+  if (td) {
     var key = td.dataset.filterKey;
     var val = td.dataset.filterVal;
-    if (key && val) window.setFilter(key, val);
-  });
-
-  // Session derived from /api/auth/me. No secrets stored in the browser.
-  // { sites: [{site,label}], current, orgs: [{id,name,role}], active_org, role, email }
-  var session = { sites: [], current: 0, orgs: [], active_org: null, role: null, email: '' };
-
-  var authGate = document.getElementById('auth-gate');
-  var dashboard = document.getElementById('dashboard');
-  var authError = document.getElementById('auth-error');
-  var authEmpty = document.getElementById('auth-empty');
-  var siteSwitcherBtn = document.getElementById('site-switcher-btn');
-  var siteSwitcherMenu = document.getElementById('site-switcher-menu');
-  var siteSwitcherLabel = document.getElementById('site-switcher-label');
-  var siteSwitcherItems = document.getElementById('site-switcher-items');
-  var orgSwitcher = document.getElementById('org-switcher');
-  var orgSwitcherBtn = document.getElementById('org-switcher-btn');
-  var orgSwitcherMenu = document.getElementById('org-switcher-menu');
-  var orgSwitcherLabel = document.getElementById('org-switcher-label');
-  var orgSwitcherItems = document.getElementById('org-switcher-items');
-
-  function applySession() {
-    if (!session.sites.length) return;
-    site = session.sites[session.current].site;
-    try { localStorage.setItem('flarelytics_active_site', site); } catch (e) {}
-    renderSiteSwitcher();
+    if (key && val) setFilter(key, val);
+    return;
   }
 
-  function switchToSite(idx) {
-    session.current = idx;
-    applySession();
-    siteSwitcherMenu.style.display = 'none';
-    activeFilters = {};
-    renderFilterBar();
-    loadAll();
+  var drilldownRow = target.closest('tr.drilldown-row');
+  if (drilldownRow) { openDrilldown(drilldownRow.dataset.path, drilldownRow); return; }
+
+  var pageNavBtn = target.closest('[data-page-nav]');
+  if (pageNavBtn) {
+    var id = pageNavBtn.dataset.pageId;
+    if (pageNavBtn.dataset.pageNav === 'prev') tablePrev(id);
+    else tableNext(id, parseInt(pageNavBtn.dataset.pageTotal, 10));
+    return;
   }
 
-  // Remove a site from the active organization (owner/admin only).
-  function removeSite(idx) {
-    var s = session.sites[idx];
-    if (!s) return;
-    fetch(WORKER + '/admin/sites', {
-      method: 'DELETE',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hostname: s.site }),
-    })
-      .then(function(r) { if (!r.ok) throw new Error(); bootstrap(); })
-      .catch(function() {
-        var errEl = document.getElementById('add-site-error');
-        if (errEl) { errEl.textContent = 'Could not remove site.'; errEl.style.display = ''; }
-      });
-  }
+  if (target === document.getElementById('drilldown-overlay')) { closeDrilldown(); return; }
+  if (target.closest('#drilldown-close')) { closeDrilldown(); return; }
+});
 
-  function renderSiteSwitcher() {
-    var cur = session.sites[session.current];
-    siteSwitcherLabel.textContent = cur ? (cur.label || cur.site) : '';
-    var canManage = session.role === 'owner' || session.role === 'admin';
-    var html = '';
-    session.sites.forEach(function(s, i) {
-      var lbl = esc(s.label || s.site);
-      html += '<div class="site-item' + (i === session.current ? ' active' : '') + '" data-idx="' + i + '">';
-      html += '<span>' + lbl + '</span>';
-      if (canManage) html += '<button class="site-item-remove" data-remove="' + i + '" title="Remove">&#x2715;</button>';
-      html += '</div>';
-    });
-    siteSwitcherItems.innerHTML = html;
-    siteSwitcherItems.querySelectorAll('.site-item').forEach(function(el) {
-      el.addEventListener('click', function(e) {
-        if (e.target.dataset.remove !== undefined) return;
-        switchToSite(parseInt(el.dataset.idx, 10));
-      });
-    });
-    siteSwitcherItems.querySelectorAll('.site-item-remove').forEach(function(btn) {
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        removeSite(parseInt(btn.dataset.remove, 10));
-      });
-    });
-    // Hide the inline add-site form for members (read-only).
-    var addForm = document.getElementById('add-site-inline-form');
-    if (addForm) addForm.style.display = canManage ? '' : 'none';
-  }
+// tr.drilldown-row is tabindex="0" but is not a native <button>, so Enter/
+// Space need a manual handler to make the trigger keyboard-operable (and,
+// since it receives real focus, so "restore focus on close" has something
+// to restore focus to).
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  var target = e.target;
+  if (!target || !target.closest) return;
+  var drilldownRow = target.closest('tr.drilldown-row');
+  if (!drilldownRow) return;
+  e.preventDefault();
+  openDrilldown(drilldownRow.dataset.path, drilldownRow);
+});
 
-  siteSwitcherBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    var open = siteSwitcherMenu.style.display !== 'none';
-    siteSwitcherMenu.style.display = open ? 'none' : '';
-  });
+// `error` doesn't bubble, so favicon fallback needs a capture-phase listener.
+document.addEventListener('error', function(e) {
+  var t = e.target;
+  if (t && t.tagName === 'IMG' && t.dataset && t.dataset.fallbackHide) t.style.display = 'none';
+}, true);
 
-  document.addEventListener('click', function(e) {
-    if (!document.getElementById('site-switcher').contains(e.target)) {
-      siteSwitcherMenu.style.display = 'none';
+// Session derived from /api/auth/me. No secrets stored in the browser.
+// { sites: [{site,label}], current, orgs: [{id,name,role}], active_org, role, email }
+var session = { sites: [], current: 0, orgs: [], active_org: null, role: null, email: '' };
+
+var authGate = document.getElementById('auth-gate');
+var dashboard = document.getElementById('dashboard');
+var authError = document.getElementById('auth-error');
+var authEmpty = document.getElementById('auth-empty');
+var siteSwitcherBtn = document.getElementById('site-switcher-btn');
+var siteSwitcherMenu = document.getElementById('site-switcher-menu');
+var siteSwitcherLabel = document.getElementById('site-switcher-label');
+var siteSwitcherItems = document.getElementById('site-switcher-items');
+var orgSwitcher = document.getElementById('org-switcher');
+var orgSwitcherBtn = document.getElementById('org-switcher-btn');
+var orgSwitcherMenu = document.getElementById('org-switcher-menu');
+var orgSwitcherLabel = document.getElementById('org-switcher-label');
+var orgSwitcherItems = document.getElementById('org-switcher-items');
+
+// ── Generic menu keyboard nav: ArrowUp/Down roves focus between
+// role="menuitem" children, Escape closes and returns focus to the trigger
+// button. Shared by the site switcher and org switcher. ───────────────────
+function menuItemsOf(menu) {
+  return Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]'));
+}
+
+function focusMenuItem(menu, idx) {
+  var items = menuItemsOf(menu);
+  if (!items.length) return;
+  items.forEach(function(it) { it.tabIndex = -1; });
+  var i = ((idx % items.length) + items.length) % items.length;
+  items[i].tabIndex = 0;
+  items[i].focus();
+}
+
+function openMenu(btn, menu) {
+  menu.style.display = '';
+  btn.setAttribute('aria-expanded', 'true');
+  focusMenuItem(menu, 0);
+}
+
+function closeMenu(btn, menu, restoreFocus) {
+  menu.style.display = 'none';
+  btn.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) btn.focus();
+}
+
+function wireMenuKeyboardNav(btn, menu) {
+  menu.addEventListener('keydown', function(e) {
+    var items = menuItemsOf(menu);
+    var idx = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); focusMenuItem(menu, idx + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); focusMenuItem(menu, idx - 1); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeMenu(btn, menu, true); }
+    else if ((e.key === 'Enter' || e.key === ' ') && document.activeElement && document.activeElement.getAttribute('role') === 'menuitem') {
+      e.preventDefault();
+      document.activeElement.click();
     }
   });
+}
 
-  // ── Org switcher ──────────────────────────────────────────────────────────
-  function renderOrgSwitcher() {
-    var orgs = session.orgs || [];
-    if (orgs.length <= 1) { orgSwitcher.style.display = 'none'; return; }
-    orgSwitcher.style.display = '';
-    var active = orgs.filter(function(o) { return o.id === session.active_org; })[0];
-    orgSwitcherLabel.textContent = active ? (active.name || 'Workspace') : 'Workspace';
-    var html = '';
-    orgs.forEach(function(o) {
-      html += '<button type="button" class="site-item' + (o.id === session.active_org ? ' active' : '') + '" data-org="' + esc(o.id) + '">';
-      html += '<span>' + esc(o.name || o.id) + '</span></button>';
+function applySession() {
+  if (!session.sites.length) return;
+  site = session.sites[session.current].site;
+  try { localStorage.setItem('flarelytics_active_site', site); } catch (e) {}
+  renderSiteSwitcher();
+  updateUrlState();
+}
+
+function switchToSite(idx) {
+  session.current = idx;
+  applySession();
+  closeMenu(siteSwitcherBtn, siteSwitcherMenu, false);
+  activeFilters = {};
+  renderFilterBar();
+  loadAll();
+}
+
+// Remove a site from the active organization (owner/admin only).
+function removeSite(idx) {
+  var s = session.sites[idx];
+  if (!s) return;
+  fetch(WORKER + '/admin/sites', {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hostname: s.site }),
+  })
+    .then(function(r) { if (!r.ok) throw new Error(); bootstrap(); })
+    .catch(function() {
+      var errEl = document.getElementById('add-site-error');
+      if (errEl) { errEl.textContent = 'Could not remove site.'; errEl.style.display = ''; }
     });
-    orgSwitcherItems.innerHTML = html;
-    orgSwitcherItems.querySelectorAll('[data-org]').forEach(function(el) {
-      el.addEventListener('click', function() { switchOrg(el.dataset.org); });
+}
+
+function renderSiteSwitcher() {
+  var cur = session.sites[session.current];
+  siteSwitcherLabel.textContent = cur ? (cur.label || cur.site) : '';
+  var canManage = session.role === 'owner' || session.role === 'admin';
+  var html = '';
+  session.sites.forEach(function(s, i) {
+    var lbl = esc(s.label || s.site);
+    html += '<div class="site-item' + (i === session.current ? ' active' : '') + '" role="menuitem" tabindex="-1" data-idx="' + i + '">';
+    html += '<span>' + lbl + '</span>';
+    if (canManage) html += '<button type="button" class="site-item-remove" data-remove="' + i + '" aria-label="Remove ' + lbl + '" title="Remove">&#x2715;</button>';
+    html += '</div>';
+  });
+  siteSwitcherItems.innerHTML = html;
+  siteSwitcherItems.querySelectorAll('.site-item').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      if (e.target.dataset.remove !== undefined) return;
+      switchToSite(parseInt(el.dataset.idx, 10));
     });
-  }
-
-  function switchOrg(orgId) {
-    if (orgId === session.active_org) { orgSwitcherMenu.style.display = 'none'; return; }
-    fetch(WORKER + '/api/auth/switch-org', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ org_id: orgId }),
-    }).then(function(r) {
-      if (!r.ok) throw new Error();
-      orgSwitcherMenu.style.display = 'none';
-      activeFilters = {};
-      bootstrap(); // reload me → fresh site list for the new org
-    }).catch(function() {});
-  }
-
-  orgSwitcherBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    var open = orgSwitcherMenu.style.display !== 'none';
-    orgSwitcherMenu.style.display = open ? 'none' : '';
+    el.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); switchToSite(parseInt(el.dataset.idx, 10)); }
+    });
   });
-  document.addEventListener('click', function(e) {
-    if (!orgSwitcher.contains(e.target)) orgSwitcherMenu.style.display = 'none';
+  siteSwitcherItems.querySelectorAll('.site-item-remove').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      removeSite(parseInt(btn.dataset.remove, 10));
+    });
   });
+  // Hide the inline add-site form for members (read-only).
+  var addForm = document.getElementById('add-site-inline-form');
+  if (addForm) addForm.style.display = canManage ? '' : 'none';
+}
 
-  // Claim + DNS-verify a site. statusEl shows the TXT record + a Verify button
-  // while the claim is pending; onDone(hostname) runs once verified.
-  function claimSiteFlow(hostname, label, statusEl, onDone) {
-    statusEl.style.display = '';
-    statusEl.textContent = 'Submitting…';
-    fetch(WORKER + '/admin/sites', {
+siteSwitcherBtn.addEventListener('click', function(e) {
+  e.stopPropagation();
+  var open = siteSwitcherMenu.style.display !== 'none';
+  if (open) closeMenu(siteSwitcherBtn, siteSwitcherMenu, false);
+  else openMenu(siteSwitcherBtn, siteSwitcherMenu);
+});
+wireMenuKeyboardNav(siteSwitcherBtn, siteSwitcherMenu);
+
+document.addEventListener('click', function(e) {
+  if (!document.getElementById('site-switcher').contains(e.target)) {
+    closeMenu(siteSwitcherBtn, siteSwitcherMenu, false);
+  }
+});
+
+// ── Org switcher ──────────────────────────────────────────────────────────
+function renderOrgSwitcher() {
+  var orgs = session.orgs || [];
+  if (orgs.length <= 1) { orgSwitcher.style.display = 'none'; return; }
+  orgSwitcher.style.display = '';
+  var active = orgs.filter(function(o) { return o.id === session.active_org; })[0];
+  orgSwitcherLabel.textContent = active ? (active.name || 'Workspace') : 'Workspace';
+  var html = '';
+  orgs.forEach(function(o) {
+    html += '<button type="button" role="menuitem" tabindex="-1" class="site-item' + (o.id === session.active_org ? ' active' : '') + '" data-org="' + esc(o.id) + '">';
+    html += '<span>' + esc(o.name || o.id) + '</span></button>';
+  });
+  orgSwitcherItems.innerHTML = html;
+  orgSwitcherItems.querySelectorAll('[data-org]').forEach(function(el) {
+    el.addEventListener('click', function() { switchOrg(el.dataset.org); });
+  });
+}
+
+function switchOrg(orgId) {
+  if (orgId === session.active_org) { closeMenu(orgSwitcherBtn, orgSwitcherMenu, false); return; }
+  fetch(WORKER + '/api/auth/switch-org', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ org_id: orgId }),
+  }).then(function(r) {
+    if (!r.ok) throw new Error();
+    closeMenu(orgSwitcherBtn, orgSwitcherMenu, false);
+    activeFilters = {};
+    bootstrap(); // reload me → fresh site list for the new org
+  }).catch(function() {});
+}
+
+orgSwitcherBtn.addEventListener('click', function(e) {
+  e.stopPropagation();
+  var open = orgSwitcherMenu.style.display !== 'none';
+  if (open) closeMenu(orgSwitcherBtn, orgSwitcherMenu, false);
+  else openMenu(orgSwitcherBtn, orgSwitcherMenu);
+});
+wireMenuKeyboardNav(orgSwitcherBtn, orgSwitcherMenu);
+document.addEventListener('click', function(e) {
+  if (!orgSwitcher.contains(e.target)) closeMenu(orgSwitcherBtn, orgSwitcherMenu, false);
+});
+
+// Claim + DNS-verify a site. statusEl shows the TXT record + a Verify button
+// while the claim is pending; onDone(hostname) runs once verified.
+function claimSiteFlow(hostname, label, statusEl, onDone) {
+  statusEl.style.display = '';
+  statusEl.textContent = 'Submitting…';
+  fetch(WORKER + '/admin/sites', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hostname: hostname, label: label || hostname }),
+  })
+    .then(function(r) { return r.json().then(function(d) { return { status: r.status, body: d }; }); })
+    .then(function(res) {
+      if (res.status === 200) { onDone(hostname); return; } // already owned
+      if (res.status === 202 && res.body.pending) {
+        renderVerify(res.body.verification, hostname, label, statusEl, onDone);
+        return;
+      }
+      if (res.status === 409) { statusEl.textContent = 'That hostname is verified by another organization.'; return; }
+      statusEl.textContent = (res.body && res.body.hint) || 'Could not add site.';
+    })
+    .catch(function() { statusEl.textContent = 'Could not reach the worker.'; });
+}
+
+function renderVerify(v, hostname, label, statusEl, onDone) {
+  statusEl.style.display = '';
+  statusEl.style.color = 'var(--ink)';
+  statusEl.innerHTML =
+    'Add this DNS TXT record, then verify:<br>' +
+    '<code style="display:block;margin:4px 0;word-break:break-all;font-size:0.7rem;">' + esc(v.name) + ' TXT ' + esc(v.value) + '</code>' +
+    '<button type="button" id="verify-' + esc(hostname) + '" style="min-height:28px;border-radius:var(--radius-md);background:#1c1917;color:#fff;font-family:var(--mono);font-size:0.7rem;font-weight:600;border:none;cursor:pointer;padding:0 10px;">Verify now</button> ' +
+    '<span class="verify-msg" style="font-size:0.7rem;color:var(--ink-muted);"></span>';
+  var btn = document.getElementById('verify-' + hostname);
+  var msg = statusEl.querySelector('.verify-msg');
+  btn.addEventListener('click', function() {
+    msg.textContent = 'Checking DNS…';
+    fetch(WORKER + '/admin/sites/verify', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ hostname: hostname, label: label || hostname }),
     })
       .then(function(r) { return r.json().then(function(d) { return { status: r.status, body: d }; }); })
       .then(function(res) {
-        if (res.status === 200) { onDone(hostname); return; } // already owned
-        if (res.status === 202 && res.body.pending) {
-          renderVerify(res.body.verification, hostname, label, statusEl, onDone);
-          return;
-        }
-        if (res.status === 409) { statusEl.textContent = 'That hostname is verified by another organization.'; return; }
-        statusEl.textContent = (res.body && res.body.hint) || 'Could not add site.';
+        if (res.status === 200 && res.body.verified) { onDone(hostname); return; }
+        msg.textContent = (res.body && res.body.hint) || 'Verification failed.';
       })
-      .catch(function() { statusEl.textContent = 'Could not reach the worker.'; });
-  }
-
-  function renderVerify(v, hostname, label, statusEl, onDone) {
-    statusEl.style.display = '';
-    statusEl.style.color = 'var(--ink)';
-    statusEl.innerHTML =
-      'Add this DNS TXT record, then verify:<br>' +
-      '<code style="display:block;margin:4px 0;word-break:break-all;font-size:0.7rem;">' + esc(v.name) + ' TXT ' + esc(v.value) + '</code>' +
-      '<button type="button" id="verify-' + esc(hostname) + '" style="min-height:28px;border-radius:var(--radius-md);background:#1c1917;color:#fff;font-family:var(--mono);font-size:0.7rem;font-weight:600;border:none;cursor:pointer;padding:0 10px;">Verify now</button> ' +
-      '<span class="verify-msg" style="font-size:0.7rem;color:var(--ink-muted);"></span>';
-    var btn = document.getElementById('verify-' + hostname);
-    var msg = statusEl.querySelector('.verify-msg');
-    btn.addEventListener('click', function() {
-      msg.textContent = 'Checking DNS…';
-      fetch(WORKER + '/admin/sites/verify', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hostname: hostname, label: label || hostname }),
-      })
-        .then(function(r) { return r.json().then(function(d) { return { status: r.status, body: d }; }); })
-        .then(function(res) {
-          if (res.status === 200 && res.body.verified) { onDone(hostname); return; }
-          msg.textContent = (res.body && res.body.hint) || 'Verification failed.';
-        })
-        .catch(function() { msg.textContent = 'Could not reach the worker.'; });
-    });
-  }
-
-  // Add a site to the active organization (claim → DNS verify).
-  document.getElementById('add-site-inline-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    var hostname = document.getElementById('add-site-hostname').value.trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
-    var label = document.getElementById('add-site-label').value.trim();
-    var errEl = document.getElementById('add-site-error');
-    if (!hostname) return;
-    claimSiteFlow(hostname, label, errEl, function(host) {
-      document.getElementById('add-site-hostname').value = '';
-      document.getElementById('add-site-label').value = '';
-      bootstrap(host);
-    });
+      .catch(function() { msg.textContent = 'Could not reach the worker.'; });
   });
+}
 
-  // ── Auth bootstrap ─────────────────────────────────────────────────────────
-  // Loads the current user from the worker. `preferSite` optionally selects a
-  // site by hostname after reload (e.g. the one just added).
-  function bootstrap(preferSite) {
-    if (!WORKER) { showLogin('No analytics worker configured.'); return; }
-    api('/api/auth/me')
-      .then(function(r) {
-        if (r.status === 401) { showLogin(); throw new Error('unauth'); }
-        if (!r.ok) throw new Error('connect');
-        return r.json();
-      })
-      .then(function(me) {
-        session.orgs = me.orgs || [];
-        session.active_org = me.active_org || null;
-        session.role = me.role || null;
-        session.email = me.email || '';
-        session.sites = (me.sites || []).map(function(s) { return { site: s.hostname, label: s.label || s.hostname }; });
-
-        renderOrgSwitcher();
-
-        if (!session.sites.length) {
-          // Signed in but the org owns no sites yet.
-          authGate.style.display = '';
-          dashboard.style.display = 'none';
-          document.getElementById('login-btn').style.display = 'none';
-          authEmpty.style.display = '';
-          return;
-        }
-
-        // Pick the requested / URL / last-used site, else the first.
-        var want = preferSite || new URLSearchParams(location.search).get('site') || localStorage.getItem('flarelytics_active_site');
-        session.current = 0;
-        if (want) {
-          for (var i = 0; i < session.sites.length; i++) {
-            if (session.sites[i].site === want) { session.current = i; break; }
-          }
-        }
-        applySession();
-        authGate.style.display = 'none';
-        dashboard.style.display = 'block';
-        loadAll();
-      })
-      .catch(function(err) {
-        if (err && err.message === 'unauth') return;
-        showLogin('Could not reach the analytics worker.');
-      });
-  }
-
-  function showLogin(msg) {
-    dashboard.style.display = 'none';
-    authGate.style.display = '';
-    document.getElementById('login-btn').style.display = '';
-    authEmpty.style.display = 'none';
-    if (msg) { authError.textContent = msg; authError.style.display = 'block'; }
-    else { authError.style.display = 'none'; }
-  }
-
-  document.getElementById('login-btn').addEventListener('click', function() {
-    location.href = WORKER + '/api/auth/login?return_to=' + encodeURIComponent('/' + location.search);
+// Add a site to the active organization (claim → DNS verify).
+document.getElementById('add-site-inline-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var hostname = document.getElementById('add-site-hostname').value.trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+  var label = document.getElementById('add-site-label').value.trim();
+  var errEl = document.getElementById('add-site-error');
+  if (!hostname) return;
+  claimSiteFlow(hostname, label, errEl, function(host) {
+    document.getElementById('add-site-hostname').value = '';
+    document.getElementById('add-site-label').value = '';
+    bootstrap(host);
   });
+});
 
-  document.getElementById('logout-btn').addEventListener('click', function() {
-    try { localStorage.removeItem('flarelytics_active_site'); } catch (e) {}
-    location.href = WORKER + '/api/auth/logout';
-  });
+// ── Auth bootstrap ─────────────────────────────────────────────────────────
+// Loads the current user from the worker. `preferSite` optionally selects a
+// site by hostname after reload (e.g. the one just added).
+function bootstrap(preferSite) {
+  if (!WORKER) { showLogin('No analytics worker configured.'); return; }
+  apiJson('/api/auth/me')
+    .then(function(me) {
+      session.orgs = me.orgs || [];
+      session.active_org = me.active_org || null;
+      session.role = me.role || null;
+      session.email = me.email || '';
+      session.sites = (me.sites || []).map(function(s) { return { site: s.hostname, label: s.label || s.hostname }; });
 
-  bootstrap();
+      renderOrgSwitcher();
 
-  // Period buttons
-  document.querySelectorAll('.period-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      period = btn.dataset.period;
-      loadAll();
-    });
-  });
-
-  document.getElementById('refresh-btn').addEventListener('click', loadAll);
-
-  // CSV export
-  document.querySelectorAll('.csv-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var table = document.getElementById(btn.dataset.table);
-      if (!table) return;
-      var rows = [];
-      table.querySelectorAll('tr').forEach(function(tr) {
-        var cells = [];
-        tr.querySelectorAll('th, td').forEach(function(td) { cells.push('"' + td.textContent.replace(/"/g, '""') + '"'); });
-        rows.push(cells.join(','));
-      });
-      var blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = btn.dataset.table + '-' + period + '.csv';
-      a.click();
-    });
-  });
-
-  // Full CSV export
-  document.getElementById('export-btn').addEventListener('click', function() {
-    document.querySelectorAll('.csv-btn').forEach(function(btn) { btn.click(); });
-  });
-
-  // Funnel event selector
-  var funnelEventSelect = document.getElementById('funnel-event-select');
-  funnelEventSelect.addEventListener('change', function() {
-    loadFunnelByEvent(this.value);
-  });
-
-  function query(q) {
-    return fetch(WORKER + '/query?q=' + q + '&period=' + period + '&site=' + encodeURIComponent(site) + filterParamString(), { credentials: 'include' })
-      .then(function(r) { return r.json(); })
-      .catch(function() { return null; });
-  }
-
-  function queryWow(q) {
-    var wowPeriod = period === '7d' ? '14d' : period === '30d' ? '60d' : '180d';
-    return fetch(WORKER + '/query?q=' + q + '&period=' + wowPeriod + '&site=' + encodeURIComponent(site), { credentials: 'include' })
-      .then(function(r) { return r.json(); })
-      .catch(function() { return null; });
-  }
-
-  var tablePages = {};
-  var tableData = {};
-  var PAGE_SIZE = 10;
-
-  function rows(d) { return d && Array.isArray(d) ? d : (d && d.data ? d.data : []); }
-  function num(n) { return n == null || isNaN(n) ? '0' : Math.round(n).toLocaleString('en-US'); }
-  function esc(s) { return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
-  function skel(w) { return '<span class="skeleton" style="width:' + (w||60) + 'px">&nbsp;</span>'; }
-  function sum(arr, f) { return arr.reduce(function(a, r) { return a + (parseFloat(r[f]) || 0); }, 0); }
-
-  function renderPagination(id, page, total) {
-    var pages = Math.ceil(total / PAGE_SIZE);
-    var wrap = document.getElementById(id);
-    if (!wrap) return;
-    var tableWrap = wrap.closest('.table-wrap');
-    if (!tableWrap) return;
-    var el = document.getElementById('pag-' + id);
-    if (pages <= 1) {
-      if (el) el.remove();
-      return;
-    }
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'pag-' + id;
-      el.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);';
-      tableWrap.appendChild(el);
-    }
-    var start = page * PAGE_SIZE + 1;
-    var end = Math.min((page + 1) * PAGE_SIZE, total);
-    el.innerHTML =
-      '<span>' + start + '\u2013' + end + ' / ' + total + '</span>' +
-      '<span style="display:flex;gap:0.5rem;">' +
-      '<button onclick="tablePrev(\'' + id + '\')" ' + (page === 0 ? 'disabled' : '') + ' style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-family:var(--mono);cursor:pointer;">\u2190</button>' +
-      '<button onclick="tableNext(\'' + id + '\',' + pages + ')" ' + (page >= pages - 1 ? 'disabled' : '') + ' style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-family:var(--mono);cursor:pointer;">\u2192</button>' +
-      '</span>';
-  }
-
-  window.tablePrev = function(id) {
-    tablePages[id] = Math.max(0, (tablePages[id] || 0) - 1);
-    if (id === 'table-pages') {
-      var saved = tableData['table-pages'];
-      if (saved) fillTopPages(saved.pagesData, saved.eventsData, tablePages['table-pages']);
-      return;
-    }
-    var saved = tableData[id];
-    if (saved) fillTable(id, saved.data, saved.cols, true);
-  };
-  window.tableNext = function(id, pages) {
-    tablePages[id] = Math.min(pages - 1, (tablePages[id] || 0) + 1);
-    if (id === 'table-pages') {
-      var saved = tableData['table-pages'];
-      if (saved) fillTopPages(saved.pagesData, saved.eventsData, tablePages['table-pages']);
-      return;
-    }
-    var saved = tableData[id];
-    if (saved) fillTable(id, saved.data, saved.cols, true);
-  };
-
-  function computeWow(allRows, valueField) {
-    if (!allRows.length) return null;
-    // Sort by date ascending
-    var sorted = allRows.slice().sort(function(a, b) {
-      return (a.date || '') < (b.date || '') ? -1 : 1;
-    });
-    var half = Math.floor(sorted.length / 2);
-    if (half === 0) return null;
-    var prev = sorted.slice(0, half);
-    var curr = sorted.slice(sorted.length - half);
-    var prevSum = sum(prev, valueField);
-    var currSum = sum(curr, valueField);
-    if (prevSum === 0) return null;
-    return ((currSum - prevSum) / prevSum) * 100;
-  }
-
-  function renderWow(selector, pct) {
-    var el = document.querySelector(selector);
-    if (!el) return;
-    if (pct == null) { el.textContent = ''; return; }
-    var sign = pct >= 0 ? '+' : '';
-    el.textContent = sign + pct.toFixed(1) + '%';
-    el.style.color = pct >= 0 ? 'var(--green)' : 'var(--red)';
-    el.style.fontFamily = 'var(--mono)';
-    el.style.fontSize = '0.75rem';
-  }
-
-  function fmtCurrency(n) {
-    if (n === 0) return '0.00';
-    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
-  function fmtSeconds(s) {
-    var n = Math.round(s);
-    if (n < 60) return n + 's';
-    return Math.floor(n / 60) + 'm ' + (n % 60) + 's';
-  }
-
-  function fillTimingTable(data) {
-    var tbody = document.querySelector('#table-timing tbody');
-    if (!tbody) return;
-    var r = rows(data);
-    if (!r.length) { tbody.innerHTML = '<tr><td colspan="3" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data — timing events accumulate as visitors browse</td></tr>'; return; }
-    var html = '';
-    r.forEach(function(row) {
-      html += '<tr><td style="font-family:var(--mono);font-size:0.8125rem;">' + esc(row.path) + '</td>';
-      html += '<td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;">' + fmtSeconds(parseFloat(row.avg_seconds) || 0) + '</td>';
-      html += '<td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;">' + num(row.sessions) + '</td></tr>';
-    });
-    tbody.innerHTML = html;
-  }
-
-  function renderDeviceBadges(data) {
-    var el = document.getElementById('device-badges');
-    if (!el) return;
-    var r = rows(data);
-    if (!r.length) { el.innerHTML = ''; return; }
-    var total = r.reduce(function(a, row) { return a + (parseFloat(row.views) || 0); }, 0);
-    var isFiltered = !!activeFilters.device;
-    el.innerHTML = r.map(function(row) {
-      var pct = total > 0 ? Math.round((parseFloat(row.views) || 0) / total * 100) : 0;
-      var active = activeFilters.device === row.device;
-      var style = 'font-family:var(--mono);font-size:0.75rem;color:' + (active ? 'var(--accent-text)' : 'var(--ink-secondary)') + ';white-space:nowrap;cursor:pointer;border-bottom:1px solid ' + (active ? 'var(--accent)' : 'transparent') + ';';
-      return '<span style="' + style + '" data-filter-key="device" data-filter-val="' + esc(row.device) + '" class="filterable">' + row.device + ' ' + pct + '%</span>';
-    }).join('');
-  }
-
-  function computeMaxVals(allRows, cols) {
-    var maxVals = {};
-    cols.forEach(function(c) {
-      if (c.fmt === 'num') {
-        maxVals[c.key] = Math.max.apply(null, allRows.map(function(row) { return parseFloat(row[c.key]) || 0; }));
-      }
-    });
-    return maxVals;
-  }
-
-  function renderTableRows(r, cols, maxVals) {
-    var html = '';
-    r.forEach(function(row) {
-      html += '<tr>';
-      cols.forEach(function(c) {
-        var v = row[c.key];
-        var align = c.align || 'left';
-        var styleAttr = 'text-align:' + align;
-
-        var filterAttrs = c.filter ? ' class="filterable" data-filter-key="' + esc(c.filter) + '" data-filter-val="' + esc(String(v == null ? '' : v)) + '"' : '';
-
-        if (c.favicon) {
-          var rawVal = v == null ? '' : String(v);
-          var faviconUrl = 'https://www.google.com/s2/favicons?sz=16&domain=' + esc(rawVal);
-          html += '<td' + filterAttrs + ' style="font-family:var(--mono);font-size:0.8125rem;">' +
-            '<span style="display:flex;align-items:center;gap:0.375rem;">' +
-            '<img src="' + faviconUrl + '" width="16" height="16" style="border-radius:2px;flex-shrink:0;" onerror="this.style.display=\'none\'">' +
-            esc(rawVal) + '</span></td>';
-        } else if (c.fmt === 'num') {
-          var rawNum = parseFloat(row[c.key]) || 0;
-          var pct = (maxVals && maxVals[c.key] > 0) ? rawNum / maxVals[c.key] * 100 : 0;
-          var bg = 'background:linear-gradient(to right,rgba(217,119,6,0.15) ' + pct + '%,transparent ' + pct + '%)';
-          html += '<td' + filterAttrs + ' style="' + styleAttr + ';' + bg + '">' + num(v) + '</td>';
-        } else if (c.fmt === 'currency') {
-          html += '<td' + filterAttrs + ' style="' + styleAttr + ';font-family:var(--mono);font-variant-numeric:tabular-nums;">' + fmtCurrency(parseFloat(v) || 0) + '</td>';
-        } else if (c.fmt === 'pct') {
-          html += '<td' + filterAttrs + ' style="' + styleAttr + '">' + (parseFloat(v) || 0).toFixed(1) + '%</td>';
-        } else if (c.fmt === 'props') {
-          var rawStr = v == null ? '' : String(v).trim();
-          if (!rawStr) {
-            html += '<td style="' + styleAttr + '">-</td>';
-          } else {
-            var parts = rawStr.split('|').filter(function(p) { return p.trim(); });
-            var tags = parts.map(function(p) {
-              return '<span style="display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:var(--mono);font-size:11px;color:var(--ink-secondary);margin:1px 2px 1px 0;">' + esc(p.trim()) + '</span>';
-            }).join('');
-            html += '<td style="' + styleAttr + '">' + tags + '</td>';
-          }
-        } else {
-          html += '<td' + filterAttrs + ' style="' + styleAttr + '">' + (esc(v) || '-') + '</td>';
-        }
-      });
-      html += '</tr>';
-    });
-    return html;
-  }
-
-  function fillTable(id, data, cols, paginated) {
-    var tbody = document.querySelector('#' + id + ' tbody');
-    if (!tbody) return;
-    var allRows = rows(data);
-    if (paginated) {
-      tableData[id] = { data: data, cols: cols };
-      var page = tablePages[id] || 0;
-      var total = allRows.length;
-      var start = page * PAGE_SIZE;
-      var r = allRows.slice(start, start + PAGE_SIZE);
-      if (!allRows.length) {
-        tbody.innerHTML = '<tr><td colspan="' + cols.length + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>';
-        renderPagination(id, 0, 0);
+      if (!session.sites.length) {
+        // Signed in but the org owns no sites yet.
+        authGate.style.display = '';
+        dashboard.style.display = 'none';
+        document.getElementById('login-btn').style.display = 'none';
+        authEmpty.style.display = '';
         return;
       }
-      var maxVals = computeMaxVals(allRows, cols);
-      tbody.innerHTML = renderTableRows(r, cols, maxVals);
-      renderPagination(id, page, total);
-      return;
-    }
-    var r = allRows;
-    if (!r.length) { tbody.innerHTML = '<tr><td colspan="' + cols.length + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>'; return; }
-    var maxVals = computeMaxVals(r, cols);
-    tbody.innerHTML = renderTableRows(r, cols, maxVals);
-  }
 
-  function fillTopPages(pagesData, eventsData, page) {
-    var allPageRows = rows(pagesData);
-    var eventRows = rows(eventsData);
-    if (page === undefined) page = tablePages['table-pages'] || 0;
-    tableData['table-pages'] = { pagesData: pagesData, eventsData: eventsData };
-
-    // Build share map from custom events
-    var shareMap = {};
-    var hasShares = false;
-    eventRows.forEach(function(row) {
-      if (row.event === 'share' && row.properties) {
-        var url;
-        try {
-          var parts = String(row.properties).split('|');
-          var rawUrl = parts[1] || '';
-          if (rawUrl) {
-            var u = new URL(rawUrl);
-            url = u.pathname;
-          }
-        } catch(e) {
-          url = null;
-        }
-        if (url) {
-          hasShares = true;
-          shareMap[url] = (shareMap[url] || 0) + (parseFloat(row.count) || 1);
+      // Pick the requested / URL / last-used site, else the first.
+      var want = preferSite || parseUrlState(location.search).site || localStorage.getItem('flarelytics_active_site');
+      session.current = 0;
+      if (want) {
+        for (var i = 0; i < session.sites.length; i++) {
+          if (session.sites[i].site === want) { session.current = i; break; }
         }
       }
+      applySession();
+      authGate.style.display = 'none';
+      dashboard.style.display = 'block';
+      loadAll();
+    })
+    .catch(function(err) {
+      if (err instanceof AuthError) { showLogin(); return; }
+      showLogin('Could not reach the analytics worker.');
     });
+}
 
-    var thead = document.querySelector('#table-pages thead tr');
-    var tbody = document.querySelector('#table-pages tbody');
-    if (!thead || !tbody) return;
+// Any AuthError from a /query call routes here instead of being treated as
+// empty data — a 401 means the session itself expired; a 403 means the
+// active org lost (or never had) access to the requested site.
+function handleAuthError(err) {
+  if (err.status === 403) {
+    showLogin('This site is not authorized for the active organization.');
+  } else {
+    showLogin('Your session has expired. Sign in again.');
+  }
+}
 
-    if (hasShares) {
-      thead.innerHTML = '<th style="text-align:left;">Path</th><th style="text-align:right;">Views</th><th style="text-align:right;">Visitors</th><th style="text-align:right;">Jaot</th>';
-    } else {
-      thead.innerHTML = '<th style="text-align:left;">Path</th><th style="text-align:right;">Views</th><th style="text-align:right;">Visitors</th>';
-    }
+function showLogin(msg) {
+  dashboard.style.display = 'none';
+  authGate.style.display = '';
+  document.getElementById('login-btn').style.display = '';
+  authEmpty.style.display = 'none';
+  if (msg) { authError.textContent = msg; authError.style.display = 'block'; }
+  else { authError.style.display = 'none'; }
+}
 
-    var colCount = hasShares ? 4 : 3;
+document.getElementById('login-btn').addEventListener('click', function() {
+  location.href = WORKER + '/api/auth/login?return_to=' + encodeURIComponent('/' + location.search);
+});
 
-    if (!allPageRows.length) {
-      tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>';
-      renderPagination('table-pages', 0, 0);
-      return;
-    }
+document.getElementById('logout-btn').addEventListener('click', function() {
+  try { localStorage.removeItem('flarelytics_active_site'); } catch (e) {}
+  location.href = WORKER + '/api/auth/logout';
+});
 
-    var total = allPageRows.length;
+bootstrap();
+
+// Period buttons — restore the URL-selected period on load, keep the URL in
+// sync on every change so a refresh or a shared link preserves the view.
+document.querySelectorAll('.period-btn').forEach(function(btn) {
+  if (btn.dataset.period === period) btn.classList.add('active');
+  else btn.classList.remove('active');
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    period = btn.dataset.period;
+    updateUrlState();
+    loadAll();
+  });
+});
+
+document.getElementById('refresh-btn').addEventListener('click', loadAll);
+
+// CSV export
+document.querySelectorAll('.csv-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var table = document.getElementById(btn.dataset.table);
+    if (!table) return;
+    var csvRows = [];
+    table.querySelectorAll('tr').forEach(function(tr) {
+      csvRows.push(Array.from(tr.querySelectorAll('th, td'), function(td) { return td.textContent; }));
+    });
+    var blob = new Blob([tableToCsv(csvRows)], { type: 'text/csv' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = btn.dataset.table + '-' + period + '.csv';
+    a.click();
+  });
+});
+
+// Full CSV export
+document.getElementById('export-btn').addEventListener('click', function() {
+  document.querySelectorAll('.csv-btn').forEach(function(btn) { btn.click(); });
+});
+
+// Funnel event selector
+var funnelEventSelect = document.getElementById('funnel-event-select');
+funnelEventSelect.addEventListener('change', function() {
+  loadFunnelByEvent(this.value);
+});
+
+// AuthError from any of these routes to handleAuthError and resolves to a
+// safe empty-data fallback so per-widget rendering code doesn't need its own
+// error branch; every other failure (QueryError) also degrades to empty
+// data, matching the previous "no data" behavior for genuine query errors.
+function query(q) {
+  return fetchJson(buildQueryUrl(WORKER, q, { period: period, site: site, filters: activeFilters }))
+    .catch(function(err) { if (err instanceof AuthError) handleAuthError(err); return null; });
+}
+
+function queryWow(q) {
+  var wowPeriod = period === '7d' ? '14d' : period === '30d' ? '60d' : '180d';
+  return fetchJson(buildQueryUrl(WORKER, q, { period: wowPeriod, site: site }))
+    .catch(function(err) { if (err instanceof AuthError) handleAuthError(err); return null; });
+}
+
+var tablePages = {};
+var tableData = {};
+var PAGE_SIZE = 10;
+
+function skel(w) { return '<span class="skeleton" style="width:' + (w || 60) + 'px">&nbsp;</span>'; }
+
+function renderPagination(id, page, total) {
+  var pages = Math.ceil(total / PAGE_SIZE);
+  var wrap = document.getElementById(id);
+  if (!wrap) return;
+  var tableWrap = wrap.closest('.table-wrap');
+  if (!tableWrap) return;
+  var el = document.getElementById('pag-' + id);
+  if (pages <= 1) {
+    if (el) el.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'pag-' + id;
+    el.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;font-family:var(--mono);font-size:0.75rem;color:var(--ink-muted);';
+    tableWrap.appendChild(el);
+  }
+  var start = page * PAGE_SIZE + 1;
+  var end = Math.min((page + 1) * PAGE_SIZE, total);
+  el.innerHTML =
+    '<span>' + start + '–' + end + ' / ' + total + '</span>' +
+    '<span style="display:flex;gap:0.5rem;">' +
+    '<button type="button" data-page-nav="prev" data-page-id="' + id + '" ' + (page === 0 ? 'disabled' : '') + ' style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-family:var(--mono);cursor:pointer;">←</button>' +
+    '<button type="button" data-page-nav="next" data-page-id="' + id + '" data-page-total="' + pages + '" ' + (page >= pages - 1 ? 'disabled' : '') + ' style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-family:var(--mono);cursor:pointer;">→</button>' +
+    '</span>';
+}
+
+function tablePrev(id) {
+  tablePages[id] = Math.max(0, (tablePages[id] || 0) - 1);
+  if (id === 'table-pages') {
+    var saved = tableData['table-pages'];
+    if (saved) fillTopPages(saved.pagesData, saved.eventsData, tablePages['table-pages']);
+    return;
+  }
+  var savedTable = tableData[id];
+  if (savedTable) fillTable(id, savedTable.data, savedTable.cols, true);
+}
+
+function tableNext(id, pages) {
+  tablePages[id] = Math.min(pages - 1, (tablePages[id] || 0) + 1);
+  if (id === 'table-pages') {
+    var saved = tableData['table-pages'];
+    if (saved) fillTopPages(saved.pagesData, saved.eventsData, tablePages['table-pages']);
+    return;
+  }
+  var savedTable = tableData[id];
+  if (savedTable) fillTable(id, savedTable.data, savedTable.cols, true);
+}
+
+function renderWow(selector, pct) {
+  var el = document.querySelector(selector);
+  if (!el) return;
+  var text = fmtPercentChange(pct);
+  if (text == null) { el.textContent = ''; return; }
+  el.textContent = text;
+  el.style.color = pct >= 0 ? 'var(--green)' : 'var(--red)';
+  el.style.fontFamily = 'var(--mono)';
+  el.style.fontSize = '0.75rem';
+}
+
+function fillTimingTable(data) {
+  var tbody = document.querySelector('#table-timing tbody');
+  if (!tbody) return;
+  var r = rows(data);
+  if (!r.length) { tbody.innerHTML = '<tr><td colspan="3" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data — timing events accumulate as visitors browse</td></tr>'; return; }
+  var html = '';
+  r.forEach(function(row) {
+    html += '<tr><td style="font-family:var(--mono);font-size:0.8125rem;">' + esc(row.path) + '</td>';
+    html += '<td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;">' + fmtSeconds(parseFloat(row.avg_seconds) || 0) + '</td>';
+    html += '<td style="text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;">' + num(row.sessions) + '</td></tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+function renderDeviceBadges(data) {
+  var el = document.getElementById('device-badges');
+  if (!el) return;
+  var r = rows(data);
+  if (!r.length) { el.innerHTML = ''; return; }
+  var total = r.reduce(function(a, row) { return a + (parseFloat(row.views) || 0); }, 0);
+  el.innerHTML = r.map(function(row) {
+    var pct = total > 0 ? Math.round((parseFloat(row.views) || 0) / total * 100) : 0;
+    var active = activeFilters.device === row.device;
+    var style = 'font-family:var(--mono);font-size:0.75rem;color:' + (active ? 'var(--accent-text)' : 'var(--ink-secondary)') + ';white-space:nowrap;cursor:pointer;border-bottom:1px solid ' + (active ? 'var(--accent)' : 'transparent') + ';';
+    return '<span style="' + style + '" data-filter-key="device" data-filter-val="' + esc(row.device) + '" class="filterable">' + esc(row.device) + ' ' + pct + '%</span>';
+  }).join('');
+}
+
+function fillTable(id, data, cols, paginated) {
+  var tbody = document.querySelector('#' + id + ' tbody');
+  if (!tbody) return;
+  var allRows = rows(data);
+  if (paginated) {
+    tableData[id] = { data: data, cols: cols };
+    var page = tablePages[id] || 0;
+    var total = allRows.length;
     var start = page * PAGE_SIZE;
-    var pageRows = allPageRows.slice(start, start + PAGE_SIZE);
-
-    var html = '';
-    pageRows.forEach(function(row) {
-      var path = esc(row.path) || '-';
-      var views = num(row.views);
-      var visitors = num(row.visitors);
-      html += '<tr style="cursor:pointer;" onclick="openDrilldown(\'' + esc(row.path).replace(/'/g, "\\'") + '\')"><td style="text-align:left;">' + path + '</td><td style="text-align:right;">' + views + '</td><td style="text-align:right;">' + visitors + '</td>';
-      if (hasShares) {
-        var shares = shareMap[row.path] || 0;
-        html += '<td style="text-align:right;">' + (shares > 0 ? num(shares) : '-') + '</td>';
-      }
-      html += '</tr>';
-    });
-    tbody.innerHTML = html;
-    renderPagination('table-pages', page, total);
-  }
-
-  function renderRevenue(data) {
-    var section = document.getElementById('section-revenue');
-    if (!section) return;
-    var r = rows(data).filter(function(row) { return parseFloat(row.revenue) > 0; });
-    if (!r.length) { section.style.display = 'none'; return; }
-    section.style.display = '';
-    var total = r.reduce(function(a, row) { return a + (parseFloat(row.revenue) || 0); }, 0);
-    document.getElementById('revenue-total').textContent = fmtCurrency(total);
-    tablePages['table-revenue'] = 0;
-    fillTable('table-revenue', { data: r }, [
-      { key: 'event' },
-      { key: 'revenue', align: 'right', fmt: 'currency' },
-      { key: 'count', align: 'right', fmt: 'num' },
-      { key: 'avg_value', align: 'right', fmt: 'currency' },
-    ], true);
-  }
-
-  var INTERNAL_EVENTS = { scroll_depth: true, timing: true };
-
-  function fillTopStories(storiesData) {
-    var storyRows = rows(storiesData);
-    var section = document.getElementById('section-top-stories');
-    if (!section) return;
-    if (!storyRows.length) {
-      section.style.display = 'none';
+    var r = allRows.slice(start, start + PAGE_SIZE);
+    if (!allRows.length) {
+      tbody.innerHTML = '<tr><td colspan="' + cols.length + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>';
+      renderPagination(id, 0, 0);
       return;
     }
-    section.style.display = '';
-    var tbody = document.querySelector('#table-stories tbody');
-    if (!tbody) return;
-    var maxViews = Math.max.apply(null, storyRows.map(function(r) { return parseFloat(r.views) || 0; }));
-    if (maxViews === 0) maxViews = 1;
-    var html = '';
-    storyRows.slice(0, 10).forEach(function(row) {
-      var pct = Math.round(((parseFloat(row.views) || 0) / maxViews) * 100);
-      html += '<tr style="cursor:pointer;" onclick="openDrilldown(\'' + esc(row.path).replace(/'/g, "\\'") + '\')">';
-      html += '<td style="text-align:left;">' + esc(row.path) + '</td>';
-      html += '<td style="text-align:right;">' + num(row.views) + '</td>';
-      html += '<td style="text-align:right;">' + num(row.visitors) + '</td>';
-      html += '<td style="width:80px;padding-right:12px;"><div style="background:var(--surface);border-radius:4px;overflow:hidden;height:6px;"><div style="background:var(--accent);height:100%;width:' + pct + '%;border-radius:4px;"></div></div></td>';
-      html += '</tr>';
-    });
-    tbody.innerHTML = html;
+    var maxVals = computeMaxVals(allRows, cols);
+    tbody.innerHTML = renderTableRowsHtml(r, cols, maxVals);
+    renderPagination(id, page, total);
+    return;
+  }
+  var r = allRows;
+  if (!r.length) { tbody.innerHTML = '<tr><td colspan="' + cols.length + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>'; return; }
+  var maxVals = computeMaxVals(r, cols);
+  tbody.innerHTML = renderTableRowsHtml(r, cols, maxVals);
+}
+
+function fillTopPages(pagesData, eventsData, page) {
+  var allPageRows = rows(pagesData);
+  var eventRows = rows(eventsData);
+  if (page === undefined) page = tablePages['table-pages'] || 0;
+  tableData['table-pages'] = { pagesData: pagesData, eventsData: eventsData };
+
+  var shareMap = buildShareMap(eventRows);
+  var hasShares = Object.keys(shareMap).length > 0;
+
+  var thead = document.querySelector('#table-pages thead tr');
+  var tbody = document.querySelector('#table-pages tbody');
+  if (!thead || !tbody) return;
+
+  if (hasShares) {
+    thead.innerHTML = '<th scope="col" style="text-align:left;">Path</th><th scope="col" style="text-align:right;">Views</th><th scope="col" style="text-align:right;">Visitors</th><th scope="col" style="text-align:right;">Jaot</th>';
+  } else {
+    thead.innerHTML = '<th scope="col" style="text-align:left;">Path</th><th scope="col" style="text-align:right;">Views</th><th scope="col" style="text-align:right;">Visitors</th>';
   }
 
-  function populateFunnelEventSelect(eventsData) {
-    var eventRows = rows(eventsData);
-    var names = {};
-    eventRows.forEach(function(row) {
-      if (row.event && !INTERNAL_EVENTS[row.event]) names[row.event] = true;
-    });
-    var select = document.getElementById('funnel-event-select');
-    var html = '<option value="">Kaikki eventit</option>';
-    Object.keys(names).sort().forEach(function(name) {
-      html += '<option value="' + esc(name) + '">' + esc(name) + '</option>';
-    });
-    select.innerHTML = html;
+  var colCount = hasShares ? 4 : 3;
+
+  if (!allPageRows.length) {
+    tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="padding:2rem;text-align:center;color:var(--ink-muted);">No data</td></tr>';
+    renderPagination('table-pages', 0, 0);
+    return;
   }
 
-  function loadFunnelByEvent(eventName) {
-    var funnelEl = document.getElementById('funnel');
-    funnelEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
+  var total = allPageRows.length;
+  var start = page * PAGE_SIZE;
+  var pageRows = allPageRows.slice(start, start + PAGE_SIZE);
 
-    if (!eventName) {
-      query('conversion-funnel').then(function(d) {
-        renderFunnel(rows(d));
-      });
-      return;
-    }
+  var html = '';
+  pageRows.forEach(function(row) {
+    html += renderTopPageRowHtml(row, hasShares ? (shareMap[row.path] || 0) : null);
+  });
+  tbody.innerHTML = html;
+  renderPagination('table-pages', page, total);
+}
 
-    var url = WORKER + '/query?q=funnel-by-event&period=' + period + '&site=' + encodeURIComponent(site) + '&event_name=' + encodeURIComponent(eventName);
-    fetch(url, { credentials: 'include' })
-      .then(function(r) { return r.json(); })
-      .then(function(d) { renderFunnel(rows(d)); })
-      .catch(function() { renderFunnel([]); });
+function renderRevenue(data) {
+  var section = document.getElementById('section-revenue');
+  if (!section) return;
+  var r = rows(data).filter(function(row) { return parseFloat(row.revenue) > 0; });
+  if (!r.length) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  var total = r.reduce(function(a, row) { return a + (parseFloat(row.revenue) || 0); }, 0);
+  document.getElementById('revenue-total').textContent = fmtCurrency(total);
+  tablePages['table-revenue'] = 0;
+  fillTable('table-revenue', { data: r }, [
+    { key: 'event' },
+    { key: 'revenue', align: 'right', fmt: 'currency' },
+    { key: 'count', align: 'right', fmt: 'num' },
+    { key: 'avg_value', align: 'right', fmt: 'currency' },
+  ], true);
+}
+
+var INTERNAL_EVENTS = { scroll_depth: true, timing: true };
+
+function fillTopStories(storiesData) {
+  var storyRows = rows(storiesData);
+  var section = document.getElementById('section-top-stories');
+  if (!section) return;
+  if (!storyRows.length) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+  var tbody = document.querySelector('#table-stories tbody');
+  if (!tbody) return;
+  var maxViews = Math.max.apply(null, storyRows.map(function(r) { return parseFloat(r.views) || 0; }));
+  if (maxViews === 0) maxViews = 1;
+  var html = '';
+  storyRows.slice(0, 10).forEach(function(row) {
+    var pct = Math.round(((parseFloat(row.views) || 0) / maxViews) * 100);
+    html += renderTopStoryRowHtml(row, pct);
+  });
+  tbody.innerHTML = html;
+}
+
+function populateFunnelEventSelect(eventsData) {
+  var eventRows = rows(eventsData);
+  var names = {};
+  eventRows.forEach(function(row) {
+    if (row.event && !INTERNAL_EVENTS[row.event]) names[row.event] = true;
+  });
+  var select = document.getElementById('funnel-event-select');
+  var html = '<option value="">Kaikki eventit</option>';
+  Object.keys(names).sort().forEach(function(name) {
+    html += '<option value="' + esc(name) + '">' + esc(name) + '</option>';
+  });
+  select.innerHTML = html;
+}
+
+function loadFunnelByEvent(eventName) {
+  var funnelEl = document.getElementById('funnel');
+  funnelEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
+
+  if (!eventName) {
+    query('conversion-funnel').then(function(d) {
+      renderFunnel(rows(d));
+    });
+    return;
   }
 
-  function loadAll() {
-    // Skeletons
-    document.querySelectorAll('.kpi-value').forEach(function(el) { el.innerHTML = skel(70); });
-    document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
-    document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
+  fetchJson(buildQueryUrl(WORKER, 'funnel-by-event', { period: period, site: site, extra: { event_name: eventName } }))
+    .then(function(d) { renderFunnel(rows(d)); })
+    .catch(function(err) {
+      if (err instanceof AuthError) handleAuthError(err);
+      renderFunnel([]);
+    });
+}
 
-    var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','operating-systems','top-pages-stories','total-sessions','bot-hits','bot-hits-total','bot-pages','bot-daily','bot-countries','revenue-by-event'];
+function loadAll() {
+  var myGen = loadGuard.next();
 
-    var mainPromise = Promise.all(qs.map(function(q) {
-      return query(q).then(function(d) { return { q: q, d: d }; });
-    }));
+  // Skeletons
+  document.querySelectorAll('.kpi-value').forEach(function(el) { el.innerHTML = skel(70); });
+  document.querySelectorAll('.kpi-wow').forEach(function(el) { el.textContent = ''; });
+  document.getElementById('chart-traffic').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
 
-    var wowPromise = Promise.all([
-      queryWow('daily-views').then(function(d) { return { q: 'daily-views', d: d }; }),
-      queryWow('daily-unique-visitors').then(function(d) { return { q: 'daily-unique-visitors', d: d }; })
+  var qs = ['daily-views','daily-unique-visitors','top-pages-visitors','referrers','countries','custom-events','outbound-links','utm-campaigns','conversion-funnel','page-timing','devices','browsers','operating-systems','top-pages-stories','total-sessions','bot-hits','bot-hits-total','bot-pages','bot-daily','bot-countries','revenue-by-event'];
+
+  var mainPromise = Promise.all(qs.map(function(q) {
+    return query(q).then(function(d) { return { q: q, d: d }; });
+  }));
+
+  var wowPromise = Promise.all([
+    queryWow('daily-views').then(function(d) { return { q: 'daily-views', d: d }; }),
+    queryWow('daily-unique-visitors').then(function(d) { return { q: 'daily-unique-visitors', d: d }; })
+  ]);
+
+  mainPromise.then(function(results) {
+    // A period/site switch fired a newer load while this one was in flight —
+    // discard these results so a slow, stale batch can't clobber the UI
+    // after a faster, newer one already rendered.
+    if (!loadGuard.isCurrent(myGen)) return;
+
+    var m = {};
+    results.forEach(function(r) { m[r.q] = r.d; });
+
+    // KPIs
+    var dv = rows(m['daily-views']);
+    var duv = rows(m['daily-unique-visitors']);
+    var funnel = rows(m['conversion-funnel']);
+    var sessionsData = rows(m['total-sessions']);
+    var totalViews = sum(dv, 'views');
+    var totalVisitors = sum(duv, 'unique_visitors');
+    var totalSessions = sessionsData.length ? (parseFloat(sessionsData[0].sessions) || 0) : 0;
+
+    // Conversion rate: real custom events (exclude scroll_depth, timing) / pageviews
+    var allEventRows = rows(m['custom-events']);
+    var realEventCount = allEventRows
+      .filter(function(r) { return !INTERNAL_EVENTS[r.event]; })
+      .reduce(function(acc, r) { return acc + (parseFloat(r.count) || 0); }, 0);
+    var convRate = totalViews > 0
+      ? (realEventCount / totalViews * 100).toFixed(1) + '%'
+      : '-';
+
+    document.querySelector('[data-kpi="views"] .kpi-value').textContent = num(totalViews);
+    document.querySelector('[data-kpi="visitors"] .kpi-value').textContent = num(totalVisitors);
+    document.querySelector('[data-kpi="sessions"] .kpi-value').textContent = num(totalSessions);
+    document.querySelector('[data-kpi="convrate"] .kpi-value').textContent = convRate;
+
+    // Traffic chart
+    renderChart(dv);
+
+    // Top pages with share column and visitors
+    tablePages['table-pages'] = 0;
+    fillTopPages(m['top-pages-visitors'], m['custom-events'], 0);
+
+    // Other tables
+    tablePages['table-referrers'] = 0;
+    fillTable('table-referrers', m['referrers'], [{ key: 'referrer', favicon: true, filter: 'referrer' }, { key: 'visits', align: 'right', fmt: 'num' }], true);
+    tablePages['table-countries'] = 0;
+    fillTable('table-countries', m['countries'], [{ key: 'country', filter: 'country' }, { key: 'views', align: 'right', fmt: 'num' }], true);
+    renderDeviceBadges(m['devices']);
+    tablePages['table-events'] = 0;
+    var filteredEvents = { data: rows(m['custom-events']).filter(function(r) { return !INTERNAL_EVENTS[r.event]; }) };
+    fillTable('table-events', filteredEvents, [{ key: 'event' }, { key: 'properties', fmt: 'props' }, { key: 'count', align: 'right', fmt: 'num' }], true);
+    fillTable('table-outbound', m['outbound-links'], [{ key: 'destination' }, { key: 'clicks', align: 'right', fmt: 'num' }]);
+    fillTable('table-utm', m['utm-campaigns'], [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
+
+    // Time on page
+    fillTimingTable(m['page-timing']);
+
+    // Browsers (clickable to filter)
+    fillTable('table-browsers', m['browsers'], [
+      { key: 'browser', filter: 'browser' },
+      { key: 'views', align: 'right', fmt: 'num' }
     ]);
 
-    mainPromise.then(function(results) {
-      var m = {};
-      results.forEach(function(r) { m[r.q] = r.d; });
+    // Operating systems (clickable to filter)
+    tablePages['table-os'] = 0;
+    fillTable('table-os', m['operating-systems'], [
+      { key: 'os', filter: 'os' },
+      { key: 'views', align: 'right', fmt: 'num' }
+    ]);
 
-      // KPIs
-      var dv = rows(m['daily-views']);
-      var duv = rows(m['daily-unique-visitors']);
-      var funnel = rows(m['conversion-funnel']);
-      var sessionsData = rows(m['total-sessions']);
-      var totalViews = sum(dv, 'views');
-      var totalVisitors = sum(duv, 'unique_visitors');
-      var totalSessions = sessionsData.length ? (parseFloat(sessionsData[0].sessions) || 0) : 0;
+    // Revenue (only shown if value events exist)
+    renderRevenue(m['revenue-by-event']);
 
-      // Conversion rate: real custom events (exclude scroll_depth, timing) / pageviews
-      var allEventRows = rows(m['custom-events']);
-      var realEventCount = allEventRows
-        .filter(function(r) { return !INTERNAL_EVENTS[r.event]; })
-        .reduce(function(acc, r) { return acc + (parseFloat(r.count) || 0); }, 0);
-      var convRate = totalViews > 0
-        ? (realEventCount / totalViews * 100).toFixed(1) + '%'
-        : '-';
+    // Top Articles (only shown if data exists)
+    fillTopStories(m['top-pages-stories']);
 
-      document.querySelector('[data-kpi="views"] .kpi-value').textContent = num(totalViews);
-      document.querySelector('[data-kpi="visitors"] .kpi-value').textContent = num(totalVisitors);
-      document.querySelector('[data-kpi="sessions"] .kpi-value').textContent = num(totalSessions);
-      document.querySelector('[data-kpi="convrate"] .kpi-value').textContent = convRate;
+    // Bot Traffic
+    renderBotTraffic(m['bot-hits'], m['bot-hits-total'], m['bot-pages'], m['bot-daily'], m['bot-countries'], totalViews);
 
-      // Traffic chart
-      renderChart(dv);
+    // Funnel
+    var currentFunnelEvent = document.getElementById('funnel-event-select').value;
+    renderFunnel(funnel);
 
-      // Top pages with share column and visitors
-      tablePages['table-pages'] = 0;
-      fillTopPages(m['top-pages-visitors'], m['custom-events'], 0);
+    // Populate funnel event selector
+    populateFunnelEventSelect(m['custom-events']);
+    // Restore selection if it existed
+    if (currentFunnelEvent) {
+      var sel = document.getElementById('funnel-event-select');
+      sel.value = currentFunnelEvent;
+    }
+  });
 
-      // Other tables
-      tablePages['table-referrers'] = 0;
-      fillTable('table-referrers', m['referrers'], [{ key: 'referrer', favicon: true, filter: 'referrer' }, { key: 'visits', align: 'right', fmt: 'num' }], true);
-      tablePages['table-countries'] = 0;
-      fillTable('table-countries', m['countries'], [{ key: 'country', filter: 'country' }, { key: 'views', align: 'right', fmt: 'num' }], true);
-      renderDeviceBadges(m['devices']);
-      tablePages['table-events'] = 0;
-      var filteredEvents = { data: rows(m['custom-events']).filter(function(r) { return !INTERNAL_EVENTS[r.event]; }) };
-      fillTable('table-events', filteredEvents, [{ key: 'event' }, { key: 'properties', fmt: 'props' }, { key: 'count', align: 'right', fmt: 'num' }], true);
-      fillTable('table-outbound', m['outbound-links'], [{ key: 'destination' }, { key: 'clicks', align: 'right', fmt: 'num' }]);
-      fillTable('table-utm', m['utm-campaigns'], [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
+  // WoW badges — resolve independently
+  wowPromise.then(function(results) {
+    if (!loadGuard.isCurrent(myGen)) return;
 
-      // Time on page
-      fillTimingTable(m['page-timing']);
+    var wm = {};
+    results.forEach(function(r) { wm[r.q] = r.d; });
 
-      // Browsers (clickable to filter)
-      fillTable('table-browsers', m['browsers'], [
-        { key: 'browser', filter: 'browser' },
-        { key: 'views', align: 'right', fmt: 'num' }
-      ]);
+    var dvWow = rows(wm['daily-views']);
+    var duvWow = rows(wm['daily-unique-visitors']);
 
-      // Operating systems (clickable to filter)
-      tablePages['table-os'] = 0;
-      fillTable('table-os', m['operating-systems'], [
-        { key: 'os', filter: 'os' },
-        { key: 'views', align: 'right', fmt: 'num' }
-      ]);
+    var viewsPct = computeWow(dvWow, 'views');
+    var visitorsPct = computeWow(duvWow, 'unique_visitors');
 
-      // Revenue (only shown if value events exist)
-      renderRevenue(m['revenue-by-event']);
+    renderWow('[data-wow="views"]', viewsPct);
+    renderWow('[data-wow="visitors"]', visitorsPct);
+  });
+}
 
-      // Top Articles (only shown if data exists)
-      fillTopStories(m['top-pages-stories']);
+var BOT_CATEGORIES = [
+  { label: 'Hakukoneet', patterns: ['googlebot', 'bingbot', 'yandex', 'baidu', 'slurp'] },
+  { label: 'AI-crawlerit', patterns: ['gptbot', 'claudebot', 'bytespider'] },
+  { label: 'SEO-työkalut', patterns: ['ahrefs', 'semrush', 'moz.com', 'dotbot'] },
+  { label: 'Some', patterns: ['facebookexternalhit', 'twitterbot', 'linkedinbot', 'whatsapp', 'telegrambot'] },
+  { label: 'Monitorointi', patterns: ['lighthouse', 'pagespeed', 'gtmetrix', 'pingdom', 'uptimerobot'] },
+];
 
-      // Bot Traffic
-      renderBotTraffic(m['bot-hits'], m['bot-hits-total'], m['bot-pages'], m['bot-daily'], m['bot-countries'], totalViews);
+function categorizeBot(ua) {
+  var lower = (ua || '').toLowerCase();
+  for (var i = 0; i < BOT_CATEGORIES.length; i++) {
+    for (var j = 0; j < BOT_CATEGORIES[i].patterns.length; j++) {
+      if (lower.includes(BOT_CATEGORIES[i].patterns[j])) return BOT_CATEGORIES[i].label;
+    }
+  }
+  return 'Muu';
+}
 
-      // Funnel
-      var currentFunnelEvent = document.getElementById('funnel-event-select').value;
-      renderFunnel(funnel);
-
-      // Populate funnel event selector
-      populateFunnelEventSelect(m['custom-events']);
-      // Restore selection if it existed
-      if (currentFunnelEvent) {
-        var sel = document.getElementById('funnel-event-select');
-        sel.value = currentFunnelEvent;
-      }
-    });
-
-    // WoW badges — resolve independently
-    wowPromise.then(function(results) {
-      var wm = {};
-      results.forEach(function(r) { wm[r.q] = r.d; });
-
-      var dvWow = rows(wm['daily-views']);
-      var duvWow = rows(wm['daily-unique-visitors']);
-
-      var viewsPct = computeWow(dvWow, 'views');
-      var visitorsPct = computeWow(duvWow, 'unique_visitors');
-
-      renderWow('[data-wow="views"]', viewsPct);
-      renderWow('[data-wow="visitors"]', visitorsPct);
-    });
+function renderBotTraffic(botHits, botTotal, botPages, botDaily, botCountries, totalViews) {
+  var bots = rows(botHits);
+  var totalBotHits = botTotal && rows(botTotal).length ? (parseFloat(rows(botTotal)[0].total_bot_hits) || 0) : 0;
+  document.getElementById('bot-total').textContent = num(totalBotHits);
+  var pctEl = document.getElementById('bot-pct');
+  if (totalViews > 0 && totalBotHits > 0) {
+    pctEl.textContent = '(' + (totalBotHits / (totalViews + totalBotHits) * 100).toFixed(1) + '% of all traffic)';
+  } else {
+    pctEl.textContent = '';
   }
 
-  var BOT_CATEGORIES = [
-    { label: 'Hakukoneet', patterns: ['googlebot', 'bingbot', 'yandex', 'baidu', 'slurp'] },
-    { label: 'AI-crawlerit', patterns: ['gptbot', 'claudebot', 'bytespider'] },
-    { label: 'SEO-ty\u00f6kalut', patterns: ['ahrefs', 'semrush', 'moz.com', 'dotbot'] },
-    { label: 'Some', patterns: ['facebookexternalhit', 'twitterbot', 'linkedinbot', 'whatsapp', 'telegrambot'] },
-    { label: 'Monitorointi', patterns: ['lighthouse', 'pagespeed', 'gtmetrix', 'pingdom', 'uptimerobot'] },
-  ];
+  // Bot daily trend chart
+  renderBotChart(botDaily);
 
-  function categorizeBot(ua) {
-    var lower = (ua || '').toLowerCase();
-    for (var i = 0; i < BOT_CATEGORIES.length; i++) {
-      for (var j = 0; j < BOT_CATEGORIES[i].patterns.length; j++) {
-        if (lower.includes(BOT_CATEGORIES[i].patterns[j])) return BOT_CATEGORIES[i].label;
+  // Bot categories (computed from bot-hits UA data)
+  renderBotCategories(bots, totalBotHits);
+
+  // Tables
+  tablePages['table-bot-pages'] = 0;
+  fillTable('table-bot-pages', botPages, [{ key: 'path' }, { key: 'hits', align: 'right', fmt: 'num' }], true);
+  tablePages['table-bot-countries'] = 0;
+  fillTable('table-bot-countries', botCountries, [{ key: 'country' }, { key: 'hits', align: 'right', fmt: 'num' }], true);
+  tablePages['table-bots'] = 0;
+  fillTable('table-bots', botHits, [{ key: 'user_agent' }, { key: 'hits', align: 'right', fmt: 'num' }], true);
+}
+
+var CHART_DEFAULTS = {
+  font: "'SF Mono','Fira Code','Menlo',monospace",
+  muted: '#78716c',
+  border: '#f5f5f4',
+  accent: '#dc6b14',
+  accentAlpha: 'rgba(220,107,20,0.85)',
+  secondary: '#57534e',
+  secondaryAlpha: 'rgba(87,83,78,0.7)',
+};
+
+// ---- Chart.js instance registry (destroy before recreate to avoid leaks) ----
+var chartInstances = {};
+
+function destroyChart(id) {
+  if (chartInstances[id]) {
+    chartInstances[id].destroy();
+    delete chartInstances[id];
+  }
+}
+
+function renderBotChart(data) {
+  var el = document.getElementById('chart-bot-daily');
+  var r = rows(data);
+  destroyChart('chart-bot-daily');
+  if (!r.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No bot data yet</div>'; return; }
+  el.innerHTML = '<canvas></canvas>';
+  var canvas = el.querySelector('canvas');
+  chartInstances['chart-bot-daily'] = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: r.map(function(d) { return (d.date || '').slice(5); }),
+      datasets: [{
+        label: 'Bot hits',
+        data: r.map(function(d) { return parseFloat(d.hits) || 0; }),
+        backgroundColor: CHART_DEFAULTS.secondaryAlpha,
+        borderRadius: 2,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return num(ctx.raw) + ' bot hits'; }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { family: CHART_DEFAULTS.font, size: 10 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 8 }
+        },
+        y: {
+          grid: { color: CHART_DEFAULTS.border },
+          border: { dash: [4, 4] },
+          ticks: { font: { family: CHART_DEFAULTS.font, size: 10 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 5 }
+        }
       }
     }
-    return 'Muu';
-  }
+  });
+}
 
-  function renderBotTraffic(botHits, botTotal, botPages, botDaily, botCountries, totalViews) {
-    var bots = rows(botHits);
-    var totalBotHits = botTotal && rows(botTotal).length ? (parseFloat(rows(botTotal)[0].total_bot_hits) || 0) : 0;
-    document.getElementById('bot-total').textContent = num(totalBotHits);
-    var pctEl = document.getElementById('bot-pct');
-    if (totalViews > 0 && totalBotHits > 0) {
-      pctEl.textContent = '(' + (totalBotHits / (totalViews + totalBotHits) * 100).toFixed(1) + '% of all traffic)';
-    } else {
-      pctEl.textContent = '';
+function renderBotCategories(bots, totalBotHits) {
+  var el = document.getElementById('bot-categories');
+  if (!bots.length || !totalBotHits) { el.innerHTML = '<div style="font-family:var(--mono);font-size:12px;color:var(--ink-muted);">No data</div>'; return; }
+
+  // Aggregate hits per category
+  var cats = {};
+  bots.forEach(function(b) {
+    var cat = categorizeBot(b.user_agent);
+    cats[cat] = (cats[cat] || 0) + (parseFloat(b.hits) || 0);
+  });
+
+  // Sort by hits descending
+  var sorted = Object.keys(cats).map(function(k) { return { label: k, hits: cats[k] }; });
+  sorted.sort(function(a, b) { return b.hits - a.hits; });
+
+  var maxHits = sorted[0] ? sorted[0].hits : 1;
+  var html = '';
+  sorted.forEach(function(cat) {
+    var pct = totalBotHits > 0 ? (cat.hits / totalBotHits * 100).toFixed(0) : 0;
+    var barWidth = (cat.hits / maxHits * 100).toFixed(1);
+    html += '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:6px;">';
+    html += '<span style="font-family:var(--mono);font-size:12px;color:var(--ink-secondary);min-width:100px;">' + esc(cat.label) + '</span>';
+    html += '<div style="flex:1;height:16px;background:var(--border-light);border-radius:2px;overflow:hidden;">';
+    html += '<div style="height:100%;width:' + barWidth + '%;background:var(--data-muted);border-radius:2px;"></div>';
+    html += '</div>';
+    html += '<span style="font-family:var(--mono);font-size:11px;color:var(--ink-muted);min-width:60px;text-align:right;">' + num(cat.hits) + ' (' + pct + '%)</span>';
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+// ---- Article drill-down ----
+function queryPage(q, pagePath) {
+  return fetchJson(buildQueryUrl(WORKER, q, { period: period, site: site, extra: { page: pagePath } }))
+    .catch(function(err) { if (err instanceof AuthError) handleAuthError(err); return null; });
+}
+
+var drilldownOverlay = document.getElementById('drilldown-overlay');
+var drilldownDialog = document.getElementById('drilldown-dialog');
+var lastFocusedBeforeDrilldown = null;
+
+function getFocusableIn(container) {
+  return Array.prototype.slice
+    .call(container.querySelectorAll('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'));
+}
+
+function trapDrilldownFocus(e) {
+  if (e.key === 'Escape') { e.preventDefault(); closeDrilldown(); return; }
+  if (e.key !== 'Tab') return;
+  var focusable = getFocusableIn(drilldownDialog);
+  if (!focusable.length) { e.preventDefault(); return; }
+  var first = focusable[0];
+  var last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+function openDrilldown(pagePath, triggerEl) {
+  lastFocusedBeforeDrilldown = triggerEl || document.activeElement;
+  drilldownOverlay.style.display = '';
+  document.getElementById('drilldown-title').textContent = pagePath;
+
+  // Reset
+  document.getElementById('dd-views').textContent = '-';
+  document.getElementById('dd-visitors').textContent = '-';
+  document.getElementById('dd-time').textContent = '-';
+  document.getElementById('dd-read100').textContent = '-';
+  destroyChart('dd-chart');
+  document.getElementById('dd-chart').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
+  document.getElementById('dd-scroll-depth').innerHTML = '';
+  document.querySelector('#table-dd-referrers tbody').innerHTML = '';
+  document.querySelector('#table-dd-countries tbody').innerHTML = '';
+  document.querySelector('#table-dd-utm tbody').innerHTML = '';
+
+  document.addEventListener('keydown', trapDrilldownFocus);
+  drilldownDialog.focus();
+
+  Promise.all([
+    queryPage('page-views-over-time', pagePath),
+    queryPage('timing-by-page', pagePath),
+    queryPage('scroll-depth-for-page', pagePath),
+    queryPage('referrers-by-page', pagePath),
+    queryPage('countries-by-page', pagePath),
+    queryPage('utm-by-page', pagePath),
+  ]).then(function(results) {
+    var viewsData = rows(results[0]);
+    var timingData = rows(results[1]);
+    var scrollData = rows(results[2]);
+    var refData = results[3];
+    var countryData = results[4];
+    var utmData = results[5];
+
+    // KPIs
+    var totalViews = sum(viewsData, 'views');
+    var totalVisitors = sum(viewsData, 'visitors');
+    document.getElementById('dd-views').textContent = num(totalViews);
+    document.getElementById('dd-visitors').textContent = num(totalVisitors);
+
+    if (timingData.length && timingData[0].avg_seconds) {
+      var secs = Math.round(parseFloat(timingData[0].avg_seconds));
+      var mins = Math.floor(secs / 60);
+      document.getElementById('dd-time').textContent = mins > 0 ? mins + 'm ' + (secs % 60) + 's' : secs + 's';
     }
 
-    // Bot daily trend chart
-    renderBotChart(botDaily);
+    // Read 100%
+    var read100 = 0;
+    scrollData.forEach(function(r) { if (String(r.depth) === '100') read100 = parseFloat(r.count) || 0; });
+    document.getElementById('dd-read100').textContent = read100 > 0 ? num(read100) : '-';
 
-    // Bot categories (computed from bot-hits UA data)
-    renderBotCategories(bots, totalBotHits);
+    // Chart
+    renderDrilldownChart(viewsData);
+
+    // Scroll depth funnel
+    renderDrilldownScroll(scrollData);
 
     // Tables
-    tablePages['table-bot-pages'] = 0;
-    fillTable('table-bot-pages', botPages, [{ key: 'path' }, { key: 'hits', align: 'right', fmt: 'num' }], true);
-    tablePages['table-bot-countries'] = 0;
-    fillTable('table-bot-countries', botCountries, [{ key: 'country' }, { key: 'hits', align: 'right', fmt: 'num' }], true);
-    tablePages['table-bots'] = 0;
-    fillTable('table-bots', botHits, [{ key: 'user_agent' }, { key: 'hits', align: 'right', fmt: 'num' }], true);
-  }
-
-  function renderBotChart(data) {
-    if (!window.Chart) { whenChart(function() { renderBotChart(data); }); return; }
-    var el = document.getElementById('chart-bot-daily');
-    var r = rows(data);
-    destroyChart('chart-bot-daily');
-    if (!r.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No bot data yet</div>'; return; }
-    el.innerHTML = '<canvas></canvas>';
-    var canvas = el.querySelector('canvas');
-    chartInstances['chart-bot-daily'] = new window.Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: r.map(function(d) { return (d.date || '').slice(5); }),
-        datasets: [{
-          label: 'Bot hits',
-          data: r.map(function(d) { return parseFloat(d.hits) || 0; }),
-          backgroundColor: CHART_DEFAULTS.secondaryAlpha,
-          borderRadius: 2,
-          borderSkipped: false,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: function(ctx) { return num(ctx.raw) + ' bot hits'; }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: { font: { family: CHART_DEFAULTS.font, size: 10 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 8 }
-          },
-          y: {
-            grid: { color: CHART_DEFAULTS.border },
-            border: { dash: [4, 4] },
-            ticks: { font: { family: CHART_DEFAULTS.font, size: 10 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 5 }
-          }
-        }
-      }
-    });
-  }
-
-  function renderBotCategories(bots, totalBotHits) {
-    var el = document.getElementById('bot-categories');
-    if (!bots.length || !totalBotHits) { el.innerHTML = '<div style="font-family:var(--mono);font-size:12px;color:var(--ink-muted);">No data</div>'; return; }
-
-    // Aggregate hits per category
-    var cats = {};
-    bots.forEach(function(b) {
-      var cat = categorizeBot(b.user_agent);
-      cats[cat] = (cats[cat] || 0) + (parseFloat(b.hits) || 0);
-    });
-
-    // Sort by hits descending
-    var sorted = Object.keys(cats).map(function(k) { return { label: k, hits: cats[k] }; });
-    sorted.sort(function(a, b) { return b.hits - a.hits; });
-
-    var maxHits = sorted[0] ? sorted[0].hits : 1;
-    var html = '';
-    sorted.forEach(function(cat) {
-      var pct = totalBotHits > 0 ? (cat.hits / totalBotHits * 100).toFixed(0) : 0;
-      var barWidth = (cat.hits / maxHits * 100).toFixed(1);
-      html += '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:6px;">';
-      html += '<span style="font-family:var(--mono);font-size:12px;color:var(--ink-secondary);min-width:100px;">' + esc(cat.label) + '</span>';
-      html += '<div style="flex:1;height:16px;background:var(--border-light);border-radius:2px;overflow:hidden;">';
-      html += '<div style="height:100%;width:' + barWidth + '%;background:var(--data-muted);border-radius:2px;"></div>';
-      html += '</div>';
-      html += '<span style="font-family:var(--mono);font-size:11px;color:var(--ink-muted);min-width:60px;text-align:right;">' + num(cat.hits) + ' (' + pct + '%)</span>';
-      html += '</div>';
-    });
-    el.innerHTML = html;
-  }
-
-  // ---- Article drill-down ----
-  function queryPage(q, pagePath) {
-    return fetch(WORKER + '/query?q=' + q + '&period=' + period + '&site=' + encodeURIComponent(site) + '&page=' + encodeURIComponent(pagePath), { credentials: 'include' })
-      .then(function(r) { return r.json(); })
-      .catch(function() { return null; });
-  }
-
-  window.openDrilldown = function(pagePath) {
-    var overlay = document.getElementById('drilldown-overlay');
-    overlay.style.display = '';
-    document.getElementById('drilldown-title').textContent = pagePath;
-
-    // Reset
-    document.getElementById('dd-views').textContent = '-';
-    document.getElementById('dd-visitors').textContent = '-';
-    document.getElementById('dd-time').textContent = '-';
-    document.getElementById('dd-read100').textContent = '-';
-    destroyChart('dd-chart');
-    document.getElementById('dd-chart').innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">Loading...</div>';
-    document.getElementById('dd-scroll-depth').innerHTML = '';
-    document.querySelector('#table-dd-referrers tbody').innerHTML = '';
-    document.querySelector('#table-dd-countries tbody').innerHTML = '';
-    document.querySelector('#table-dd-utm tbody').innerHTML = '';
-
-    Promise.all([
-      queryPage('page-views-over-time', pagePath),
-      queryPage('timing-by-page', pagePath),
-      queryPage('scroll-depth-for-page', pagePath),
-      queryPage('referrers-by-page', pagePath),
-      queryPage('countries-by-page', pagePath),
-      queryPage('utm-by-page', pagePath),
-    ]).then(function(results) {
-      var viewsData = rows(results[0]);
-      var timingData = rows(results[1]);
-      var scrollData = rows(results[2]);
-      var refData = results[3];
-      var countryData = results[4];
-      var utmData = results[5];
-
-      // KPIs
-      var totalViews = sum(viewsData, 'views');
-      var totalVisitors = sum(viewsData, 'visitors');
-      document.getElementById('dd-views').textContent = num(totalViews);
-      document.getElementById('dd-visitors').textContent = num(totalVisitors);
-
-      if (timingData.length && timingData[0].avg_seconds) {
-        var secs = Math.round(parseFloat(timingData[0].avg_seconds));
-        var mins = Math.floor(secs / 60);
-        document.getElementById('dd-time').textContent = mins > 0 ? mins + 'm ' + (secs % 60) + 's' : secs + 's';
-      }
-
-      // Read 100%
-      var read100 = 0;
-      scrollData.forEach(function(r) { if (String(r.depth) === '100') read100 = parseFloat(r.count) || 0; });
-      document.getElementById('dd-read100').textContent = read100 > 0 ? num(read100) : '-';
-
-      // Chart
-      renderDrilldownChart(viewsData);
-
-      // Scroll depth funnel
-      renderDrilldownScroll(scrollData);
-
-      // Tables
-      fillTable('table-dd-referrers', refData, [{ key: 'referrer', favicon: true }, { key: 'visits', align: 'right', fmt: 'num' }]);
-      fillTable('table-dd-countries', countryData, [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }]);
-      fillTable('table-dd-utm', utmData, [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
-    });
-  };
-
-  window.closeDrilldown = function() {
-    document.getElementById('drilldown-overlay').style.display = 'none';
-  };
-
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') closeDrilldown();
+    fillTable('table-dd-referrers', refData, [{ key: 'referrer', favicon: true }, { key: 'visits', align: 'right', fmt: 'num' }]);
+    fillTable('table-dd-countries', countryData, [{ key: 'country' }, { key: 'views', align: 'right', fmt: 'num' }]);
+    fillTable('table-dd-utm', utmData, [{ key: 'utm_source' }, { key: 'utm_medium' }, { key: 'utm_campaign' }, { key: 'visits', align: 'right', fmt: 'num' }]);
   });
+}
 
-  function renderDrilldownChart(data) {
-    if (!window.Chart) { whenChart(function() { renderDrilldownChart(data); }); return; }
-    var el = document.getElementById('dd-chart');
-    destroyChart('dd-chart');
-    if (!data.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No data</div>'; return; }
-    el.innerHTML = '<canvas></canvas>';
-    var canvas = el.querySelector('canvas');
-    chartInstances['dd-chart'] = new window.Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: data.map(function(d) { return (d.date || '').slice(5); }),
-        datasets: [{
-          label: 'Views',
-          data: data.map(function(d) { return parseFloat(d.views) || 0; }),
-          backgroundColor: CHART_DEFAULTS.accentAlpha,
-          borderRadius: 2,
-          borderSkipped: false,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: function(ctx) { return num(ctx.raw) + ' views'; }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: { font: { family: CHART_DEFAULTS.font, size: 9 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 7 }
-          },
-          y: {
-            grid: { color: CHART_DEFAULTS.border },
-            border: { dash: [4, 4] },
-            ticks: { font: { family: CHART_DEFAULTS.font, size: 9 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 4 }
+function closeDrilldown() {
+  drilldownOverlay.style.display = 'none';
+  document.removeEventListener('keydown', trapDrilldownFocus);
+  if (lastFocusedBeforeDrilldown && typeof lastFocusedBeforeDrilldown.focus === 'function') {
+    lastFocusedBeforeDrilldown.focus();
+  }
+  lastFocusedBeforeDrilldown = null;
+}
+
+function renderDrilldownChart(data) {
+  var el = document.getElementById('dd-chart');
+  destroyChart('dd-chart');
+  if (!data.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No data</div>'; return; }
+  el.innerHTML = '<canvas></canvas>';
+  var canvas = el.querySelector('canvas');
+  chartInstances['dd-chart'] = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: data.map(function(d) { return (d.date || '').slice(5); }),
+      datasets: [{
+        label: 'Views',
+        data: data.map(function(d) { return parseFloat(d.views) || 0; }),
+        backgroundColor: CHART_DEFAULTS.accentAlpha,
+        borderRadius: 2,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return num(ctx.raw) + ' views'; }
           }
         }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { family: CHART_DEFAULTS.font, size: 9 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 7 }
+        },
+        y: {
+          grid: { color: CHART_DEFAULTS.border },
+          border: { dash: [4, 4] },
+          ticks: { font: { family: CHART_DEFAULTS.font, size: 9 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 4 }
+        }
       }
-    });
-  }
-
-  function renderDrilldownScroll(scrollData) {
-    var el = document.getElementById('dd-scroll-depth');
-    if (!scrollData.length) { el.innerHTML = '<div style="font-family:var(--mono);font-size:12px;color:var(--ink-muted);">No scroll data</div>'; return; }
-
-    var depthMap = {};
-    scrollData.forEach(function(r) { depthMap[String(r.depth)] = parseFloat(r.count) || 0; });
-    var depths = ['25', '50', '75', '100'];
-    var maxCount = Math.max.apply(null, depths.map(function(d) { return depthMap[d] || 0; }));
-    if (maxCount === 0) maxCount = 1;
-
-    var html = '';
-    depths.forEach(function(d) {
-      var count = depthMap[d] || 0;
-      var barW = (count / maxCount * 100).toFixed(1);
-      html += '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:6px;">';
-      html += '<span style="font-family:var(--mono);font-size:12px;color:var(--ink-secondary);min-width:40px;text-align:right;">' + d + '%</span>';
-      html += '<div style="flex:1;height:16px;background:var(--border-light);border-radius:2px;overflow:hidden;">';
-      html += '<div style="height:100%;width:' + barW + '%;background:var(--accent);border-radius:2px;transition:width 300ms;"></div>';
-      html += '</div>';
-      html += '<span style="font-family:var(--mono);font-size:11px;color:var(--ink-muted);min-width:40px;text-align:right;">' + num(count) + '</span>';
-      html += '</div>';
-    });
-    el.innerHTML = html;
-  }
-
-  // ---- Chart.js instance registry (destroy before recreate to avoid leaks) ----
-  var chartInstances = {};
-
-  function destroyChart(id) {
-    if (chartInstances[id]) {
-      chartInstances[id].destroy();
-      delete chartInstances[id];
     }
-  }
-
-  // Guard against race: module scripts (Chart.js) are deferred and run after
-  // the inline script fires fetch calls. On slow CDN connections the API
-  // response can arrive before window.Chart is set.
-  var _chartPending = [];
-  window.addEventListener('chartjs-ready', function() {
-    _chartPending.splice(0).forEach(function(fn) { fn(); });
-  }, { once: true });
-  function whenChart(fn) {
-    if (window.Chart) { fn(); } else { _chartPending.push(fn); }
-  }
-
-  var CHART_DEFAULTS = {
-    font: "'SF Mono','Fira Code','Menlo',monospace",
-    muted: '#78716c',
-    border: '#f5f5f4',
-    accent: '#dc6b14',
-    accentAlpha: 'rgba(220,107,20,0.85)',
-    secondary: '#57534e',
-    secondaryAlpha: 'rgba(87,83,78,0.7)',
-  };
-
-  function renderChart(data) {
-    if (!window.Chart) { whenChart(function() { renderChart(data); }); return; }
-    var el = document.getElementById('chart-traffic');
-    var r = rows(data);
-    destroyChart('chart-traffic');
-    if (!r.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No traffic data</div>'; return; }
-    el.innerHTML = '<canvas></canvas>';
-    var canvas = el.querySelector('canvas');
-    chartInstances['chart-traffic'] = new window.Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: r.map(function(d) { return (d.date || '').slice(5); }),
-        datasets: [{
-          label: 'Views',
-          data: r.map(function(d) { return parseFloat(d.views) || 0; }),
-          backgroundColor: CHART_DEFAULTS.accentAlpha,
-          borderRadius: 2,
-          borderSkipped: false,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: function(ctx) { return num(ctx.raw) + ' views'; }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: { font: { family: CHART_DEFAULTS.font, size: 10 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 8 }
-          },
-          y: {
-            grid: { color: CHART_DEFAULTS.border },
-            border: { dash: [4, 4] },
-            ticks: { font: { family: CHART_DEFAULTS.font, size: 10 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 5 }
-          }
-        }
-      }
-    });
-  }
-
-  // ---- Live panel ----
-  var liveActive = false;
-  var liveTimer = null;
-
-  function liveQuery(q) {
-    var url = WORKER + '/query?q=' + q + '&period=7d&site=' + encodeURIComponent(site);
-    return fetch(url, { credentials: 'include' })
-      .then(function(r) { return r.json(); })
-      .catch(function() { return { data: [] }; });
-  }
-
-  function renderLiveChart(hourlyData) {
-    if (!window.Chart) { whenChart(function() { renderLiveChart(hourlyData); }); return; }
-    var el = document.getElementById('live-chart');
-    if (!el) return;
-    var r = rows(hourlyData);
-    destroyChart('live-chart');
-    if (!r.length) { el.innerHTML = '<div style="color:var(--ink-muted);font-family:var(--mono);font-size:11px;padding-top:20px;">No data yet</div>'; return; }
-    el.innerHTML = '<canvas></canvas>';
-    var canvas = el.querySelector('canvas');
-    chartInstances['live-chart'] = new window.Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: r.map(function(d) { return (d.hour || '').toString().slice(11, 16); }),
-        datasets: [{
-          label: 'Views',
-          data: r.map(function(d) { return parseFloat(d.views) || 0; }),
-          backgroundColor: CHART_DEFAULTS.accentAlpha,
-          borderRadius: 1,
-          borderSkipped: false,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: function(ctx) { return num(ctx.raw) + ' views'; }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: { font: { family: CHART_DEFAULTS.font, size: 9 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 6 }
-          },
-          y: {
-            grid: { display: false },
-            ticks: { display: false }
-          }
-        }
-      }
-    });
-  }
-
-  function renderLivePages(pagesData) {
-    var el = document.getElementById('live-pages-list');
-    if (!el) return;
-    var r = rows(pagesData);
-    if (!r.length) { el.innerHTML = '<div style="color:var(--ink-muted);font-family:var(--mono);font-size:11px;">No activity</div>'; return; }
-    var max = parseFloat(r[0].views) || 1;
-    var html = '';
-    r.slice(0, 6).forEach(function(row) {
-      var pct = Math.max(4, Math.round(((parseFloat(row.views) || 0) / max) * 100));
-      html += '<div style="margin-bottom:6px;">';
-      html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">';
-      html += '<span style="font-family:var(--mono);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80%;">' + esc(row.path) + '</span>';
-      html += '<span style="font-family:var(--mono);color:var(--ink-muted);font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">' + num(row.views) + '</span>';
-      html += '</div>';
-      html += '<div style="background:var(--surface);border-radius:3px;overflow:hidden;height:4px;"><div style="background:var(--accent);height:100%;width:' + pct + '%;border-radius:3px;"></div></div>';
-      html += '</div>';
-    });
-    el.innerHTML = html;
-  }
-
-  function renderLiveReferrers(refData) {
-    var el = document.getElementById('live-referrers-list');
-    if (!el) return;
-    var r = rows(refData);
-    if (!r.length) { el.innerHTML = '<div style="color:var(--ink-muted);font-family:var(--mono);font-size:11px;">Direct / no referrer</div>'; return; }
-    var max = parseFloat(r[0].visits) || 1;
-    var html = '';
-    r.slice(0, 6).forEach(function(row) {
-      var pct = Math.max(4, Math.round(((parseFloat(row.visits) || 0) / max) * 100));
-      var host = esc(row.referrer || 'direct');
-      html += '<div style="margin-bottom:6px;">';
-      html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">';
-      html += '<span style="font-family:var(--mono);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80%;">' + host + '</span>';
-      html += '<span style="font-family:var(--mono);color:var(--ink-muted);font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">' + num(row.visits) + '</span>';
-      html += '</div>';
-      html += '<div style="background:var(--surface);border-radius:3px;overflow:hidden;height:4px;"><div style="background:var(--accent-hover);height:100%;width:' + pct + '%;border-radius:3px;"></div></div>';
-      html += '</div>';
-    });
-    el.innerHTML = html;
-  }
-
-  function loadLive() {
-    if (!liveActive) return;
-    var pulse = document.getElementById('live-pulse');
-    if (pulse) { pulse.classList.add('live-pulse'); }
-
-    Promise.all([
-      liveQuery('live-visitors'),
-      liveQuery('live-pages'),
-      liveQuery('hourly-today'),
-      liveQuery('live-referrers')
-    ]).then(function(results) {
-      var visitorData = rows(results[0]);
-      var pagesData = results[1];
-      var hourlyData = results[2];
-      var referrersData = results[3];
-
-      var visitors = visitorData.length ? (visitorData[0].visitors || 0) : 0;
-      var pageviews = visitorData.length ? (visitorData[0].pageviews || 0) : 0;
-
-      var vEl = document.getElementById('live-visitors');
-      var pvEl = document.getElementById('live-pageviews');
-      var updEl = document.getElementById('live-updated');
-
-      if (vEl) vEl.textContent = num(visitors);
-      if (pvEl) pvEl.textContent = num(pageviews);
-
-      var now = new Date();
-      var hh = String(now.getHours()).padStart(2, '0');
-      var mm = String(now.getMinutes()).padStart(2, '0');
-      var ss = String(now.getSeconds()).padStart(2, '0');
-      if (updEl) updEl.textContent = 'Updated ' + hh + ':' + mm + ':' + ss;
-
-      renderLivePages(pagesData);
-      renderLiveReferrers(referrersData);
-      renderLiveChart(hourlyData);
-
-      if (pulse) { pulse.classList.remove('live-pulse'); }
-      if (liveActive) { liveTimer = setTimeout(loadLive, 60000); }
-    });
-  }
-
-  function startLive() {
-    liveActive = true;
-    var panel = document.getElementById('live-panel');
-    var btn = document.getElementById('live-btn');
-    var dot = document.getElementById('live-dot');
-    if (panel) panel.style.display = '';
-    if (btn) { btn.style.background = '#1c1917'; btn.style.color = 'white'; }
-    if (dot) { dot.style.background = 'white'; }
-    loadLive();
-  }
-
-  function stopLive() {
-    liveActive = false;
-    if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
-    destroyChart('live-chart');
-    var panel = document.getElementById('live-panel');
-    var btn = document.getElementById('live-btn');
-    var dot = document.getElementById('live-dot');
-    if (panel) panel.style.display = 'none';
-    if (btn) { btn.style.background = ''; btn.style.color = ''; }
-    if (dot) { dot.style.background = '#dc2626'; }
-  }
-
-  document.getElementById('live-btn').addEventListener('click', function() {
-    if (liveActive) { stopLive(); } else { startLive(); }
   });
-  // ---- end live panel ----
+}
 
-  // ---- sites panel ----
-  var sitesPanel = document.getElementById('sites-panel');
-  var sitesBtn = document.getElementById('sites-btn');
-  var sitesClose = document.getElementById('sites-close');
-  var sitesList = document.getElementById('sites-list');
-  var sitesError = document.getElementById('sites-error');
+function renderDrilldownScroll(scrollData) {
+  var el = document.getElementById('dd-scroll-depth');
+  if (!scrollData.length) { el.innerHTML = '<div style="font-family:var(--mono);font-size:12px;color:var(--ink-muted);">No scroll data</div>'; return; }
 
-  // Manages the active organization's sites. Server returns [{hostname,label}].
-  function renderSitesList(sites) {
-    if (!sites.length) {
-      sitesList.innerHTML = '<div style="font-family:var(--mono);font-size:12px;color:var(--ink-muted);padding:0.5rem 0;">No sites registered. Add one below.</div>';
-      return;
+  var depthMap = {};
+  scrollData.forEach(function(r) { depthMap[String(r.depth)] = parseFloat(r.count) || 0; });
+  var depths = ['25', '50', '75', '100'];
+  var maxCount = Math.max.apply(null, depths.map(function(d) { return depthMap[d] || 0; }));
+  if (maxCount === 0) maxCount = 1;
+
+  var html = '';
+  depths.forEach(function(d) {
+    var count = depthMap[d] || 0;
+    var barW = (count / maxCount * 100).toFixed(1);
+    html += '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:6px;">';
+    html += '<span style="font-family:var(--mono);font-size:12px;color:var(--ink-secondary);min-width:40px;text-align:right;">' + d + '%</span>';
+    html += '<div style="flex:1;height:16px;background:var(--border-light);border-radius:2px;overflow:hidden;">';
+    html += '<div style="height:100%;width:' + barW + '%;background:var(--accent);border-radius:2px;transition:width 300ms;"></div>';
+    html += '</div>';
+    html += '<span style="font-family:var(--mono);font-size:11px;color:var(--ink-muted);min-width:40px;text-align:right;">' + num(count) + '</span>';
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function renderChart(data) {
+  var el = document.getElementById('chart-traffic');
+  var r = rows(data);
+  destroyChart('chart-traffic');
+  if (!r.length) { el.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No traffic data</div>'; return; }
+  el.innerHTML = '<canvas></canvas>';
+  var canvas = el.querySelector('canvas');
+  chartInstances['chart-traffic'] = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: r.map(function(d) { return (d.date || '').slice(5); }),
+      datasets: [{
+        label: 'Views',
+        data: r.map(function(d) { return parseFloat(d.views) || 0; }),
+        backgroundColor: CHART_DEFAULTS.accentAlpha,
+        borderRadius: 2,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return num(ctx.raw) + ' views'; }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { family: CHART_DEFAULTS.font, size: 10 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 8 }
+        },
+        y: {
+          grid: { color: CHART_DEFAULTS.border },
+          border: { dash: [4, 4] },
+          ticks: { font: { family: CHART_DEFAULTS.font, size: 10 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 5 }
+        }
+      }
     }
-    var canManage = session.role === 'owner' || session.role === 'admin';
-    sitesList.innerHTML = sites.map(function(s) {
-      var host = s.hostname || s;
-      var lbl = s.label || host;
-      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">' +
-        '<span style="font-family:var(--mono);font-size:12px;color:var(--ink);">' + esc(lbl) + ' <span style="color:var(--ink-muted);">' + esc(host) + '</span></span>' +
-        (canManage ? '<button data-remove="' + esc(host) + '" style="font-family:var(--mono);font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;padding:2px 6px;">remove</button>' : '') +
-        '</div>';
-    }).join('');
-    sitesList.querySelectorAll('[data-remove]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        fetch(WORKER + '/admin/sites', {
-          method: 'DELETE',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ hostname: btn.dataset.remove }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) { if (d.sites) { renderSitesList(d.sites); bootstrap(); } })
-          .catch(function() { sitesError.textContent = 'Remove failed.'; sitesError.style.display = ''; });
-      });
-    });
-  }
+  });
+}
 
-  function loadSites() {
-    sitesError.style.display = 'none';
-    api('/admin/sites')
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (d.sites) renderSitesList(d.sites);
-        else { sitesError.textContent = d.error || 'Failed to load sites.'; sitesError.style.display = ''; }
+// ---- Live panel ----
+var liveActive = false;
+var liveTimer = null;
+
+function liveQuery(q) {
+  return fetchJson(buildQueryUrl(WORKER, q, { period: '7d', site: site }))
+    .catch(function(err) { if (err instanceof AuthError) handleAuthError(err); return { data: [] }; });
+}
+
+function renderLiveChart(hourlyData) {
+  var el = document.getElementById('live-chart');
+  if (!el) return;
+  var r = rows(hourlyData);
+  destroyChart('live-chart');
+  if (!r.length) { el.innerHTML = '<div style="color:var(--ink-muted);font-family:var(--mono);font-size:11px;padding-top:20px;">No data yet</div>'; return; }
+  el.innerHTML = '<canvas></canvas>';
+  var canvas = el.querySelector('canvas');
+  chartInstances['live-chart'] = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: r.map(function(d) { return (d.hour || '').toString().slice(11, 16); }),
+      datasets: [{
+        label: 'Views',
+        data: r.map(function(d) { return parseFloat(d.views) || 0; }),
+        backgroundColor: CHART_DEFAULTS.accentAlpha,
+        borderRadius: 1,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return num(ctx.raw) + ' views'; }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { family: CHART_DEFAULTS.font, size: 9 }, color: CHART_DEFAULTS.muted, maxTicksLimit: 6 }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function renderLivePages(pagesData) {
+  var el = document.getElementById('live-pages-list');
+  if (!el) return;
+  var r = rows(pagesData);
+  if (!r.length) { el.innerHTML = '<div style="color:var(--ink-muted);font-family:var(--mono);font-size:11px;">No activity</div>'; return; }
+  var max = parseFloat(r[0].views) || 1;
+  var html = '';
+  r.slice(0, 6).forEach(function(row) {
+    var pct = Math.max(4, Math.round(((parseFloat(row.views) || 0) / max) * 100));
+    html += '<div style="margin-bottom:6px;">';
+    html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">';
+    html += '<span style="font-family:var(--mono);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80%;">' + esc(row.path) + '</span>';
+    html += '<span style="font-family:var(--mono);color:var(--ink-muted);font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">' + num(row.views) + '</span>';
+    html += '</div>';
+    html += '<div style="background:var(--surface);border-radius:3px;overflow:hidden;height:4px;"><div style="background:var(--accent);height:100%;width:' + pct + '%;border-radius:3px;"></div></div>';
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function renderLiveReferrers(refData) {
+  var el = document.getElementById('live-referrers-list');
+  if (!el) return;
+  var r = rows(refData);
+  if (!r.length) { el.innerHTML = '<div style="color:var(--ink-muted);font-family:var(--mono);font-size:11px;">Direct / no referrer</div>'; return; }
+  var max = parseFloat(r[0].visits) || 1;
+  var html = '';
+  r.slice(0, 6).forEach(function(row) {
+    var pct = Math.max(4, Math.round(((parseFloat(row.visits) || 0) / max) * 100));
+    var host = esc(row.referrer || 'direct');
+    html += '<div style="margin-bottom:6px;">';
+    html += '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px;">';
+    html += '<span style="font-family:var(--mono);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80%;">' + host + '</span>';
+    html += '<span style="font-family:var(--mono);color:var(--ink-muted);font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">' + num(row.visits) + '</span>';
+    html += '</div>';
+    html += '<div style="background:var(--surface);border-radius:3px;overflow:hidden;height:4px;"><div style="background:var(--accent-hover);height:100%;width:' + pct + '%;border-radius:3px;"></div></div>';
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function loadLive() {
+  if (!liveActive) return;
+  var pulse = document.getElementById('live-pulse');
+  if (pulse) { pulse.classList.add('live-pulse'); }
+
+  Promise.all([
+    liveQuery('live-visitors'),
+    liveQuery('live-pages'),
+    liveQuery('hourly-today'),
+    liveQuery('live-referrers')
+  ]).then(function(results) {
+    var visitorData = rows(results[0]);
+    var pagesData = results[1];
+    var hourlyData = results[2];
+    var referrersData = results[3];
+
+    var visitors = visitorData.length ? (visitorData[0].visitors || 0) : 0;
+    var pageviews = visitorData.length ? (visitorData[0].pageviews || 0) : 0;
+
+    var vEl = document.getElementById('live-visitors');
+    var pvEl = document.getElementById('live-pageviews');
+    var updEl = document.getElementById('live-updated');
+
+    if (vEl) vEl.textContent = num(visitors);
+    if (pvEl) pvEl.textContent = num(pageviews);
+
+    var now = new Date();
+    var hh = String(now.getHours()).padStart(2, '0');
+    var mm = String(now.getMinutes()).padStart(2, '0');
+    var ss = String(now.getSeconds()).padStart(2, '0');
+    if (updEl) updEl.textContent = 'Updated ' + hh + ':' + mm + ':' + ss;
+
+    renderLivePages(pagesData);
+    renderLiveReferrers(referrersData);
+    renderLiveChart(hourlyData);
+
+    if (pulse) { pulse.classList.remove('live-pulse'); }
+    if (liveActive) { liveTimer = setTimeout(loadLive, 60000); }
+  });
+}
+
+function startLive() {
+  liveActive = true;
+  var panel = document.getElementById('live-panel');
+  var btn = document.getElementById('live-btn');
+  var dot = document.getElementById('live-dot');
+  if (panel) panel.style.display = '';
+  if (btn) { btn.style.background = '#1c1917'; btn.style.color = 'white'; }
+  if (dot) { dot.style.background = 'white'; }
+  loadLive();
+}
+
+function stopLive() {
+  liveActive = false;
+  if (liveTimer) { clearTimeout(liveTimer); liveTimer = null; }
+  destroyChart('live-chart');
+  var panel = document.getElementById('live-panel');
+  var btn = document.getElementById('live-btn');
+  var dot = document.getElementById('live-dot');
+  if (panel) panel.style.display = 'none';
+  if (btn) { btn.style.background = ''; btn.style.color = ''; }
+  if (dot) { dot.style.background = '#dc2626'; }
+}
+
+document.getElementById('live-btn').addEventListener('click', function() {
+  if (liveActive) { stopLive(); } else { startLive(); }
+});
+// ---- end live panel ----
+
+// ---- sites panel ----
+var sitesPanel = document.getElementById('sites-panel');
+var sitesBtn = document.getElementById('sites-btn');
+var sitesClose = document.getElementById('sites-close');
+var sitesList = document.getElementById('sites-list');
+var sitesError = document.getElementById('sites-error');
+
+// Manages the active organization's sites. Server returns [{hostname,label}].
+function renderSitesList(sites) {
+  if (!sites.length) {
+    sitesList.innerHTML = '<div style="font-family:var(--mono);font-size:12px;color:var(--ink-muted);padding:0.5rem 0;">No sites registered. Add one below.</div>';
+    return;
+  }
+  var canManage = session.role === 'owner' || session.role === 'admin';
+  sitesList.innerHTML = sites.map(function(s) {
+    var host = s.hostname || s;
+    var lbl = s.label || host;
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">' +
+      '<span style="font-family:var(--mono);font-size:12px;color:var(--ink);">' + esc(lbl) + ' <span style="color:var(--ink-muted);">' + esc(host) + '</span></span>' +
+      (canManage ? '<button type="button" data-remove="' + esc(host) + '" style="font-family:var(--mono);font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;padding:2px 6px;">remove</button>' : '') +
+      '</div>';
+  }).join('');
+  sitesList.querySelectorAll('[data-remove]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      fetch(WORKER + '/admin/sites', {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: btn.dataset.remove }),
       })
-      .catch(function() { sitesError.textContent = 'Could not reach worker.'; sitesError.style.display = ''; });
-  }
-
-  sitesBtn.addEventListener('click', function() {
-    var open = sitesPanel.style.display !== 'none';
-    sitesPanel.style.display = open ? 'none' : '';
-    if (!open) loadSites();
-  });
-
-  sitesClose.addEventListener('click', function() { sitesPanel.style.display = 'none'; });
-
-  document.getElementById('add-site-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    var hostname = document.getElementById('new-origin').value.trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
-    sitesError.style.color = 'var(--red)';
-    sitesError.style.display = 'none';
-    if (!hostname) return;
-    claimSiteFlow(hostname, '', sitesError, function() {
-      document.getElementById('new-origin').value = '';
-      loadSites();
-      bootstrap();
+        .then(function(r) { return r.json(); })
+        .then(function(d) { if (d.sites) { renderSitesList(d.sites); bootstrap(); } })
+        .catch(function() { sitesError.textContent = 'Remove failed.'; sitesError.style.display = ''; });
     });
   });
-  // ---- end sites panel ----
+}
 
-  function renderFunnel(data) {
-    var el = document.getElementById('funnel');
-    var r = rows(data);
-    if (!r.length) { el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No funnel data</div>'; return; }
-
-    var pv = sum(r, 'pageviews');
-    var conv = sum(r, 'conversions');
-    var max = Math.max(pv, 1);
-
-    var steps = [
-      { label: 'Pageviews', value: pv, color: 'var(--accent)' },
-      { label: 'Custom Events', value: conv, color: 'var(--green)' },
-    ];
-
-    var html = '';
-    steps.forEach(function(s) {
-      var w = Math.max(2, (s.value / max) * 100);
-      var rate = pv > 0 ? (s.value / pv * 100).toFixed(2) : '0';
-      html += '<div class="funnel-row">';
-      html += '<div class="funnel-label"><span>' + esc(s.label) + '</span><span>' + num(s.value) + ' (' + rate + '%)</span></div>';
-      html += '<div class="funnel-track"><div class="funnel-fill" style="width:' + w + '%;background:' + s.color + ';opacity:0.8;"></div></div>';
-      html += '</div>';
+function loadSites() {
+  sitesError.style.display = 'none';
+  apiJson('/admin/sites')
+    .then(function(d) {
+      if (d.sites) renderSitesList(d.sites);
+      else { sitesError.textContent = d.error || 'Failed to load sites.'; sitesError.style.display = ''; }
+    })
+    .catch(function(err) {
+      if (err instanceof AuthError) { showLogin(); return; }
+      sitesError.textContent = 'Could not reach worker.'; sitesError.style.display = '';
     });
-    el.innerHTML = html;
-  }
-})();
+}
+
+sitesBtn.addEventListener('click', function() {
+  var open = sitesPanel.style.display !== 'none';
+  sitesPanel.style.display = open ? 'none' : '';
+  if (!open) loadSites();
+});
+
+sitesClose.addEventListener('click', function() { sitesPanel.style.display = 'none'; });
+
+document.getElementById('add-site-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var hostname = document.getElementById('new-origin').value.trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+  sitesError.style.color = 'var(--red)';
+  sitesError.style.display = 'none';
+  if (!hostname) return;
+  claimSiteFlow(hostname, '', sitesError, function() {
+    document.getElementById('new-origin').value = '';
+    loadSites();
+    bootstrap();
+  });
+});
+// ---- end sites panel ----
+
+function renderFunnel(data) {
+  var el = document.getElementById('funnel');
+  var r = rows(data);
+  if (!r.length) { el.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--ink-muted);font-family:var(--mono);font-size:12px;">No funnel data</div>'; return; }
+
+  var pv = sum(r, 'pageviews');
+  var conv = sum(r, 'conversions');
+  var max = Math.max(pv, 1);
+
+  var steps = [
+    { label: 'Pageviews', value: pv, color: 'var(--accent)' },
+    { label: 'Custom Events', value: conv, color: 'var(--green)' },
+  ];
+
+  var html = '';
+  steps.forEach(function(s) {
+    var w = Math.max(2, (s.value / max) * 100);
+    var rate = pv > 0 ? (s.value / pv * 100).toFixed(2) : '0';
+    html += '<div class="funnel-row">';
+    html += '<div class="funnel-label"><span>' + esc(s.label) + '</span><span>' + num(s.value) + ' (' + rate + '%)</span></div>';
+    html += '<div class="funnel-track"><div class="funnel-fill" style="width:' + w + '%;background:' + s.color + ';opacity:0.8;"></div></div>';
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
 </script>

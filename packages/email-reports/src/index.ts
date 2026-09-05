@@ -12,6 +12,14 @@
  *   GET  /health        — Health check
  *
  * Cron: runs weekly (configured in wrangler.toml)
+ *
+ * Idempotency: before sending, `scheduled()` checks a KV marker
+ * (`sent:weekly:<iso-week>`) written once the send loop finishes. Cloudflare
+ * retries a cron invocation that throws, and without this marker a retry
+ * after a partial send would re-send that week's email to everyone,
+ * including recipients who already got it. The marker is never deleted —
+ * it is one small key per calendar week and KV list() below filters
+ * non-email keys back out, so it costs nothing to keep indefinitely.
  */
 
 export interface Env {
@@ -102,8 +110,87 @@ function sum(rows: AnalyticsRow[], field: string): number {
   return rows.reduce((acc, r) => acc + (Number(r[field]) || 0), 0);
 }
 
-// Generate the HTML email report
-export async function generateReport(env: Env): Promise<{ subject: string; html: string }> {
+function addDays(d: Date, delta: number): Date {
+  const copy = new Date(d);
+  copy.setUTCDate(copy.getUTCDate() + delta);
+  return copy;
+}
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// Analytics Engine's daily-* queries GROUP BY date and omit any day with no
+// matching rows entirely — a quiet Tuesday just isn't in the array. That
+// means the previous week can occupy anywhere from 0 to 7 of the 30
+// elements, so summing by array position (`.slice(-21, -14)`) silently
+// drifts onto the wrong calendar days the moment any day in the range had
+// zero traffic. Summing by the row's own `date` field is immune to gaps.
+export function sumInWeek(rows: AnalyticsRow[], field: string, weekStart: string, weekEnd: string): number {
+  return rows
+    .filter((r) => {
+      const d = String(r.date);
+      return d >= weekStart && d <= weekEnd;
+    })
+    .reduce((acc, r) => acc + (Number(r[field]) || 0), 0);
+}
+
+// The report compares two whole-calendar-day windows taken from the same
+// 30-day daily series: the current week is today-6 .. today and the previous
+// week is today-13 .. today-7. Summing the rolling `NOW() - 7 DAY` query for
+// the current side would overlap the previous window on the boundary day and
+// make the percentage drift with the cron hour.
+export function currentWeekWindow(now: Date): { start: string; end: string } {
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return { start: isoDate(addDays(today, -6)), end: isoDate(today) };
+}
+
+export function previousWeekWindow(now: Date): { start: string; end: string } {
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return { start: isoDate(addDays(today, -13)), end: isoDate(addDays(today, -7)) };
+}
+
+// ISO-8601 week identifier (e.g. "2026-W36") — stable across a whole
+// calendar week regardless of which day or hour the cron actually runs on,
+// so a Cloudflare retry a few hours later lands on the same period key.
+function isoWeekKey(date: Date): string {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7; // Mon=0 .. Sun=6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3); // Thursday of this ISO week
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
+  const weekNum = 1 + Math.round((d.getTime() - firstThursday.getTime()) / (7 * 24 * 3600 * 1000));
+  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+// Escape everything HTML-meaningful before interpolating visitor-controlled
+// data (page path, referrer, user agent) into the email markup. A visitor to
+// the tracked site can send an arbitrary path or User-Agent to the public
+// /track endpoint, and that string ends up inside an HTML email opened in a
+// normal mail client if it isn't escaped here.
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// A "spike" or "drop" percentage is only meaningful once the baseline has
+// enough traffic that normal day-to-day noise can't swing it past the
+// threshold on its own — otherwise 1 view becoming 2 reads as a "+100%
+// traffic spike" alert for a brand-new or very quiet site.
+const MIN_SAMPLE_FOR_ANOMALY = 50;
+
+// Generate the HTML (and plain-text) email report. `now` is the anchor for
+// the previous-week comparison window; it defaults to the real clock and is
+// only overridden by tests that need a fixed calendar date.
+export async function generateReport(
+  env: Env,
+  now: Date = new Date(),
+): Promise<{ subject: string; html: string; text: string }> {
   // Fetch current and previous period data
   const outcomes = await Promise.all([
     queryAnalytics(env, 'daily-views', '7d'),
@@ -134,13 +221,16 @@ export async function generateReport(env: Env): Promise<{ subject: string; html:
     botHitsTotal,
   ] = outcomes.map((o) => o.rows);
 
-  const totalViews = sum(dailyViews, 'views');
-  const totalVisitors = sum(dailyVisitors, 'unique_visitors');
   const totalEvents = sum(customEvents, 'count');
 
-  // Previous 7 days (from 30d data, take days 8-14)
-  const prevViews = sum(prevDailyViews.slice(-21, -14), 'views');
-  const prevVisitors = sum(prevDailyVisitors.slice(-21, -14), 'unique_visitors');
+  // Both comparison windows come from the 30-day daily series so they are
+  // whole calendar days and cannot overlap (see currentWeekWindow).
+  const { start: curWeekStart, end: curWeekEnd } = currentWeekWindow(now);
+  const { start: prevWeekStart, end: prevWeekEnd } = previousWeekWindow(now);
+  const totalViews = sumInWeek(prevDailyViews, 'views', curWeekStart, curWeekEnd);
+  const totalVisitors = sumInWeek(prevDailyVisitors, 'unique_visitors', curWeekStart, curWeekEnd);
+  const prevViews = sumInWeek(prevDailyViews, 'views', prevWeekStart, prevWeekEnd);
+  const prevVisitors = sumInWeek(prevDailyVisitors, 'unique_visitors', prevWeekStart, prevWeekEnd);
 
   const viewsDelta = pctChange(totalViews, prevViews);
   const visitorsDelta = pctChange(totalVisitors, prevVisitors);
@@ -154,11 +244,14 @@ export async function generateReport(env: Env): Promise<{ subject: string; html:
   const totalBotHits = Number(botHitsTotal[0]?.total_bot_hits || 0);
   const top5Bots = botHits.slice(0, 5);
 
-  // Detect anomalies (>30% change)
+  // Detect anomalies (>30% change), but only once the baseline is large
+  // enough that the swing means something (see MIN_SAMPLE_FOR_ANOMALY).
   const anomalies: string[] = [];
   const viewsChangeNum = prevViews > 0 ? ((totalViews - prevViews) / prevViews) * 100 : 0;
-  if (viewsChangeNum > 30) anomalies.push(`Traffic spike: pageviews up ${viewsDelta} vs last week`);
-  if (viewsChangeNum < -30) anomalies.push(`Traffic drop: pageviews down ${viewsDelta} vs last week`);
+  if (prevViews >= MIN_SAMPLE_FOR_ANOMALY) {
+    if (viewsChangeNum > 30) anomalies.push(`Traffic spike: pageviews up ${viewsDelta} vs last week`);
+    if (viewsChangeNum < -30) anomalies.push(`Traffic drop: pageviews down ${viewsDelta} vs last week`);
+  }
 
   // Never put a fabricated zero in the subject line: it is the part that gets
   // read at a glance, and "0 views" reads as a fact about the site rather than
@@ -177,7 +270,7 @@ export async function generateReport(env: Env): Promise<{ subject: string; html:
   <div style="text-align:center;padding:16px 0 24px;">
     <div style="display:inline-block;width:32px;height:32px;background:#dc6b14;border-radius:6px;"></div>
     <h1 style="margin:8px 0 0;font-size:20px;color:#1a1a1a;">Weekly Report</h1>
-    <p style="margin:4px 0 0;font-size:13px;color:#8a8a8a;">${siteName} — Last 7 days</p>
+    <p style="margin:4px 0 0;font-size:13px;color:#8a8a8a;">${escapeHtml(siteName)} — Last 7 days</p>
   </div>
 ${queriesFailed ? `
   <!-- Data could not be read -->
@@ -227,7 +320,7 @@ ${queriesFailed ? `
         <tbody>
           ${top5Pages.map((p) => `
           <tr style="border-bottom:1px solid #f0f0ee;">
-            <td style="padding:8px 12px;color:#4a4a4a;">${siteUrl}${p.path}</td>
+            <td style="padding:8px 12px;color:#4a4a4a;">${escapeHtml(siteUrl)}${escapeHtml(p.path)}</td>
             <td style="padding:8px 12px;color:#4a4a4a;text-align:right;font-variant-numeric:tabular-nums;">${num(p.views)}</td>
           </tr>`).join('')}
           ${top5Pages.length === 0 ? '<tr><td colspan="2" style="padding:16px;text-align:center;color:#8a8a8a;">No data</td></tr>' : ''}
@@ -243,7 +336,7 @@ ${queriesFailed ? `
     <div style="background:white;border:1px solid #e5e5e3;border-radius:4px;padding:12px;">
       ${top3Referrers.map((r) => `
       <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;">
-        <span style="color:#4a4a4a;">${r.referrer}</span>
+        <span style="color:#4a4a4a;">${escapeHtml(r.referrer)}</span>
         <span style="color:#8a8a8a;font-variant-numeric:tabular-nums;">${num(r.visits)}</span>
       </div>`).join('')}
     </div>
@@ -256,7 +349,7 @@ ${queriesFailed ? `
     <div style="background:white;border:1px solid #e5e5e3;border-radius:4px;padding:12px;">
       ${top3Countries.map((c) => `
       <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;">
-        <span style="color:#4a4a4a;">${c.country}</span>
+        <span style="color:#4a4a4a;">${escapeHtml(c.country)}</span>
         <span style="color:#8a8a8a;font-variant-numeric:tabular-nums;">${num(c.views)}</span>
       </div>`).join('')}
     </div>
@@ -275,7 +368,7 @@ ${queriesFailed ? `
       <div style="font-size:11px;color:#8a8a8a;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Top bots</div>
       ${top5Bots.map((b) => `
       <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;">
-        <span style="color:#6a6a6a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;">${String(b.user_agent).slice(0, 60)}</span>
+        <span style="color:#6a6a6a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;">${escapeHtml(String(b.user_agent).slice(0, 60))}</span>
         <span style="color:#8a8a8a;font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:8px;">${num(b.hits)}</span>
       </div>`).join('')}` : ''}
     </div>
@@ -285,23 +378,79 @@ ${queriesFailed ? `
   <div style="text-align:center;padding:16px 0;border-top:1px solid #e5e5e3;">
     <p style="font-size:12px;color:#8a8a8a;">
       Sent by <a href="https://flarelytics.dev" style="color:#dc6b14;text-decoration:none;">Flarelytics</a>
-      ${siteUrl ? ` — <a href="${siteUrl}" style="color:#dc6b14;text-decoration:none;">View site</a>` : ''}
+      ${siteUrl ? ` — <a href="${escapeHtml(siteUrl)}" style="color:#dc6b14;text-decoration:none;">View site</a>` : ''}
     </p>
   </div>
 </div>
 </body>
 </html>`;
 
-  return { subject, html };
+  // Plain-text alternative. Several mail providers penalize HTML-only
+  // messages for deliverability, and a text body carries the raw
+  // (unescaped) values rather than the HTML-entity-escaped ones above.
+  const textLines: string[] = [
+    `${siteName} — Weekly Report (last 7 days)`,
+    '',
+  ];
+  if (queriesFailed) {
+    textLines.push(
+      'These numbers could not be read.',
+      'At least one query to the analytics worker failed, so the figures below are missing rather than zero.',
+      'Do not read this as a quiet week. Check the reports worker logs.',
+      '',
+    );
+  } else {
+    textLines.push(
+      `Pageviews: ${num(totalViews)} (${viewsDelta} vs last week)`,
+      `Visitors:  ${num(totalVisitors)} (${visitorsDelta} vs last week)`,
+      `Events:    ${num(totalEvents)}`,
+      '',
+    );
+  }
+  if (anomalies.length > 0) {
+    textLines.push('Alert', ...anomalies.map((a) => `- ${a}`), '');
+  }
+  textLines.push('Top Pages');
+  if (top5Pages.length === 0) {
+    textLines.push('  No data');
+  } else {
+    for (const p of top5Pages) textLines.push(`  ${siteUrl}${p.path} — ${num(p.views)} views`);
+  }
+  textLines.push('');
+  if (top3Referrers.length > 0) {
+    textLines.push('Top Referrers');
+    for (const r of top3Referrers) textLines.push(`  ${r.referrer} — ${num(r.visits)}`);
+    textLines.push('');
+  }
+  if (top3Countries.length > 0) {
+    textLines.push('Top Countries');
+    for (const c of top3Countries) textLines.push(`  ${c.country} — ${num(c.views)}`);
+    textLines.push('');
+  }
+  if (totalBotHits > 0) {
+    textLines.push(`Bot Traffic: ${num(totalBotHits)} requests blocked`);
+    for (const b of top5Bots) textLines.push(`  ${String(b.user_agent).slice(0, 60)} — ${num(b.hits)}`);
+    textLines.push('');
+  }
+  textLines.push(`Sent by Flarelytics (https://flarelytics.dev)${siteUrl ? ` — ${siteUrl}` : ''}`);
+  const text = textLines.join('\n');
+
+  return { subject, html, text };
 }
 
-// Send email via HTTP API (Euromail, Resend, SendGrid, etc.)
+// Send email via HTTP API (Euromail, Resend, SendGrid, etc.). `index` is a
+// 1-based position in the current send loop, logged instead of the address
+// itself so failures are traceable without putting a recipient's email in
+// the logs.
 async function sendEmail(
   env: Env,
   to: string,
   subject: string,
   html: string,
+  text: string,
+  index?: number,
 ): Promise<boolean> {
+  const label = index != null ? `recipient #${index}` : 'recipient';
   try {
     const apiUrl = env.EMAIL_API_URL.replace(/\/$/, '');
     const res = await fetch(`${apiUrl}/v1/emails`, {
@@ -315,34 +464,83 @@ async function sendEmail(
         to,
         subject,
         html_body: html,
+        text_body: text,
       }),
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
       const errText = await res.text();
-      console.log(`[reports] Email API error ${res.status}: ${errText}`);
+      console.error(`[reports] Email API error ${res.status} sending to ${label}: ${errText}`);
     }
     return res.ok;
   } catch (err) {
-    console.log(`[reports] Failed to send to ${to}: ${err}`);
+    console.error(`[reports] Failed to send to ${label}: ${err}`);
     return false;
   }
 }
 
-// Get all recipients from KV
+// A deliberately permissive but sane "local@domain.tld" shape — not a full
+// RFC 5322 validator, just enough to reject the empty-local-part and
+// missing-TLD garbage that `.includes('@')` let through.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function isValidEmail(email: unknown): email is string {
+  return typeof email === 'string' && email.length <= 254 && EMAIL_PATTERN.test(email);
+}
+
+// Get all recipients from KV, paginating past KV's 1000-key-per-call cap.
+// Filters to valid-looking email addresses only: the same KV namespace also
+// holds the `sent:weekly:<...>` idempotency marker (see scheduled()), and
+// treating that key as a recipient would silently try to email it.
 async function getRecipients(env: Env): Promise<string[]> {
-  const list = await env.REPORT_RECIPIENTS.list();
-  return list.keys.map((k) => k.name);
+  const emails: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await env.REPORT_RECIPIENTS.list(cursor ? { cursor } : {});
+    for (const k of page.keys) {
+      if (isValidEmail(k.name)) emails.push(k.name);
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return emails;
+}
+
+// Constant-time comparison of the admin API key, mirroring
+// packages/worker/src/auth/crypto.ts's timingSafeEqual so a network
+// observer can't recover the key one byte at a time from response timing.
+const utf8 = new TextEncoder();
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const aa = utf8.encode(a);
+  const bb = utf8.encode(b);
+  if (aa.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aa.length; i++) diff |= aa[i] ^ bb[i];
+  return diff === 0;
 }
 
 function isAuthenticated(request: Request, env: Env): boolean {
   const key = request.headers.get('X-API-Key');
-  return !!key && key === env.ADMIN_API_KEY;
+  if (!key || !env.ADMIN_API_KEY) return false;
+  return timingSafeEqual(key, env.ADMIN_API_KEY);
 }
 
 export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    console.log(`[reports] Cron triggered at ${new Date().toISOString()}`);
+  async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+    const now = new Date(event.scheduledTime);
+    console.log(`[reports] Cron triggered at ${now.toISOString()}`);
+
+    // Idempotency guard: Cloudflare retries a cron invocation that throws.
+    // Without this marker, a retry after a partial send (an exception
+    // outside the per-recipient try/catch below, e.g. a KV outage while
+    // listing recipients) would re-send this week's email to everyone,
+    // including recipients who already got it.
+    const periodKey = `sent:weekly:${isoWeekKey(now)}`;
+    const alreadySent = await env.REPORT_RECIPIENTS.get(periodKey);
+    if (alreadySent) {
+      console.log(`[reports] Already sent for ${periodKey}, skipping`);
+      return;
+    }
 
     const recipients = await getRecipients(env);
     if (recipients.length === 0) {
@@ -350,17 +548,42 @@ export default {
       return;
     }
 
-    const { subject, html } = await generateReport(env);
+    let sentAny = false;
+    try {
+      const { subject, html, text } = await generateReport(env, now);
 
-    let sent = 0;
-    let failed = 0;
-    for (const email of recipients) {
-      const ok = await sendEmail(env, email, subject, html);
-      if (ok) sent++;
-      else failed++;
+      let sent = 0;
+      let failed = 0;
+      for (let i = 0; i < recipients.length; i++) {
+        const ok = await sendEmail(env, recipients[i], subject, html, text, i + 1);
+        if (ok) {
+          sent++;
+          sentAny = true;
+        } else {
+          failed++;
+        }
+      }
+
+      console.log(`[reports] Sent to ${sent}/${recipients.length} recipients (${failed} failed)`);
+      if (sent === 0) {
+        // sendEmail never throws, so a total outage reaches this point with
+        // sentAny still false. Throwing here leaves the marker unset and
+        // lets the platform retry, since nobody has received anything yet.
+        throw new Error(`no recipient received the report (${failed} failed)`);
+      }
+      // Mark the period sent only once at least one email went out.
+      await env.REPORT_RECIPIENTS.put(periodKey, now.toISOString());
+    } catch (err) {
+      console.error('[reports] scheduled run failed:', err);
+      if (sentAny) {
+        // Some recipients already received this period's email. Opt out of
+        // Cloudflare's automatic retry rather than risk a duplicate send to
+        // everyone — a partial failure here needs a human to look at the
+        // logs, not a silent full replay.
+        event.noRetry();
+      }
+      throw err;
     }
-
-    console.log(`[reports] Sent to ${sent}/${recipients.length} recipients (${failed} failed)`);
   },
 
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -390,7 +613,7 @@ export default {
     // Add recipient
     if (pathname === '/recipients' && request.method === 'POST') {
       const body = await request.json() as { email?: string };
-      if (!body.email || !body.email.includes('@')) {
+      if (!isValidEmail(body.email)) {
         return Response.json({ error: 'Invalid email' }, { status: 400 });
       }
       await env.REPORT_RECIPIENTS.put(body.email, new Date().toISOString());
@@ -411,12 +634,12 @@ export default {
     if (pathname === '/test' && request.method === 'POST') {
       const body = await request.json() as { email?: string };
       const email = body.email;
-      if (!email || !email.includes('@')) {
+      if (!isValidEmail(email)) {
         return Response.json({ error: 'Provide email to send test to' }, { status: 400 });
       }
 
-      const { subject, html } = await generateReport(env);
-      const ok = await sendEmail(env, email, subject, html);
+      const { subject, html, text } = await generateReport(env);
+      const ok = await sendEmail(env, email, subject, html, text);
       return Response.json({ ok, subject, sentTo: email });
     }
 

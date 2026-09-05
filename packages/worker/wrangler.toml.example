@@ -3,6 +3,12 @@ main = "src/index.ts"
 compatibility_date = "2025-03-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Workers Logs — structured request logs, queryable in the dashboard. Worth
+# having on record for a Worker handling session cookies, OIDC callbacks, and
+# cross-tenant site authorization.
+[observability]
+enabled = true
+
 # Optional: serve the worker on a custom domain (SSO API origin). Cloudflare
 # auto-creates the DNS record + cert on `wrangler deploy` when the apex is a zone
 # on this account. Put the dashboard on a sibling subdomain (app.<domain>) so the
@@ -104,6 +110,13 @@ DATASET_NAME = "flarelytics"
 #                        Find at: https://dash.cloudflare.com → any zone → Overview sidebar
 #   SESSION_SECRET     — random 32+ byte string; signs the session cookie (SSO)
 #   OIDC_CLIENT_SECRET — OIDC client secret from your provider (SSO)
+#   VISITOR_SALT       — optional; random string salting the daily visitor
+#                        hash (blob9). Falls back to QUERY_API_KEY when unset,
+#                        so existing deployments keep working — set a
+#                        dedicated value if you want the visitor hash to
+#                        survive rotating QUERY_API_KEY. Changing this value
+#                        changes every visitor hash going forward (expected,
+#                        since the hash already rotates daily).
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Staging environment — used by MIGRATION_PLAN.md §9 Task B (baseline p99)

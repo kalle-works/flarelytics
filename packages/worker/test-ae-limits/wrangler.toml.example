@@ -2,6 +2,9 @@ name = "flarelytics-ae-limits-test"
 main = "src/index.ts"
 compatibility_date = "2026-04-01"
 
+[observability]
+enabled = true
+
 # Throwaway verification harness for MIGRATION_PLAN.md §9 Task A.
 # Deploy under your own Cloudflare account; SEPARATE from any production worker.
 account_id = "your-account-id-here"

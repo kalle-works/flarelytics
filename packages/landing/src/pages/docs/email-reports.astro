@@ -125,7 +125,7 @@
         <p>Each weekly report includes:</p>
         <ul>
           <li>KPI cards — pageviews, unique visitors, and custom event count with week-over-week change</li>
-          <li>Anomaly alerts — flagged automatically when traffic changes by more than 30%</li>
+          <li>Anomaly alerts — flagged automatically when traffic changes by more than 30%, once the prior week has at least 50 pageviews</li>
           <li>Top 5 pages by pageviews</li>
           <li>Top 3 referrer sources</li>
           <li>Top 3 countries</li>
@@ -174,7 +174,7 @@
                 <div>SITE_URL = <span class="code-string">"https://mysite.com"</span></div>
                 <div>&nbsp;</div>
                 <div>[triggers]</div>
-                <div>crons = [<span class="code-string">"0 9 * * 1"</span>] <span class="code-comment"># Monday at 9am UTC</span></div>
+                <div>crons = [<span class="code-string">"0 8 * * 1"</span>] <span class="code-comment"># Sunday at 8am UTC — see note below</span></div>
                 <div>&nbsp;</div>
                 <div>[[kv_namespaces]]</div>
                 <div>binding = <span class="code-string">"REPORT_RECIPIENTS"</span></div>
@@ -255,7 +255,12 @@
 
         <div class="note">
           <strong>Cron schedule</strong><br />
-          <code style="font-family:var(--mono);font-size:12px;">0 9 * * 1</code> fires every Monday at 9am UTC. Adjust the cron expression in wrangler.toml to change the schedule. Cloudflare cron triggers require a paid Workers plan.
+          Cloudflare's day-of-week field is offset by one from standard cron: <code style="font-family:var(--mono);font-size:12px;">1</code> fires on <strong>Sunday</strong>, not Monday, and <code style="font-family:var(--mono);font-size:12px;">2</code> fires on Monday. So <code style="font-family:var(--mono);font-size:12px;">0 8 * * 1</code> above fires every Sunday at 8am UTC — use <code style="font-family:var(--mono);font-size:12px;">0 8 * * 2</code> for a genuine Monday send. Adjust the cron expression in wrangler.toml to change the schedule. Cloudflare cron triggers require a paid Workers plan.
+        </div>
+
+        <div class="note" style="margin-top:1rem;">
+          <strong>Retries and duplicate sends</strong><br />
+          Cloudflare retries a scheduled invocation that throws. Before sending, the worker checks a <code style="font-family:var(--mono);font-size:12px;">sent:weekly:&lt;iso-week&gt;</code> marker in the <code style="font-family:var(--mono);font-size:12px;">REPORT_RECIPIENTS</code> KV namespace and skips the run if that week has already been sent, so a retry never re-emails recipients who already got that week's report. The marker is written once per calendar week and kept indefinitely — it costs one small KV key per week and is filtered out of the recipient list automatically.
         </div>
 
         <h2 id="recipients">Managing recipients</h2>
@@ -329,7 +334,7 @@
         <p>Each digest covers the previous 7 days and compares it to the 7 days before that.</p>
         <ul>
           <li><strong>KPI cards</strong> — pageviews, unique visitors, and custom event count, each with a colour-coded week-over-week percentage change</li>
-          <li><strong>Anomaly alerts</strong> — shown when pageview count changes by more than 30% compared to the prior week</li>
+          <li><strong>Anomaly alerts</strong> — shown when pageview count changes by more than 30% compared to the prior week, but only once the prior week has at least 50 pageviews. Below that minimum sample, a swing (e.g. 1 view becoming 2) is noise, not a spike, and is never flagged.</li>
           <li><strong>Top 5 pages</strong> — paths ranked by pageview count</li>
           <li><strong>Top 3 referrers</strong> — referrer hostnames ranked by visit count</li>
           <li><strong>Top 3 countries</strong> — country codes ranked by pageview count</li>

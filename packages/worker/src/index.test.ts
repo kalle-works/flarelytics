@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import worker, { isBot, deviceType, browserName, osName, parseFilters } from './index';
+import worker, { isBot, deviceType, browserName, osName, parseFilters, QUERY_TEMPLATES, PERIOD_MAP } from './index';
 import { PV_SCHEMA, ENG_SCHEMA, SHARE_SCHEMA, BOT_SCHEMA, CUSTOM_SCHEMA } from './v1/emit';
 import { createSessionCookie, buildOrgList } from './auth/session';
 
@@ -169,6 +169,22 @@ describe('isBot', () => {
 
   it('allows Firefox', () => {
     expect(isBot('Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0')).toBe(false);
+  });
+
+  // v0's old isBot did a flat substring match on bare strings like 'baidu'
+  // and 'yandex' (no token-boundary check), so a real, human-driven browser
+  // whose UA merely contains one of those words as a substring — not the
+  // actual bot suffix ('baiduspider', 'yandexbot') — was misclassified as a
+  // bot. Delegating to the v1 classifier's token-boundary matching fixes
+  // this false-positive class (the 'gptbotmalicious' style problem): a UA
+  // still gets flagged when it contains a real bot token, but no longer
+  // just because it contains a substring of one.
+  it('does not flag a real human browser whose UA merely contains "baidu" without the baiduspider bot token', () => {
+    expect(isBot('Mozilla/5.0 (Linux; Android 9; SM-G960F) BaiduBrowser/11.4')).toBe(false);
+  });
+
+  it('does not flag a real human tool whose UA merely contains "yandex" without the yandexbot bot token', () => {
+    expect(isBot('Mozilla/5.0 (Windows NT 10.0) YandexTranslate/1.0')).toBe(false);
   });
 });
 
@@ -688,6 +704,26 @@ describe('GET /config', () => {
     expect(body.filters.keys).toContain('country');
     expect(body.filters.keys).toContain('device');
   });
+
+  it('does not list new-vs-returning (removed: cannot work with a daily-rotating visitor hash)', async () => {
+    const res = await worker.fetch(new Request('https://worker.test/config'), makeEnv(), {} as ExecutionContext);
+    const body = await res.json() as { queries: { name: string }[] };
+    expect(body.queries.map((q) => q.name)).not.toContain('new-vs-returning');
+  });
+});
+
+describe('GET /query?q=new-vs-returning', () => {
+  it('returns 400 (query removed: cannot work with a daily-rotating visitor hash)', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/query?q=new-vs-returning&site=example.com', { headers: { 'X-API-Key': 'test-key' } }),
+      makeEnv({ CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' }),
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string; available: { name: string }[] };
+    expect(body.error).toMatch(/invalid query/i);
+    expect(body.available.map((q) => q.name)).not.toContain('new-vs-returning');
+  });
 });
 
 describe('parseFilters', () => {
@@ -747,6 +783,21 @@ describe('POST /track — server-side tracking', () => {
     expect(res.status).toBe(401);
   });
 
+  it('rejects a server-side request whose site is missing or not a hostname with 400 and writes nothing', async () => {
+    for (const site of [undefined, '', 'not a host name', 'evil.com/path']) {
+      const { ctx } = makeCtx();
+      const env = makeEnv();
+      const req = new Request('https://worker.test/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': HUMAN_UA, 'X-API-Key': 'test-key' },
+        body: JSON.stringify({ event: 'purchase', path: '/checkout', ...(site === undefined ? {} : { site }) }),
+      });
+      const res = await worker.fetch(req, env, ctx);
+      expect(res.status, `site=${String(site)}`).toBe(400);
+      expect(env.ANALYTICS.writeDataPoint).not.toHaveBeenCalled();
+    }
+  });
+
   it('accepts server-side request with valid API key and site field', async () => {
     const { ctx, settle } = makeCtx();
     const env = makeEnv();
@@ -804,6 +855,50 @@ describe('POST /track — server-side tracking', () => {
     expect(res.status).toBe(204);
     const call = (env.ANALYTICS.writeDataPoint as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.doubles[2]).toBe(0);
+  });
+});
+
+describe('POST /track — request body size cap', () => {
+  it('rejects a request whose Content-Length header exceeds the cap, without reading the body', async () => {
+    const req = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': HUMAN_UA,
+        Origin: 'https://example.com',
+        'Content-Length': '99999',
+      },
+      body: JSON.stringify({ event: 'pageview', path: '/' }),
+    });
+    const res = await worker.fetch(req, makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(413);
+  });
+
+  it('rejects an oversize body even without a Content-Length header (streamed cap)', async () => {
+    // No explicit Content-Length is set here — Node's Request does not compute
+    // one for a string body, matching a client that streams without declaring
+    // a length. The cap must still be enforced by reading the actual bytes.
+    const req = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': HUMAN_UA,
+        Origin: 'https://example.com',
+      },
+      body: JSON.stringify({ event: 'pageview', path: '/', referrer: 'a'.repeat(9000) }),
+    });
+    expect(req.headers.get('Content-Length')).toBeNull();
+    const res = await worker.fetch(req, makeEnv(), {} as ExecutionContext);
+    expect(res.status).toBe(413);
+  });
+
+  it('accepts a request comfortably under the cap', async () => {
+    const { ctx, settle } = makeCtx();
+    const env = makeEnv();
+    const req = trackReq({ event: 'pageview', path: '/' }, { Origin: 'https://example.com' });
+    const res = await worker.fetch(req, env, ctx);
+    await settle();
+    expect(res.status).toBe(204);
   });
 });
 
@@ -880,6 +975,24 @@ describe('GET /public-stats', () => {
     expect(Array.isArray(body.stats.devices)).toBe(true);
     expect(Array.isArray(body.stats.dailyViews)).toBe(true);
     expect(typeof body.stats.botHitsTotal).toBe('number');
+    fetchMock.mockRestore();
+  });
+
+  it('sends the same SQL QUERY_TEMPLATES would generate for each metric (no duplicated inline SQL)', async () => {
+    const fetchMock = makeCfMock();
+    const env = makeEnv({ PUBLIC_STATS_SITES: 'example.com', CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok', DATASET_NAME: 'test' });
+    await worker.fetch(
+      new Request('https://worker.test/public-stats?site=example.com'),
+      env,
+      {} as ExecutionContext,
+    );
+    const sentBodies = fetchMock.mock.calls.map((call) => String((call[1] as RequestInit).body).trim());
+    const period = PERIOD_MAP['30d'];
+    const expectedTemplates = ['total-pageviews', 'total-visitors', 'top-pages', 'referrers', 'countries', 'devices', 'daily-views', 'bot-hits-total'];
+    for (const name of expectedTemplates) {
+      const expectedSql = QUERY_TEMPLATES[name].sql('test', period, 'example.com', '', '').trim();
+      expect(sentBodies).toContain(expectedSql);
+    }
     fetchMock.mockRestore();
   });
 
@@ -1062,6 +1175,60 @@ describe('multi-org auth — /admin/sites (org-scoped)', () => {
     fetchMock.mockRestore();
   });
 
+  it('removing a verified site also revokes its /track CORS access (403 afterward)', async () => {
+    const env = authEnv();
+    const cookie = await cookieFor({ email: 'a@b.c', sub: 'u1', orgs: buildOrgList('u1', []), active_org: 'u1', secret: SECRET });
+    const claimRes = await worker.fetch(
+      new Request('https://worker.test/admin/sites', {
+        method: 'POST', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'newsite.com' }),
+      }), env, {} as ExecutionContext,
+    );
+    const token = ((await claimRes.json()) as { verification: { value: string } }).verification.value;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input).includes('cloudflare-dns.com')) {
+        return new Response(JSON.stringify({ Answer: [{ data: `"${token}"` }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    });
+    await worker.fetch(
+      new Request('https://worker.test/admin/sites/verify', {
+        method: 'POST', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'newsite.com' }),
+      }), env, {} as ExecutionContext,
+    );
+    fetchMock.mockRestore();
+
+    // Before removal: /track from the newly-verified origin is accepted.
+    const beforeReq = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': HUMAN_UA, Origin: 'https://newsite.com' },
+      body: JSON.stringify({ event: 'pageview', path: '/' }),
+    });
+    const { ctx: beforeCtx } = makeCtx();
+    const beforeRes = await worker.fetch(beforeReq, env, beforeCtx);
+    expect(beforeRes.status).toBe(204);
+
+    const deleteRes = await worker.fetch(
+      new Request('https://worker.test/admin/sites', {
+        method: 'DELETE', headers: { Cookie: cookie, Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: 'newsite.com' }),
+      }), env, {} as ExecutionContext,
+    );
+    expect(deleteRes.status).toBe(200);
+
+    // After removal: /track from that origin is rejected — the org can no
+    // longer query it, so /track must stop accepting events for it too.
+    const afterReq = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': HUMAN_UA, Origin: 'https://newsite.com' },
+      body: JSON.stringify({ event: 'pageview', path: '/' }),
+    });
+    const { ctx: afterCtx } = makeCtx();
+    const afterRes = await worker.fetch(afterReq, env, afterCtx);
+    expect(afterRes.status).toBe(403);
+  });
+
   it('rejects claiming a hostname already owned by another org (409)', async () => {
     const env = authEnv();
     await env.SITE_CONFIG.put('site_owner:taken.com', 'someone-else');
@@ -1133,5 +1300,46 @@ describe('multi-org auth — /admin/sites (org-scoped)', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as { sites: { hostname: string }[] };
     expect(body.sites).toEqual([{ hostname: 'mine.com', label: 'Mine' }]);
+  });
+});
+
+// ── Timing-safe X-API-Key comparisons ─────────────────────────────────────────
+// makeEnv()'s QUERY_API_KEY is 'test-key' (8 chars). 'test-kex' is the same
+// length, differing only in the last byte — a key that would defeat a naive
+// early-exit === comparison's timing signal but must still be rejected.
+describe('X-API-Key comparisons are timing-safe (equal-length, last-byte-different key rejected)', () => {
+  const WRONG_KEY_SAME_LENGTH = 'test-kex';
+
+  it('GET /query rejects a same-length wrong key (falls through to 401, no session)', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/query?q=top-pages&site=example.com', {
+        headers: { 'X-API-Key': WRONG_KEY_SAME_LENGTH },
+      }),
+      makeEnv(), {} as ExecutionContext,
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /track (server-side, no Origin) rejects a same-length wrong key', async () => {
+    const { ctx } = makeCtx();
+    const req = new Request('https://worker.test/track', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': HUMAN_UA,
+        'X-API-Key': WRONG_KEY_SAME_LENGTH,
+      },
+      body: JSON.stringify({ event: 'purchase', path: '/checkout', site: 'example.com' }),
+    });
+    const res = await worker.fetch(req, makeEnv(), ctx);
+    expect(res.status).toBe(401);
+  });
+
+  it('legacy /admin/sites rejects a same-length wrong key (falls through to 401, no session)', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/admin/sites', { headers: { 'X-API-Key': WRONG_KEY_SAME_LENGTH } }),
+      makeEnv(), {} as ExecutionContext,
+    );
+    expect(res.status).toBe(401);
   });
 });

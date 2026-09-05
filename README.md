@@ -10,7 +10,7 @@ Privacy-first web analytics that runs entirely on Cloudflare. No cookies, no ext
 
 - **100% Cloudflare** — Workers + Analytics Engine. No databases, no servers, no third-party services.
 - **Privacy by architecture** — No cookies. No fingerprinting. Daily-rotating visitor hash that resets every 24 hours. GDPR/CCPA compliant without a cookie banner.
-- **Under 1KB** — The tracking script is smaller than most cookie consent popups.
+- **Under 2KB gzipped** — The tracking script is smaller than most cookie consent popups.
 - **Custom events** — Track signups, purchases, clicks, or anything else with `flarelytics.track('event', { props })`.
 - **Scroll depth** — Optional IntersectionObserver-based tracking at 25/50/75/100% milestones.
 - **Email reports** — Weekly digests with traffic trends, top pages, and anomaly alerts.
@@ -22,10 +22,11 @@ Privacy-first web analytics that runs entirely on Cloudflare. No cookies, no ext
 
 ```bash
 git clone https://github.com/kalle-works/flarelytics.git
-cd flarelytics/packages/worker
+cd flarelytics && npm install
+cd packages/worker
 
 # Edit wrangler.toml with your account_id and allowed origins
-npx wrangler deploy
+npm run deploy      # builds the tracker bundle, then wrangler deploy
 npx wrangler secret put QUERY_API_KEY    # random string for dashboard auth
 npx wrangler secret put CF_API_TOKEN     # CF API token (Analytics Engine read)
 npx wrangler secret put CF_ACCOUNT_ID    # your CF account ID
@@ -43,6 +44,21 @@ npx wrangler secret put CF_ACCOUNT_ID    # your CF account ID
 <script defer data-endpoint="https://your-worker.workers.dev" data-scroll-depth src="/tracker.js"></script>
 ```
 
+Pageviews, outbound link clicks, and time-on-page are tracked automatically, including
+client-side navigation in single-page apps (React Router, Vue Router, Astro view
+transitions, etc.) — a route change fires a pageview without a full page reload. The
+tracker also skips sending anything while running on `localhost`/`127.0.0.1`/`file://`,
+so a plain `npm run dev` session doesn't send test traffic into production. Both are
+configurable via script-tag attributes:
+
+```html
+<!-- Disable automatic SPA pageview tracking -->
+<script defer data-endpoint="https://your-worker.workers.dev" data-no-spa src="/tracker.js"></script>
+
+<!-- Send events even on localhost (useful when testing against a real worker) -->
+<script defer data-endpoint="https://your-worker.workers.dev" data-allow-localhost src="/tracker.js"></script>
+```
+
 Or with npm:
 
 ```bash
@@ -57,6 +73,9 @@ init('https://your-worker.workers.dev')
 
 // With scroll depth tracking at 25/50/75/100% milestones
 init('https://your-worker.workers.dev', { scrollDepth: true })
+
+// Disable SPA navigation tracking, or send events on localhost
+init('https://your-worker.workers.dev', { noSpa: true, allowLocalhost: true })
 
 // Track custom events
 track('signup', { props: { plan: 'pro' } })
@@ -90,7 +109,7 @@ below); the browser dashboard no longer stores any key.
 ```
 packages/
   worker/         Cloudflare Worker: event tracking + query API
-  tracker/        Client-side script (<1KB): pageviews, outbound links, custom events, scroll depth
+  tracker/        Client-side script (under 2KB gzipped): pageviews, outbound links, custom events, scroll depth
   dashboard/      Astro static site: analytics dashboard with charts and tables
   email-reports/  Cloudflare Worker cron: weekly email digests
   landing/        Astro static site: flarelytics.dev marketing + docs
@@ -155,8 +174,9 @@ X-API-Key: your-api-key
 | `top-pages-stories` | | Top pages where path starts with `/a/` |
 | `daily-views` | | Pageviews per day |
 | `daily-unique-visitors` | | Unique visitors per day (+ total views) |
-| `new-vs-returning` | | New vs returning visitors in the selected period |
-| `total-sessions` | | Total sessions in period (based on timing events) |
+| `total-sessions` | | Total sessions in period. A session is a `timing` event, which only fires after >1s of dwell time — pages left immediately aren't counted |
+| `total-pageviews` | | Total pageviews in period |
+| `total-visitors` | | Total unique visitors in period |
 
 **Referrers & Acquisition**
 
@@ -175,7 +195,7 @@ X-API-Key: your-api-key
 | `page-views-over-time` | `?page=/path` | Daily views + visitors for one page |
 | `page-timing` | | Average time on page in seconds per path |
 | `timing-by-page` | `?page=/path` | Average time on page for a specific page |
-| `bounce-rate-by-page` | `?event_name=N` | Bounce % per page (threshold seconds, default 10) |
+| `bounce-rate-by-page` | `?event_name=N` | Bounce % per page (threshold seconds, default 10). Counts `timing` events (sessions with >1s dwell), so pages left within 1s aren't in the denominator at all |
 | `scroll-depth` | | Scroll depth distribution: how far visitors scroll across all pages |
 | `scroll-depth-by-page` | | Scroll depth breakdown per page |
 | `scroll-depth-for-page` | `?page=/path` | Scroll depth distribution for a specific page |
@@ -188,6 +208,14 @@ X-API-Key: your-api-key
 | `countries-by-page` | `?page=/path` | Country breakdown for one page |
 | `devices` | | Pageviews by device type (mobile/tablet/desktop) |
 | `browsers` | | Pageviews by browser |
+| `operating-systems` | | Pageviews by operating system (Windows/macOS/iOS/Android/Linux/ChromeOS) |
+
+**Revenue**
+
+| Query | Params | Description |
+|---|---|---|
+| `revenue-by-event` | | Events with a revenue value — total, count, average (requires `value` in `/track` calls) |
+| `revenue-over-time` | | Daily revenue totals and conversion counts |
 
 **Conversions**
 
@@ -233,19 +261,6 @@ X-API-Key: your-api-key
     { "path": "/a/my-article", "depth": "75", "count": 61 },
     { "path": "/a/my-article", "depth": "100", "count": 34 }
   ]
-}
-```
-
-#### Example: new vs returning visitors
-
-```bash
-GET /query?q=new-vs-returning&period=7d&site=yoursite.com
-X-API-Key: your-api-key
-```
-
-```json
-{
-  "data": [{ "new_visitors": 83, "returning_visitors": 21, "total": 104 }]
 }
 ```
 
@@ -404,8 +419,10 @@ Each event writes one row to Cloudflare Analytics Engine:
 | `blob10` | Site hostname (for multi-site support) |
 | `blob11` | Device type (`mobile`/`tablet`/`desktop`) |
 | `blob12` | Browser name |
+| `blob13` | Operating system (Windows/macOS/iOS/Android/Linux/ChromeOS/Other) |
 | `double1` | Event count (always 1) |
 | `double2` | Time on page in seconds (only for `timing` events) |
+| `double3` | Revenue/conversion value (0 unless `value` is sent in a `/track` call) |
 
 ## Comparison
 

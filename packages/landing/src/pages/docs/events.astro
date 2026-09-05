@@ -17,9 +17,9 @@ const schema = [
 ];
 
 const builtins = [
-  { name: 'pageview', trigger: 'Every page load', fields: 'path, referrer, country, device, browser, UTM params' },
-  { name: 'outbound', trigger: 'External link click', fields: 'path, destination URL (blob5)' },
-  { name: 'timing', trigger: 'visibilitychange (tab close/switch)', fields: 'path, seconds on page (double2)' },
+  { name: 'pageview', trigger: 'Every page load, plus SPA route changes (pushState/replaceState/popstate)', fields: 'path, referrer, country, device, browser, UTM params' },
+  { name: 'outbound', trigger: 'External link click or middle-click; subdomains of the current site count as internal', fields: 'path, destination URL (blob5)' },
+  { name: 'timing', trigger: 'visibilitychange / pagehide, per visible period (resets on tab switch)', fields: 'path, seconds on page (double2)' },
   { name: 'scroll_depth', trigger: '25 / 50 / 75 / 100% scroll milestone', fields: 'path, depth percentage (blob5)' },
 ];
 ---
@@ -197,6 +197,7 @@ const builtins = [
           </div>
         </div>
         <p>Properties are stored as pipe-separated values in blob5 and queryable via the <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">custom-events</code> and <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">funnel-by-event</code> queries.</p>
+        <p>Property values are stored verbatim and are not vetted — don't pass personal data (emails, names, IPs) in <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">props</code>.</p>
         <p>The event name is stored in blob4. Query custom events using <code style="font-family:var(--mono);font-size:13px;background:#f5f4f2;padding:1px 5px;border-radius:3px;">?q=custom-events&period=30d&site=mysite.com</code>.</p>
 
         <h2 id="schema">Analytics Engine schema</h2>

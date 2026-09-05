@@ -1,7 +1,7 @@
 {
   "name": "@flarelytics/tracker",
   "version": "0.2.0",
-  "description": "Privacy-first analytics tracker for Flarelytics. Under 1KB gzipped.",
+  "description": "Privacy-first analytics tracker for Flarelytics. Under 2KB gzipped.",
   "main": "dist/tracker.js",
   "module": "dist/tracker.mjs",
   "types": "dist/tracker.d.ts",
@@ -20,9 +20,11 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsup src/tracker.ts --format cjs,esm --dts --minify",
+    "build": "tsup src/tracker.ts --format cjs,esm --dts --minify && tsup src/tracker.ts --format iife --minify --clean=false && mv -f dist/tracker.global.js dist/tracker.iife.js && npm run size && node scripts/emit-module.mjs",
     "dev": "tsup src/tracker.ts --format cjs,esm --dts --watch",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "size": "node scripts/check-size.mjs",
     "prepublishOnly": "tsup src/tracker.ts --format cjs,esm --dts --minify"
   },
   "devDependencies": {
@@ -30,6 +32,9 @@
     "tsup": "^8.0.0",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   },
   "keywords": ["analytics", "cloudflare", "privacy", "tracking"],
   "license": "MIT"

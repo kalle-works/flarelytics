@@ -40,3 +40,11 @@ lands in production analytics. Tear it down after each measurement round.
 ## Recorded baselines
 
 See `MIGRATION_PLAN.md §9 Task B` for the locked baseline numbers.
+
+## Lifecycle
+
+This is a Phase 0/1 measurement harness for `MIGRATION_PLAN.md` §9 Task B, not
+permanent tooling. It's needed again after the Phase 1 dual-emit deploy to
+re-measure `/track` p99 against the Phase 0 baseline before promoting to
+Phase 2 (§4). Once that Phase 1 → 2 gate is cleared, this directory can be
+deleted.

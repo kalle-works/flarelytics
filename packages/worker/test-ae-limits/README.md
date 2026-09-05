@@ -63,3 +63,11 @@ retention naturally expires) the test dataset binding.
 
 The source is kept in the repo so re-runs are cheap when the v1 schema
 evolves.
+
+## Lifecycle
+
+This is a Phase 0/1 measurement harness for `MIGRATION_PLAN.md` §9 Task A, not
+permanent tooling. It earns its keep only while the v1 schema is still being
+locked down (Phase 0) and re-verified during the Phase 0.5/1 rollout. Once
+Phase 2 (read shadow) begins, the byte-limit numbers it produces are locked
+into `MIGRATION_PLAN.md` and this directory can be deleted.

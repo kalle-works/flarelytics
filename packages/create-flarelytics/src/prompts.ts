@@ -29,20 +29,32 @@ async function getWorkerSource(): Promise<string> {
   throw new Error('Worker source template not found');
 }
 
+async function getVersion(): Promise<string> {
+  // package.json sits next to both src/ (dev) and dist/ (bundled) — same
+  // relative path either way — so this doesn't need a getWorkerSource-style
+  // dual-path fallback.
+  try {
+    const pkg = JSON.parse(await readFile(resolve(__dirname, '..', 'package.json'), 'utf-8')) as { version?: string };
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
 function cancel(): never {
   p.cancel('Setup cancelled.');
   process.exit(0);
 }
 
 export async function main(argv: string[]): Promise<void> {
-  const version = '1.0.0';
+  const version = await getVersion();
 
   // --help flag
   if (argv.includes('--help') || argv.includes('-h')) {
     console.log(`
   ${pc.bold('create-flarelytics')} v${version}
 
-  Set up Flarelytics privacy-first analytics in under 3 minutes.
+  Set up Flarelytics privacy-first analytics in 5 minutes.
 
   ${pc.dim('Usage:')}
     npx create-flarelytics [project-directory]
@@ -296,7 +308,13 @@ ${divider}
 
 ${divider}
 
-  Dashboard: ${pc.cyan('https://flarelytics-dashboard.pages.dev')}
-  Enter your Worker URL, API Key, and site hostname.
+  View your data:
+
+  ${pc.cyan('curl')} -H "X-API-Key: ${apiKey}" \\
+    "${workerUrl}/query?q=top-pages&period=7d&site=<your-site-hostname>"
+
+  Or try queries interactively at ${pc.cyan('https://flarelytics.dev/docs/playground')}
+  (the hosted dashboard is SSO-only and isn't for self-hosted workers — the
+  playground and ${pc.bold('GET /query')} with your API key are the self-hosted path).
 `);
 }
