@@ -1,12 +1,10 @@
 /** GET /tracker.js — serves the built @flarelytics/tracker IIFE bundle. */
 
-// wrangler.toml.example declares a text-module rule (`[[rules]] type =
-// "Text" globs = ["**/*.iife.js"]`) so this import resolves to the file's
-// raw source at deploy time; vitest.config.ts's raw-text plugin does the
-// same for tests. The `*.iife.js` ambient module type lives in
-// text-modules.d.ts since TypeScript's `bundler` moduleResolution only
-// honors wildcard module augmentations declared in a .d.ts file.
-import trackerScript from '../../tracker/dist/tracker.iife.js';
+// The tracker build (packages/tracker/scripts/emit-module.mjs) wraps the
+// minified IIFE bundle in an ES module that default-exports it as a string,
+// so the browser script travels through wrangler's bundler as plain data and
+// needs no text-module rule in wrangler.toml.
+import trackerScript from '../../tracker/dist/tracker-script.mjs';
 
 export function handleTrackerJs(request: Request): Response {
   const url = new URL(request.url);

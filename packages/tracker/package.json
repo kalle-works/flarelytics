@@ -20,7 +20,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsup src/tracker.ts --format cjs,esm --dts --minify && tsup src/tracker.ts --format iife --minify --clean=false && mv -f dist/tracker.global.js dist/tracker.iife.js && npm run size",
+    "build": "tsup src/tracker.ts --format cjs,esm --dts --minify && tsup src/tracker.ts --format iife --minify --clean=false && mv -f dist/tracker.global.js dist/tracker.iife.js && npm run size && node scripts/emit-module.mjs",
     "dev": "tsup src/tracker.ts --format cjs,esm --dts --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

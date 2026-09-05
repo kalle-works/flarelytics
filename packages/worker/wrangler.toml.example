@@ -3,16 +3,6 @@ main = "src/index.ts"
 compatibility_date = "2025-03-01"
 compatibility_flags = ["nodejs_compat"]
 
-# GET /tracker.js serves the built @flarelytics/tracker bundle (see
-# packages/worker/src/tracker-script.ts) as a plain string import rather than
-# a second, hand-maintained copy of the tracker — this rule tells wrangler's
-# bundler to treat the .iife.js import as raw text instead of trying to parse
-# it as a worker module.
-[[rules]]
-type = "Text"
-globs = ["**/*.iife.js"]
-fallthrough = true
-
 # Workers Logs — structured request logs, queryable in the dashboard. Worth
 # having on record for a Worker handling session cookies, OIDC callbacks, and
 # cross-tenant site authorization.

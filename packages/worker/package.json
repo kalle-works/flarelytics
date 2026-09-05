@@ -8,6 +8,7 @@
     "setup": "bash setup.sh",
     "dev": "wrangler dev",
     "build": "wrangler deploy --dry-run --outdir dist",
+    "predeploy": "npm --prefix ../tracker run build",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
