@@ -57,7 +57,7 @@ Events written to Analytics Engine:
 
 - No cookies
 - No fingerprinting
-- Daily-rotating, per-site visitor hash (SHA-256 of `VISITOR_SALT`+IP+UA+site+date) for unique visitor counts
+- Daily-rotating, per-site visitor hash (HMAC-SHA256 of IP+UA+site+date, keyed by `VISITOR_SALT`, truncated to 64 bits) for unique visitor counts
 - Hash resets every day — no cross-day tracking
 - GDPR/CCPA compliant by architecture
 - Bot filtering built-in
@@ -118,7 +118,7 @@ Each event writes one row. Always use these field names in queries:
 | `blob6` | `utm_source` |
 | `blob7` | `utm_medium` |
 | `blob8` | `utm_campaign` |
-| `blob9` | Visitor hash (daily-rotating SHA-256) |
+| `blob9` | Visitor hash (daily-rotating HMAC-SHA256, 16 hex chars) |
 | `blob10` | Site hostname — REQUIRED in all WHERE clauses for multi-site support |
 | `blob11` | Device type (`mobile`/`tablet`/`desktop`) |
 | `blob12` | Browser name (Chrome/Firefox/Safari/Edge/Opera/DuckDuckGo/Other) |

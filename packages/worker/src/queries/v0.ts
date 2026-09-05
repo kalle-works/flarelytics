@@ -367,8 +367,6 @@ export const QUERY_TEMPLATES: Record<string, {
     `,
   },
 
-  // new-vs-returning is handled separately (requires two CF API calls)
-
   // Live queries — ignore period param, use hardcoded short intervals
   'live-visitors': {
     description: 'Visitors and pageviews in the last 30 minutes',

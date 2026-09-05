@@ -16,7 +16,7 @@ import {
 import type { Env } from './env';
 import { deviceType, browserName, osName } from './ua';
 import { fetchAllowedOrigins, corsHeaders } from './cors';
-import { timingSafeEqual } from './auth/crypto';
+import { timingSafeEqual, hmacSha256 } from './auth/crypto';
 
 // Phase 0.5 dual-emit allowlist. Hardcoded to Kiiru per MIGRATION_PLAN.md §4
 // "Phase 0.5 (Day 0 — Day 21) — Pilot validation on Kiiru only (T2A)".
@@ -79,6 +79,9 @@ export function isBot(ua: string): boolean {
  * reading the raw Analytics Engine dataset (e.g. via CF_API_TOKEN) could
  * correlate one visitor's traffic across tenants.
  *
+ * HMAC-SHA256 keyed by the salt, truncated to 8 bytes (16 hex chars) so
+ * blob9 keeps its historical shape.
+ *
  * Salt defaults to QUERY_API_KEY when VISITOR_SALT is unset so existing
  * deployments keep working without provisioning a new secret. Rotating the
  * salt (or setting VISITOR_SALT for the first time) changes every hash going
@@ -88,9 +91,8 @@ export function isBot(ua: string): boolean {
 export async function visitorHash(env: Pick<Env, 'VISITOR_SALT' | 'QUERY_API_KEY'>, ip: string, ua: string, site: string): Promise<string> {
   const salt = env.VISITOR_SALT ?? env.QUERY_API_KEY ?? '';
   const date = new Date().toISOString().slice(0, 10);
-  const data = new TextEncoder().encode(`${salt}:${ip}:${ua}:${site}:${date}`);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash).slice(0, 8))
+  const mac = await hmacSha256(salt, `${ip}:${ua}:${site}:${date}`);
+  return Array.from(mac.slice(0, 8))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }

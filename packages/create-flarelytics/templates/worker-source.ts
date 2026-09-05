@@ -189,7 +189,7 @@ async function visitorHash(ip: string, ua: string, site: string, env: Env): Prom
     ['sign'],
   );
   const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${ip}:${ua}:${site}:${date}`));
-  return Array.from(new Uint8Array(signature))
+  return Array.from(new Uint8Array(signature).slice(0, 8))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
