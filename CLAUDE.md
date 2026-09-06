@@ -77,6 +77,8 @@ npm run test         # Run tests
 ```bash
 cd packages/worker
 npm run deploy       # builds the tracker bundle, then wrangler deploy
+# wrangler.toml must list every custom domain the worker serves (api. and
+# analytics.). A deploy detaches any custom domain that is not declared.
 
 cd packages/dashboard
 npx wrangler pages deploy dist  # Deploy dashboard
