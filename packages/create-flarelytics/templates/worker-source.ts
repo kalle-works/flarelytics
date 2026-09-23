@@ -349,11 +349,16 @@ async function handleTrack(request: Request, env: Env): Promise<Response> {
   return new Response(null, { status: 204, headers: cors });
 }
 
+/** Event names the tracker and worker emit themselves; not usable as custom events. */
+const RESERVED_EVENTS = new Set(['pageview', 'timing', 'scroll_depth', 'outbound', 'bot_hit']);
+
 // Query templates
 export const QUERY_TEMPLATES: Record<string, {
   description: string;
   sql: (ds: string, p: string, site: string, eventName: string, page: string) => string;
   requiresPage?: boolean;
+  /** Filter keys this query cannot honour; the handler answers 400 instead of returning wrong data */
+  unsupportedFilters?: string[];
   /** Live queries ignore the period param and use hardcoded short intervals */
   live?: boolean;
 }> = {
@@ -613,6 +618,47 @@ export const QUERY_TEMPLATES: Record<string, {
       GROUP BY depth ORDER BY depth ASC
     `,
   },
+  'event-properties': {
+    description: 'Counts per property value for one custom event (?event_name=name), e.g. which topic a topic_open event carried',
+    sql: (ds, p, site, eventName) => `
+      SELECT blob5 AS properties, SUM(_sample_interval * double1) AS count
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = '${eventName}' AND blob10 = '${site}'
+      GROUP BY properties ORDER BY count DESC LIMIT 100
+    `,
+  },
+  'conversion-sources': {
+    description: 'Where converting visits came from: first pageview referrer, utm_source and landing page of each visitor-day (UTC) that fired any of ?event_name=a,b (comma-separated, up to 10). Visitor-days without a pageview in the period are reported as (unattributed).',
+    // Custom events carry no referrer or utm values, so each visitor-day (the visitor hash
+    // rotates daily) is attributed to its first pageview. Event rows get a far-future rank
+    // so they can never win argMin. Filters on attribution columns would drop the event
+    // rows, so the handler rejects them (unsupportedFilters).
+    unsupportedFilters: ['referrer', 'page', 'utm_source', 'utm_campaign'],
+    sql: (ds, p, site, eventName) => {
+      const events = eventName.split(',').map((e) => `'${e}'`).join(', ');
+      const rank = `if(blob4 = 'pageview', timestamp, NOW() + INTERVAL '1' DAY)`;
+      return `
+      SELECT if(pageviews > 0, first_source, '(unattributed)') AS source,
+        if(pageviews > 0, first_campaign, '') AS campaign,
+        if(pageviews > 0, first_landing, '') AS landing,
+        SUM(weight) AS visits
+      FROM (
+        SELECT blob9 AS visitor, toDate(timestamp) AS day,
+          argMin(blob2, ${rank}) AS first_source,
+          argMin(blob6, ${rank}) AS first_campaign,
+          argMin(blob1, ${rank}) AS first_landing,
+          countIf(blob4 = 'pageview') AS pageviews,
+          countIf(blob4 IN (${events})) AS conversions,
+          max(_sample_interval) AS weight
+        FROM ${ds}
+        WHERE timestamp > NOW() - INTERVAL ${p} AND blob10 = '${site}' AND blob4 IN ('pageview', ${events})
+        GROUP BY visitor, day
+      )
+      WHERE conversions > 0
+      GROUP BY source, campaign, landing ORDER BY visits DESC LIMIT 20
+    `;
+    },
+  },
   'funnel-by-event': {
     description: 'Daily funnel: pageviews to a specific custom event (?event_name=my_event)',
     sql: (ds, p, site, eventName) => `
@@ -859,13 +905,22 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   }
 
   // funnel-by-event requires a valid event_name param
-  if (queryName === 'funnel-by-event') {
-    if (!eventNameParam || !/^[a-zA-Z0-9_\-]+$/.test(eventNameParam)) {
+  // funnel-by-event and event-properties take one event name, conversion-sources a
+  // comma-separated list. All are interpolated into SQL, so only this character set may pass.
+  if (queryName === 'funnel-by-event' || queryName === 'conversion-sources' || queryName === 'event-properties') {
+    const pattern = queryName === 'conversion-sources' ? /^[a-zA-Z0-9_\-]+(,[a-zA-Z0-9_\-]+){0,9}$/ : /^[a-zA-Z0-9_\-]+$/;
+    const reserved = queryName !== 'funnel-by-event' && eventNameParam.split(',').some((e) => RESERVED_EVENTS.has(e));
+    if (!eventNameParam || !pattern.test(eventNameParam) || reserved) {
       return Response.json({ error: 'Missing or invalid param: event_name', hint: 'Add ?event_name=your_event to filter by a specific custom event. Only alphanumeric characters, hyphens and underscores are allowed.' }, { status: 400, headers: cors });
     }
   }
 
   // Some queries require a ?page= param
+  const unsupported = (template.unsupportedFilters ?? []).filter((k) => url.searchParams.has(`filter[${k}]`));
+  if (unsupported.length) {
+    return Response.json({ error: `Filter not supported by ${queryName}: ${unsupported.join(', ')}`, hint: 'This query attributes custom events to the first pageview, so it cannot filter on page, referrer or utm values.' }, { status: 400, headers: cors });
+  }
+
   if (template.requiresPage) {
     if (!pageParam || !/^\/[a-zA-Z0-9.\-_/]*$/.test(pageParam)) {
       return Response.json({ error: 'Missing or invalid param: page', hint: 'Add ?page=/your/path to scope this query to a single page. The value must start with / and contain only URL-safe characters.' }, { status: 400, headers: cors });
