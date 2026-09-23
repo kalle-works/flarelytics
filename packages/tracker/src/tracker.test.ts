@@ -524,6 +524,29 @@ describe('tracker', () => {
       expect(outbound).toHaveLength(1);
       expect(outbound[0].props.url).toBe('unrelated.org/post');
     });
+
+    // Sites put form contents into link query strings (a mailto: draft's body, a
+    // prefilled search). The outbound event must carry only the destination.
+    it('never sends the query string or fragment of an outbound link', async () => {
+      stubLocation('https://example.com/');
+      document.body.innerHTML =
+        '<a id="web" href="https://unrelated.org/form?name=Secret+Person#msg=secret">web</a>' +
+        '<a id="mail" href="mailto:office@example.org?subject=Secret&body=secret%20message">mail</a>';
+      const tracker = await import('./tracker');
+      tracker.init('https://analytics.example.com');
+      beaconSpy.mockClear();
+      sentPayloads = [];
+
+      for (const id of ['web', 'mail']) {
+        const anchor = document.getElementById(id)!;
+        anchor.addEventListener('click', (e) => e.preventDefault());
+        anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0, cancelable: true }));
+      }
+
+      const outbound = sentPayloads.map((p) => JSON.parse(p)).filter((p) => p.event === 'outbound');
+      expect(outbound.map((p) => p.props.url)).toEqual(['unrelated.org/form', 'office@example.org']);
+      expect(sentPayloads.join('')).not.toMatch(/secret/i);
+    });
   });
 
   describe('localhost / dev exclusion', () => {
