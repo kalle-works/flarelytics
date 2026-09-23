@@ -72,6 +72,9 @@ export function isBot(ua: string): boolean {
   return classifyUserAgent(ua).bot_class !== 'human';
 }
 
+/** Event names the tracker and worker emit themselves; not usable as custom events. */
+export const RESERVED_EVENTS = new Set(['pageview', 'timing', 'scroll_depth', 'outbound', 'bot_hit']);
+
 /**
  * Daily-rotating visitor hash. GDPR-friendly: no raw IP stored, and scoped
  * per-site so the same physical visitor doesn't hash to the same blob9 value
@@ -88,9 +91,6 @@ export function isBot(ua: string): boolean {
  * forward — expected, since the hash already rotates daily; the day of the
  * change will double-count returning visitors as new for that one day.
  */
-/** Event names the tracker and worker emit themselves; not usable as custom events. */
-export const RESERVED_EVENTS = new Set(['pageview', 'timing', 'scroll_depth', 'outbound', 'bot_hit']);
-
 export async function visitorHash(env: Pick<Env, 'VISITOR_SALT' | 'QUERY_API_KEY'>, ip: string, ua: string, site: string): Promise<string> {
   const salt = env.VISITOR_SALT ?? env.QUERY_API_KEY ?? '';
   const date = new Date().toISOString().slice(0, 10);
