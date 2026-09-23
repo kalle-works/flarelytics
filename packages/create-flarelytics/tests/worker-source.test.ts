@@ -251,3 +251,43 @@ describe('template source — no non-constant-time API key comparisons', () => {
     expect(TEMPLATE_SOURCE).toMatch(/timingSafeEqual\(incomingKey, env\.QUERY_API_KEY\)/);
   });
 });
+
+describe('QUERY_TEMPLATES SQL parity with the main worker', () => {
+  // Names alone are not enough: a template query whose SQL drifts from the worker's
+  // silently returns different numbers on self-hosted installs.
+  it('builds the same SQL and declares the same unsupported filters for every shared query', () => {
+    const drift = Object.keys(TEMPLATE_QUERY_TEMPLATES).filter((name) => {
+      const t = TEMPLATE_QUERY_TEMPLATES[name];
+      const w = WORKER_QUERY_TEMPLATES[name];
+      if (!w) return false;
+      const args = ['ds', "'7' DAY", 'example.com', 'signup,phone_click', '/p'] as const;
+      return t.sql(...args) !== w.sql(...args) || JSON.stringify(t.unsupportedFilters ?? []) !== JSON.stringify(w.unsupportedFilters ?? []);
+    });
+    expect(drift, `template SQL differs from the worker for: ${drift.join(', ')}`).toEqual([]);
+  });
+});
+
+describe('template event_name validation', () => {
+  it.each([
+    ['conversion-sources', "a'); DROP TABLE x; --"],
+    ['conversion-sources', 'pageview'],
+    ['event-properties', 'a,b'],
+    ['event-properties', 'timing'],
+  ])('%s rejects event_name %j with 400', async (query, eventName) => {
+    const res = await worker.fetch(
+      new Request(`https://worker.example.com/query?q=${query}&site=example.com&event_name=${encodeURIComponent(eventName)}`, { headers: { 'X-API-Key': 'super-secret-key' } }),
+      makeEnv(),
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects filters conversion-sources cannot honour', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.example.com/query?q=conversion-sources&site=example.com&event_name=signup&filter[referrer]=x', { headers: { 'X-API-Key': 'super-secret-key' } }),
+      makeEnv(),
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(400);
+  });
+});

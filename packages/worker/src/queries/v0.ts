@@ -54,6 +54,8 @@ export const QUERY_TEMPLATES: Record<string, {
   description: string;
   sql: (ds: string, p: string, site: string, eventName: string, page: string) => string;
   requiresPage?: boolean;
+  /** Filter keys this query cannot honour; the handler answers 400 instead of returning wrong data */
+  unsupportedFilters?: string[];
   /** Live queries ignore the period param and use hardcoded short intervals */
   live?: boolean;
 }> = {
@@ -312,6 +314,47 @@ export const QUERY_TEMPLATES: Record<string, {
       WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'scroll_depth' AND blob10 = '${site}' AND blob1 = '${page}'
       GROUP BY depth ORDER BY depth ASC
     `,
+  },
+  'event-properties': {
+    description: 'Counts per property value for one custom event (?event_name=name), e.g. which topic a topic_open event carried',
+    sql: (ds, p, site, eventName) => `
+      SELECT blob5 AS properties, SUM(_sample_interval * double1) AS count
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = '${eventName}' AND blob10 = '${site}'
+      GROUP BY properties ORDER BY count DESC LIMIT 100
+    `,
+  },
+  'conversion-sources': {
+    description: 'Where converting visits came from: first pageview referrer, utm_source and landing page of each visitor-day (UTC) that fired any of ?event_name=a,b (comma-separated, up to 10). Visitor-days without a pageview in the period are reported as (unattributed).',
+    // Custom events carry no referrer or utm values, so each visitor-day (the visitor hash
+    // rotates daily) is attributed to its first pageview. Event rows get a far-future rank
+    // so they can never win argMin. Filters on attribution columns would drop the event
+    // rows, so the handler rejects them (unsupportedFilters).
+    unsupportedFilters: ['referrer', 'page', 'utm_source', 'utm_campaign'],
+    sql: (ds, p, site, eventName) => {
+      const events = eventName.split(',').map((e) => `'${e}'`).join(', ');
+      const rank = `if(blob4 = 'pageview', timestamp, NOW() + INTERVAL '1' DAY)`;
+      return `
+      SELECT if(pageviews > 0, first_source, '(unattributed)') AS source,
+        if(pageviews > 0, first_campaign, '') AS campaign,
+        if(pageviews > 0, first_landing, '') AS landing,
+        SUM(weight) AS visits
+      FROM (
+        SELECT blob9 AS visitor, toDate(timestamp) AS day,
+          argMin(blob2, ${rank}) AS first_source,
+          argMin(blob6, ${rank}) AS first_campaign,
+          argMin(blob1, ${rank}) AS first_landing,
+          countIf(blob4 = 'pageview') AS pageviews,
+          countIf(blob4 IN (${events})) AS conversions,
+          max(_sample_interval) AS weight
+        FROM ${ds}
+        WHERE timestamp > NOW() - INTERVAL ${p} AND blob10 = '${site}' AND blob4 IN ('pageview', ${events})
+        GROUP BY visitor, day
+      )
+      WHERE conversions > 0
+      GROUP BY source, campaign, landing ORDER BY visits DESC LIMIT 20
+    `;
+    },
   },
   'funnel-by-event': {
     description: 'Daily funnel: pageviews to a specific custom event (?event_name=my_event)',

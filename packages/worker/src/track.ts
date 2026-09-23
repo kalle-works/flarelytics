@@ -72,6 +72,9 @@ export function isBot(ua: string): boolean {
   return classifyUserAgent(ua).bot_class !== 'human';
 }
 
+/** Event names the tracker and worker emit themselves; not usable as custom events. */
+export const RESERVED_EVENTS = new Set(['pageview', 'timing', 'scroll_depth', 'outbound', 'bot_hit']);
+
 /**
  * Daily-rotating visitor hash. GDPR-friendly: no raw IP stored, and scoped
  * per-site so the same physical visitor doesn't hash to the same blob9 value
@@ -325,7 +328,6 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
   // reject oversize event_props_json with 400 rather than silently truncating
   // mid-JSON (truncated JSON is unparsable at read time). Non-pilot sites keep
   // v0's silent-truncation behavior for backwards compatibility.
-  const RESERVED_EVENTS = new Set(['pageview', 'timing', 'scroll_depth', 'outbound', 'bot_hit']);
   if (V1_EMIT_SITES.has(site) && !RESERVED_EVENTS.has(eventName) && body.props) {
     const propsJson = JSON.stringify(body.props);
     const propsBytes = new TextEncoder().encode(propsJson).length;

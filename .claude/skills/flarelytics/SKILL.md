@@ -14,7 +14,7 @@ You are integrating Flarelytics — privacy-first, cookie-free web analytics on 
 
 Tracks: pageviews, outbound clicks, time on page, scroll depth (opt-in), bot hits, custom events.
 No cookies. No PII. GDPR/CCPA compliant by design.
-37 built-in queries + public stats endpoint (no API key needed).
+43 built-in queries + public stats endpoint (no API key needed).
 
 Full query reference: `.claude/skills/flarelytics/references/queries.md` — load it if the user asks about available data or queries.
 
@@ -187,7 +187,7 @@ For scripts or dashboards that need to fetch analytics programmatically:
 # Public stats (no API key) — 30-day summary
 curl "WORKER_URL/public-stats?site=HOSTNAME"
 
-# Authenticated query — any of the 37 built-in queries
+# Authenticated query — any of the 43 built-in queries
 curl "WORKER_URL/query?q=top-pages&period=30d&site=HOSTNAME" \
   -H "X-API-Key: QUERY_API_KEY"
 
@@ -200,7 +200,7 @@ curl "WORKER_URL/query?q=live-visitors&period=7d&site=HOSTNAME" \
   -H "X-API-Key: QUERY_API_KEY"
 ```
 
-See `.claude/skills/flarelytics/references/queries.md` for the full list of 37 queries.
+See `.claude/skills/flarelytics/references/queries.md` for the full list of 43 queries.
 
 ---
 

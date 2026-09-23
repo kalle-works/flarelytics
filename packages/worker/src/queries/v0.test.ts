@@ -93,3 +93,19 @@ describe('FILTER_BLOB maps every filter key to its documented Analytics Engine b
     });
   });
 });
+
+describe('conversion-sources', () => {
+  it('matches every listed event both when selecting rows and when counting conversions', () => {
+    const sql = QUERY_TEMPLATES['conversion-sources'].sql(FIXTURE_DATASET, FIXTURE_PERIOD, FIXTURE_SITE, 'contact_draft,phone_click', FIXTURE_PAGE);
+    expect(sql).toContain("blob4 IN ('pageview', 'contact_draft', 'phone_click')");
+    expect(sql).toContain("countIf(blob4 IN ('contact_draft', 'phone_click'))");
+  });
+
+  it('ranks only pageviews for attribution, so a conversion row can never become the source or landing page', () => {
+    const sql = QUERY_TEMPLATES['conversion-sources'].sql(FIXTURE_DATASET, FIXTURE_PERIOD, FIXTURE_SITE, 'signup', FIXTURE_PAGE);
+    const rank = "if(blob4 = 'pageview', timestamp, NOW() + INTERVAL '1' DAY)";
+    for (const blob of ['blob2', 'blob6', 'blob1']) expect(sql).toContain(`argMin(${blob}, ${rank})`);
+    expect(sql).toContain("if(pageviews > 0, first_source, '(unattributed)')");
+    expect(sql).toContain('SUM(weight) AS visits');
+  });
+});
