@@ -88,6 +88,9 @@ export function isBot(ua: string): boolean {
  * forward — expected, since the hash already rotates daily; the day of the
  * change will double-count returning visitors as new for that one day.
  */
+/** Event names the tracker and worker emit themselves; not usable as custom events. */
+export const RESERVED_EVENTS = new Set(['pageview', 'timing', 'scroll_depth', 'outbound', 'bot_hit']);
+
 export async function visitorHash(env: Pick<Env, 'VISITOR_SALT' | 'QUERY_API_KEY'>, ip: string, ua: string, site: string): Promise<string> {
   const salt = env.VISITOR_SALT ?? env.QUERY_API_KEY ?? '';
   const date = new Date().toISOString().slice(0, 10);
@@ -325,7 +328,6 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
   // reject oversize event_props_json with 400 rather than silently truncating
   // mid-JSON (truncated JSON is unparsable at read time). Non-pilot sites keep
   // v0's silent-truncation behavior for backwards compatibility.
-  const RESERVED_EVENTS = new Set(['pageview', 'timing', 'scroll_depth', 'outbound', 'bot_hit']);
   if (V1_EMIT_SITES.has(site) && !RESERVED_EVENTS.has(eventName) && body.props) {
     const propsJson = JSON.stringify(body.props);
     const propsBytes = new TextEncoder().encode(propsJson).length;

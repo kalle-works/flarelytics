@@ -18,6 +18,8 @@ Auth: `X-API-Key: <QUERY_API_KEY>` header required.
 | `top-pages-stories` | | Top pages where path starts with `/a/` |
 | `daily-views` | | Pageviews per day |
 | `daily-unique-visitors` | | Unique visitors per day |
+| `total-pageviews` | | Total pageviews in the period |
+| `total-visitors` | | Total unique visitors in the period |
 | `new-vs-returning` | | New vs returning visitors |
 | `total-sessions` | | Total sessions in period (based on timing events) |
 
@@ -51,6 +53,7 @@ Auth: `X-API-Key: <QUERY_API_KEY>` header required.
 | `countries-by-page` | `?page=/path` | Country breakdown for one page |
 | `devices` | | Pageviews by device type (mobile/tablet/desktop) |
 | `browsers` | | Browser breakdown |
+| `operating-systems` | | Pageviews by operating system |
 
 ## Conversions
 
@@ -61,7 +64,9 @@ Auth: `X-API-Key: <QUERY_API_KEY>` header required.
 | `custom-events` | | Custom event counts by name + properties |
 | `conversion-funnel` | | Daily pageviews → conversions |
 | `funnel-by-event` | `?event_name=signup` | Daily funnel for a specific event |
-| `conversion-sources` | `?event_name=a,b` | Where converting visits came from: first referrer, utm_source and landing page per visitor-day that fired any listed event |
+| `revenue-by-event` | | Events with revenue value: total, count and average (requires value in track calls) |
+| `revenue-over-time` | | Daily revenue totals and conversion counts |
+| `conversion-sources` | `?event_name=a,b` | Where converting visits came from: first pageview's referrer, utm_source and landing page per visitor-day (UTC) that fired any listed event (up to 10). Days without a pageview show as `(unattributed)`. Country, device, browser and OS filters work; page, referrer and utm filters return 400 |
 
 ## Live (30-minute window)
 

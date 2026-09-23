@@ -28,7 +28,7 @@ import { timingSafeEqual } from './auth/crypto';
 import type { Env } from './env';
 import { corsHeaders, dataCorsHeaders, fetchAllowedOrigins } from './cors';
 import { deviceType, browserName, osName } from './ua';
-import { handleTrack, isBot } from './track';
+import { handleTrack, isBot, RESERVED_EVENTS } from './track';
 import { handleAdminSites } from './admin';
 import { handlePublicStats } from './public-stats';
 import { handleTrackerJs } from './tracker-script';
@@ -168,9 +168,15 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
   // Both are interpolated into SQL, so only this character set may pass.
   if (queryName === 'funnel-by-event' || queryName === 'conversion-sources') {
     const pattern = queryName === 'funnel-by-event' ? /^[a-zA-Z0-9_\-]+$/ : /^[a-zA-Z0-9_\-]+(,[a-zA-Z0-9_\-]+){0,9}$/;
-    if (!eventNameParam || !pattern.test(eventNameParam)) {
-      return Response.json({ error: 'Missing or invalid param: event_name', hint: 'Add ?event_name=your_event to filter by a specific custom event. Only alphanumeric characters, hyphens and underscores are allowed.' }, { status: 400, headers: cors });
+    const reserved = queryName === 'conversion-sources' && eventNameParam.split(',').some((e) => RESERVED_EVENTS.has(e));
+    if (!eventNameParam || !pattern.test(eventNameParam) || reserved) {
+      return Response.json({ error: 'Missing or invalid param: event_name', hint: queryName === 'conversion-sources' ? 'Add ?event_name=a,b with up to 10 comma-separated custom event names (not pageview, timing, scroll_depth, outbound or bot_hit). Only alphanumeric characters, hyphens and underscores are allowed.' : 'Add ?event_name=your_event to filter by a specific custom event. Only alphanumeric characters, hyphens and underscores are allowed.' }, { status: 400, headers: cors });
     }
+  }
+
+  const unsupported = (template.unsupportedFilters ?? []).filter((k) => url.searchParams.has(`filter[${k}]`));
+  if (unsupported.length) {
+    return Response.json({ error: `Filter not supported by ${queryName}: ${unsupported.join(', ')}`, hint: 'This query attributes custom events to the first pageview, so it cannot filter on page, referrer or utm values.' }, { status: 400, headers: cors });
   }
 
   // Some queries require a ?page= param
