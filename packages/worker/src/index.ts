@@ -166,9 +166,9 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
 
   // funnel-by-event takes one event name, conversion-sources a comma-separated list.
   // Both are interpolated into SQL, so only this character set may pass.
-  if (queryName === 'funnel-by-event' || queryName === 'conversion-sources') {
-    const pattern = queryName === 'funnel-by-event' ? /^[a-zA-Z0-9_\-]+$/ : /^[a-zA-Z0-9_\-]+(,[a-zA-Z0-9_\-]+){0,9}$/;
-    const reserved = queryName === 'conversion-sources' && eventNameParam.split(',').some((e) => RESERVED_EVENTS.has(e));
+  if (queryName === 'funnel-by-event' || queryName === 'conversion-sources' || queryName === 'event-properties') {
+    const pattern = queryName === 'conversion-sources' ? /^[a-zA-Z0-9_\-]+(,[a-zA-Z0-9_\-]+){0,9}$/ : /^[a-zA-Z0-9_\-]+$/;
+    const reserved = queryName !== 'funnel-by-event' && eventNameParam.split(',').some((e) => RESERVED_EVENTS.has(e));
     if (!eventNameParam || !pattern.test(eventNameParam) || reserved) {
       return Response.json({ error: 'Missing or invalid param: event_name', hint: queryName === 'conversion-sources' ? 'Add ?event_name=a,b with up to 10 comma-separated custom event names (not pageview, timing, scroll_depth, outbound or bot_hit). Only alphanumeric characters, hyphens and underscores are allowed.' : 'Add ?event_name=your_event to filter by a specific custom event. Only alphanumeric characters, hyphens and underscores are allowed.' }, { status: 400, headers: cors });
     }

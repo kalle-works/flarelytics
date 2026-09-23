@@ -1,6 +1,6 @@
 # Flarelytics Query Reference
 
-42 queries via `GET /query?q=<name>&period=<period>&site=<hostname>`
+43 queries via `GET /query?q=<name>&period=<period>&site=<hostname>`
 Auth: `X-API-Key: <QUERY_API_KEY>` header required.
 
 **Periods:** `7d`, `14d`, `30d`, `60d`, `90d`, `180d`
@@ -67,6 +67,7 @@ Auth: `X-API-Key: <QUERY_API_KEY>` header required.
 | `revenue-by-event` | | Events with revenue value: total, count and average (requires value in track calls) |
 | `revenue-over-time` | | Daily revenue totals and conversion counts |
 | `conversion-sources` | `?event_name=a,b` | Where converting visits came from: first pageview's referrer, utm_source and landing page per visitor-day (UTC) that fired any listed event (up to 10). Days without a pageview show as `(unattributed)`. Country, device, browser and OS filters work; page, referrer and utm filters return 400 |
+| `event-properties` | `?event_name=name` | Counts per property value for one custom event (up to 100 values) |
 
 ## Live (30-minute window)
 

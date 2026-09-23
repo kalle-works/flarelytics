@@ -315,6 +315,15 @@ export const QUERY_TEMPLATES: Record<string, {
       GROUP BY depth ORDER BY depth ASC
     `,
   },
+  'event-properties': {
+    description: 'Counts per property value for one custom event (?event_name=name), e.g. which topic a topic_open event carried',
+    sql: (ds, p, site, eventName) => `
+      SELECT blob5 AS properties, SUM(_sample_interval * double1) AS count
+      FROM ${ds}
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = '${eventName}' AND blob10 = '${site}'
+      GROUP BY properties ORDER BY count DESC LIMIT 100
+    `,
+  },
   'conversion-sources': {
     description: 'Where converting visits came from: first pageview referrer, utm_source and landing page of each visitor-day (UTC) that fired any of ?event_name=a,b (comma-separated, up to 10). Visitor-days without a pageview in the period are reported as (unattributed).',
     // Custom events carry no referrer or utm values, so each visitor-day (the visitor hash

@@ -738,6 +738,17 @@ describe('GET /query?q=conversion-sources', () => {
   });
 });
 
+describe('GET /query?q=event-properties', () => {
+  it.each(["topic_open' OR '1'='1", 'a,b', '', 'timing'])('rejects event_name %j with 400', async (eventName) => {
+    const res = await worker.fetch(
+      new Request(`https://worker.test/query?q=event-properties&site=example.com&event_name=${encodeURIComponent(eventName)}`, { headers: { 'X-API-Key': 'test-key' } }),
+      makeEnv({ CF_ACCOUNT_ID: 'acct', CF_API_TOKEN: 'tok' }),
+      {} as ExecutionContext,
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('GET /query?q=conversion-sources filters', () => {
   // Event rows carry no referrer, utm or landing page, so these filters would silently drop every conversion.
   it.each(['referrer', 'page', 'utm_source', 'utm_campaign'])('rejects filter[%s] with 400', async (key) => {

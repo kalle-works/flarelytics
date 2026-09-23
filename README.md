@@ -227,6 +227,7 @@ X-API-Key: your-api-key
 | `conversion-funnel` | | Daily pageviews to custom events |
 | `funnel-by-event` | `?event_name=signup` | Daily funnel for a specific custom event |
 | `conversion-sources` | `?event_name=a,b` | Where converting visits came from: first pageview's referrer, utm_source and landing page per visitor-day (UTC) that fired any listed event (up to 10). Days without a pageview show as `(unattributed)`. Country, device, browser and OS filters work; page, referrer and utm filters return 400 |
+| `event-properties` | `?event_name=name` | Counts per property value for one custom event (up to 100 values) |
 
 **Live (30-minute window)**
 
