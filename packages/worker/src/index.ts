@@ -164,9 +164,11 @@ async function handleQuery(request: Request, env: Env): Promise<Response> {
     return Response.json({ error: 'DATASET_NAME not configured', hint: 'Set DATASET_NAME in wrangler.toml under [vars]. It must match your Analytics Engine dataset binding.' }, { status: 500, headers: cors });
   }
 
-  // funnel-by-event requires a valid event_name param
-  if (queryName === 'funnel-by-event') {
-    if (!eventNameParam || !/^[a-zA-Z0-9_\-]+$/.test(eventNameParam)) {
+  // funnel-by-event takes one event name, conversion-sources a comma-separated list.
+  // Both are interpolated into SQL, so only this character set may pass.
+  if (queryName === 'funnel-by-event' || queryName === 'conversion-sources') {
+    const pattern = queryName === 'funnel-by-event' ? /^[a-zA-Z0-9_\-]+$/ : /^[a-zA-Z0-9_\-]+(,[a-zA-Z0-9_\-]+){0,9}$/;
+    if (!eventNameParam || !pattern.test(eventNameParam)) {
       return Response.json({ error: 'Missing or invalid param: event_name', hint: 'Add ?event_name=your_event to filter by a specific custom event. Only alphanumeric characters, hyphens and underscores are allowed.' }, { status: 400, headers: cors });
     }
   }

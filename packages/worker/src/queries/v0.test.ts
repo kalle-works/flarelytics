@@ -93,3 +93,11 @@ describe('FILTER_BLOB maps every filter key to its documented Analytics Engine b
     });
   });
 });
+
+describe('conversion-sources', () => {
+  it('matches every listed event both when selecting rows and when counting conversions', () => {
+    const sql = QUERY_TEMPLATES['conversion-sources'].sql(FIXTURE_DATASET, FIXTURE_PERIOD, FIXTURE_SITE, 'contact_draft,phone_click', FIXTURE_PAGE);
+    expect(sql).toContain("blob4 IN ('pageview', 'contact_draft', 'phone_click')");
+    expect(sql).toContain("countIf(blob4 IN ('contact_draft', 'phone_click'))");
+  });
+});

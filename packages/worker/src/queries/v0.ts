@@ -313,6 +313,29 @@ export const QUERY_TEMPLATES: Record<string, {
       GROUP BY depth ORDER BY depth ASC
     `,
   },
+  'conversion-sources': {
+    description: 'Where converting visits came from: first referrer, utm_source and landing page of each visitor-day that fired one of ?event_name=a,b (comma-separated)',
+    // Custom events carry no referrer, so each visitor-day (the visitor hash rotates daily)
+    // is attributed to its first pageview. Counts visitor-days, not events.
+    sql: (ds, p, site, eventName) => {
+      const events = eventName.split(',').map((e) => `'${e}'`).join(', ');
+      return `
+      SELECT source, campaign, landing, count() AS visits
+      FROM (
+        SELECT blob9 AS visitor, toDate(timestamp) AS day,
+          argMin(blob2, timestamp) AS source,
+          argMin(blob6, timestamp) AS campaign,
+          argMin(blob1, timestamp) AS landing,
+          countIf(blob4 IN (${events})) AS conversions
+        FROM ${ds}
+        WHERE timestamp > NOW() - INTERVAL ${p} AND blob10 = '${site}' AND blob4 IN ('pageview', ${events})
+        GROUP BY visitor, day
+      )
+      WHERE conversions > 0
+      GROUP BY source, campaign, landing ORDER BY visits DESC LIMIT 20
+    `;
+    },
+  },
   'funnel-by-event': {
     description: 'Daily funnel: pageviews to a specific custom event (?event_name=my_event)',
     sql: (ds, p, site, eventName) => `

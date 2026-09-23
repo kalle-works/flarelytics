@@ -226,6 +226,7 @@ X-API-Key: your-api-key
 | `custom-events` | | Custom event counts by name and properties |
 | `conversion-funnel` | | Daily pageviews to custom events |
 | `funnel-by-event` | `?event_name=signup` | Daily funnel for a specific custom event |
+| `conversion-sources` | `?event_name=a,b` | Where converting visits came from: first referrer, utm_source and landing page per visitor-day that fired any listed event |
 
 **Live (30-minute window)**
 

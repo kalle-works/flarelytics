@@ -1,6 +1,6 @@
 # Flarelytics Query Reference
 
-37 queries via `GET /query?q=<name>&period=<period>&site=<hostname>`
+42 queries via `GET /query?q=<name>&period=<period>&site=<hostname>`
 Auth: `X-API-Key: <QUERY_API_KEY>` header required.
 
 **Periods:** `7d`, `14d`, `30d`, `60d`, `90d`, `180d`
@@ -61,6 +61,7 @@ Auth: `X-API-Key: <QUERY_API_KEY>` header required.
 | `custom-events` | | Custom event counts by name + properties |
 | `conversion-funnel` | | Daily pageviews → conversions |
 | `funnel-by-event` | `?event_name=signup` | Daily funnel for a specific event |
+| `conversion-sources` | `?event_name=a,b` | Where converting visits came from: first referrer, utm_source and landing page per visitor-day that fired any listed event |
 
 ## Live (30-minute window)
 
