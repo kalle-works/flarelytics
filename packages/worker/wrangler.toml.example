@@ -13,8 +13,16 @@ enabled = true
 # auto-creates the DNS record + cert on `wrangler deploy` when the apex is a zone
 # on this account. Put the dashboard on a sibling subdomain (app.<domain>) so the
 # session cookie (COOKIE_DOMAIN=<domain>) is first-party same-site.
+#
+# List EVERY custom domain the worker serves. Wrangler replaces the worker's
+# custom-domain set with the ones declared here on each deploy, so a hostname
+# left out (for example the tracking origin your sites' tracker.js points at)
+# is detached and its DNS record removed the next time you deploy.
 # [[routes]]
 # pattern = "api.yoursite.com"
+# custom_domain = true
+# [[routes]]
+# pattern = "analytics.yoursite.com"
 # custom_domain = true
 
 # Legacy v0 dataset — still bound, dual-emitted to during the v0 → v1 migration.
