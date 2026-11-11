@@ -105,7 +105,22 @@ describe('conversion-sources', () => {
     const sql = QUERY_TEMPLATES['conversion-sources'].sql(FIXTURE_DATASET, FIXTURE_PERIOD, FIXTURE_SITE, 'signup', FIXTURE_PAGE);
     const rank = "if(blob4 = 'pageview', timestamp, NOW() + INTERVAL '1' DAY)";
     for (const blob of ['blob2', 'blob6', 'blob1']) expect(sql).toContain(`argMin(${blob}, ${rank})`);
-    expect(sql).toContain("if(pageviews > 0, first_source, '(unattributed)')");
+    expect(sql).toContain("if(pageviews > 0, if(first_source IN");
     expect(sql).toContain('SUM(weight) AS visits');
+  });
+});
+
+describe('historical internal referral exclusion', () => {
+  for (const name of ['referrers', 'referrers-by-page', 'live-referrers']) {
+    it(`${name} excludes both own hostname variants before ranking and limiting`, () => {
+      const sql = QUERY_TEMPLATES[name].sql(FIXTURE_DATASET, FIXTURE_PERIOD, 'tyonantajajuristit.fi', '', '/tyooikeus/');
+      expect(sql).toContain("blob2 NOT IN ('direct', 'tyonantajajuristit.fi', 'www.tyonantajajuristit.fi')");
+      expect(sql.indexOf('NOT IN')).toBeLessThan(sql.indexOf('GROUP BY'));
+    });
+  }
+  it('does not invent an external source for historical contact visits starting on an internal referral', () => {
+    const sql = QUERY_TEMPLATES['conversion-sources'].sql(FIXTURE_DATASET, FIXTURE_PERIOD, 'tyonantajajuristit.fi', 'email_click', '');
+    expect(sql).toContain("if(first_source IN ('tyonantajajuristit.fi', 'www.tyonantajajuristit.fi'), '(unattributed)', first_source)");
+    expect(sql).toContain('argMin(blob2,');
   });
 });

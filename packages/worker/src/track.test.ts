@@ -82,3 +82,32 @@ describe('handleTrack — props serialization (blob5)', () => {
     expect(blob5).toBe('a%7Cb|c');
   });
 });
+
+describe('internal referrers on www sites', () => {
+  for (const referrer of ['tyonantajajuristit.fi', 'www.tyonantajajuristit.fi', 'WWW.TYONANTAJAJURISTIT.FI', 'www.tyonantajajuristit.fi.']) {
+    it(`does not store ${referrer} as an external traffic source`, async () => {
+      const writeDataPoint = vi.fn();
+      const env = { ANALYTICS: { writeDataPoint }, QUERY_API_KEY: 'test-key', ALLOWED_ORIGINS: 'https://www.tyonantajajuristit.fi' } as unknown as Env;
+      const res = await handleTrack(new Request('https://worker.test/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0', 'X-API-Key': 'test-key', Origin: 'https://www.tyonantajajuristit.fi' },
+        body: JSON.stringify({ event: 'pageview', path: '/tyooikeus/', referrer }),
+      }), env, { waitUntil: vi.fn() } as unknown as ExecutionContext);
+      expect(res.status).toBe(204);
+      expect(writeDataPoint.mock.calls[0][0].blobs[1]).toBe('direct');
+      expect(writeDataPoint.mock.calls[0][0].blobs[9]).toBe('tyonantajajuristit.fi');
+    });
+  }
+  for (const referrer of ['google.com', 'tyonantajajuristit.fi.example.com', 'othertyonantajajuristit.fi', 'news.tyonantajajuristit.fi']) {
+    it(`preserves the external source ${referrer}`, async () => {
+      const writeDataPoint = vi.fn();
+      const env = { ANALYTICS: { writeDataPoint }, QUERY_API_KEY: 'test-key', ALLOWED_ORIGINS: 'https://www.tyonantajajuristit.fi' } as unknown as Env;
+      await handleTrack(new Request('https://worker.test/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0', 'X-API-Key': 'test-key', Origin: 'https://www.tyonantajajuristit.fi' },
+        body: JSON.stringify({ event: 'pageview', path: '/', referrer }),
+      }), env, { waitUntil: vi.fn() } as unknown as ExecutionContext);
+      expect(writeDataPoint.mock.calls[0][0].blobs[1]).toBe(referrer);
+    });
+  }
+});
