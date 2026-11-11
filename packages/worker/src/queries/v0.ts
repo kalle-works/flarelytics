@@ -93,7 +93,7 @@ export const QUERY_TEMPLATES: Record<string, {
     sql: (ds, p, site) => `
       SELECT blob2 AS referrer, SUM(_sample_interval * double1) AS visits
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob2 != 'direct' AND blob10 = '${site}'
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob2 NOT IN ('direct', '${site}', 'www.${site}') AND blob10 = '${site}'
       GROUP BY referrer ORDER BY visits DESC LIMIT 20
     `,
   },
@@ -282,7 +282,7 @@ export const QUERY_TEMPLATES: Record<string, {
     sql: (ds, p, site, _eventName, page) => `
       SELECT blob2 AS referrer, SUM(_sample_interval * double1) AS visits
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}' AND blob1 = '${page}' AND blob2 != 'direct'
+      WHERE timestamp > NOW() - INTERVAL ${p} AND blob4 = 'pageview' AND blob10 = '${site}' AND blob1 = '${page}' AND blob2 NOT IN ('direct', '${site}', 'www.${site}')
       GROUP BY referrer ORDER BY visits DESC LIMIT 10
     `,
   },
@@ -335,7 +335,7 @@ export const QUERY_TEMPLATES: Record<string, {
       const events = eventName.split(',').map((e) => `'${e}'`).join(', ');
       const rank = `if(blob4 = 'pageview', timestamp, NOW() + INTERVAL '1' DAY)`;
       return `
-      SELECT if(pageviews > 0, first_source, '(unattributed)') AS source,
+      SELECT if(pageviews > 0, if(first_source IN ('${site}', 'www.${site}'), '(unattributed)', first_source), '(unattributed)') AS source,
         if(pageviews > 0, first_campaign, '') AS campaign,
         if(pageviews > 0, first_landing, '') AS landing,
         SUM(weight) AS visits
@@ -446,7 +446,7 @@ export const QUERY_TEMPLATES: Record<string, {
     sql: (ds, _p, site) => `
       SELECT blob2 AS referrer, SUM(_sample_interval * double1) AS visits
       FROM ${ds}
-      WHERE timestamp > NOW() - INTERVAL '30' MINUTE AND blob4 = 'pageview' AND blob2 != 'direct' AND blob10 = '${site}'
+      WHERE timestamp > NOW() - INTERVAL '30' MINUTE AND blob4 = 'pageview' AND blob2 NOT IN ('direct', '${site}', 'www.${site}') AND blob10 = '${site}'
       GROUP BY referrer ORDER BY visits DESC LIMIT 8
     `,
   },

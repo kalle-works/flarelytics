@@ -344,7 +344,8 @@ export async function handleTrack(request: Request, env: Env, ctx: ExecutionCont
 
   // If referrer hostname matches the site itself, treat as direct (internal navigation)
   const rawReferrer = (body.referrer || 'direct').slice(0, 500);
-  const referrer = rawReferrer === site ? 'direct' : rawReferrer;
+  const referrerHost = rawReferrer.trim().toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+  const referrer = referrerHost === site.toLowerCase().replace(/\.$/, '') ? 'direct' : rawReferrer;
 
   // For timing events, extract seconds into double2 for AVG queries
   const timingSeconds = eventName === 'timing' ? (parseFloat(body.props?.seconds || '0') || 0) : 0;
